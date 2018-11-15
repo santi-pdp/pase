@@ -72,8 +72,11 @@ def main(opts):
             wavs = glob.glob(os.path.join(data_root, WAV_DIR, 
                                           'p' + spk_, '*.wav'))
             for wi, wav in enumerate(wavs):
+                bname = os.path.basename(wav)
                 data_cfg[split]['data'].append(
-                    {'filename':os.path.basename(wav),
+                    {'filename':os.path.join(WAV_DIR,
+                                             'p' + spk_,
+                                             bname),
                      'spk':spk_}
                 )
                 if spk_ not in data_cfg[split]['speakers']:
