@@ -46,9 +46,12 @@ def main(opts):
     print('-' * 30)
     print('train_N: {}, valid_N: {}, test_N: {}'.format(train_N, valid_N,
                                                         test_N))
-    data_cfg = {'train':[],
-                'valid':[],
-                'test':[],
+    data_cfg = {'train':{'data':[],
+                         'speakers':[]},
+                'valid':{'data':[],
+                         'speakers':[]},
+                'test':{'data':[],
+                        'speakers':[]},
                 'speakers':spks}
 
     if os.path.exists(os.path.join(data_root, 'wav16')):
@@ -69,10 +72,12 @@ def main(opts):
             wavs = glob.glob(os.path.join(data_root, WAV_DIR, 
                                           'p' + spk_, '*.wav'))
             for wi, wav in enumerate(wavs):
-                data_cfg[split].append(
+                data_cfg[split]['data'].append(
                     {'filename':os.path.basename(wav),
                      'spk':spk_}
                 )
+                if spk_ not in data_cfg[split]['speakers']:
+                    data_cfg[split]['speakers'].append(spk_)
         split_pointer += split_N
 
     # Write final config file onto specified output path
@@ -86,7 +91,7 @@ def main(opts):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('data_root', type=str, default=None)
-    parser.add_argument('cfg_file', type=str, default='vctk_data.cfg')
+    parser.add_argument('--cfg_file', type=str, default='vctk_data.cfg')
     parser.add_argument('--train_split', type=float, default=0.88)
     parser.add_argument('--valid_split', type=float, default=0.06)
 
