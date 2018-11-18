@@ -61,6 +61,7 @@ class WavDataset(Dataset):
                 spks = self.data_cfg[split]['speakers']
                 print('Found {} speakers in {} split'.format(len(spks),
                                                              split))
+                self.total_wav_dur = self.data_cfg[split]['total_wav_dur']
             self.wavs = wavs
 
     def __len__(self):

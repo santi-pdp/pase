@@ -3,6 +3,7 @@ import numpy as np
 import random
 import pysptk
 import librosa
+import pickle
 from ahoproc_tools.interpolate import interpolation
 
 
@@ -25,6 +26,27 @@ class ToTensor(object):
 
     def __repr__(self):
         return self.__class__.__name__ + '()'
+
+class ZNorm(object):
+
+    def __init__(self, stats):
+        self.stats_name = stats
+        with open(stats, 'rb') as stats_f:
+            self.stats = pickle.load(stats_f)
+
+    def __call__(self, pkg):
+        pkg = format_package(pkg)
+        for k, st in self.stats.items():
+            assert k in pkg, '{} != {}'.format(list(pkg.keys()),
+                                               list(self.stats.keys()))
+
+            mean = st['mean'].unsqueeze(1)
+            std = st['std'].unsqueeze(1)
+            pkg[k] = (pkg[k] - mean) / std
+        return pkg
+
+    def __repr__(self):
+        return self.__class__.__name__ + '({})'.format(self.stats_name)
 
 class SingleChunkWav(object):
 
@@ -123,7 +145,7 @@ class MFCC(object):
                                     n_fft=self.n_fft,
                                     hop_length=self.hop
                                    )[:, :max_frames]
-        pkg['mfcc'] = torch.tensor(mfcc)
+        pkg['mfcc'] = torch.tensor(mfcc.astype(np.float32))
         return pkg
 
     def __repr__(self):
