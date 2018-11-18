@@ -1,14 +1,44 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import json
 import librosa
 import os
 import random
 
+class DictCollater(object):
+
+    def __init__(self, batching_keys=['chunk',
+                                      'chunk_ctxt',
+                                      'chunk_rand',
+                                      'lps',
+                                      'mfcc',
+                                      'prosody']):
+        self.batching_keys = batching_keys
+
+    def __call__(self, batch):
+        batches = {}
+        for sample in batch:
+            for k, v in sample.items():
+                if k not in self.batching_keys:
+                    continue
+                if k not in batches:
+                    batches[k] = []
+                if v.dim() == 1:
+                    v = v.view(1, 1, -1)
+                elif v.dim() == 2:
+                    v = v.unsqueeze(0)
+                else:
+                    raise ValueError('Error in collating dimensions for size '
+                                     '{}'.format(v.size()))
+                batches[k].append(v)
+        for k in batches.keys():
+            batches[k] = torch.cat(batches[k], dim=0)
+        return batches
 
 class WavDataset(Dataset):
 
-    def __init__(self, data_root, data_cfg_file, split, sr=None,
+    def __init__(self, data_root, data_cfg_file, split, 
+                 transform=None, sr=None,
                  verbose=True):
         # sr: sampling rate, (Def: None, the one in the wav header)
         self.sr = sr
@@ -19,6 +49,7 @@ class WavDataset(Dataset):
                              'file for loading data.')
 
         self.split = split
+        self.transform = transform
         with open(data_cfg_file, 'r') as data_cfg_f:
             self.data_cfg = json.load(data_cfg_f)
             self.spk_info = self.data_cfg['speakers']
@@ -38,14 +69,18 @@ class WavDataset(Dataset):
     def __getitem__(self, index):
         wname = os.path.join(self.data_root, self.wavs[index]['filename'])
         wav, rate = librosa.load(wname, sr=self.sr)
+        if self.transform is not None:
+            wav = self.transform(wav)
         return wav
 
 class PairWavDataset(WavDataset):
     """ Return paired wavs, one is current wav and the other one is a randomly
         chosen one.
     """
-    def __init__(self, data_root, data_cfg_file, split, sr=None, verbose=True):
-        super().__init__(data_root, data_cfg_file, split, sr=sr,
+    def __init__(self, data_root, data_cfg_file, split, 
+                 transform=None, sr=None, verbose=True):
+        super().__init__(data_root, data_cfg_file, split, transform=transform, 
+                         sr=sr,
                          verbose=verbose)
 
 
@@ -59,7 +94,11 @@ class PairWavDataset(WavDataset):
         rindex = random.choice(indices)
         rwname = os.path.join(self.data_root, self.wavs[rindex]['filename'])
         rwav, rrate = librosa.load(rwname, sr=self.sr)
-        return wav, rwav
+        if self.transform is not None:
+            ret = self.transform({'raw': wav, 'raw_rand': rwav})
+            return ret
+        else:
+            return wav, rwav
 
         
 
