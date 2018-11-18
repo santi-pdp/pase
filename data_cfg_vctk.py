@@ -4,6 +4,8 @@ import os
 import argparse
 import re
 import numpy as np
+import librosa
+import timeit
 
 
 def main(opts):
@@ -66,12 +68,18 @@ def main(opts):
 
     # 1) Train split, 2) Valid split, 3) Test split
     split_pointer = 0
-    for split, split_N in zip(splits, splits_N):
+    for si, (split, split_N) in enumerate(zip(splits, splits_N), start=1):
         split_spks = spk_ids[split_pointer:split_pointer + split_N]
-        for spk_ in split_spks:
+        total_wav_dur = 0
+
+        timings = []
+        beg_t = timeit.default_timer()
+        for spk_i, spk_ in enumerate(split_spks, start=1):
             wavs = glob.glob(os.path.join(data_root, WAV_DIR, 
                                           'p' + spk_, '*.wav'))
             for wi, wav in enumerate(wavs):
+                x, rate = librosa.load(wav, sr=None)
+                total_wav_dur += x.shape[0]
                 bname = os.path.basename(wav)
                 data_cfg[split]['data'].append(
                     {'filename':os.path.join(WAV_DIR,
@@ -81,7 +89,19 @@ def main(opts):
                 )
                 if spk_ not in data_cfg[split]['speakers']:
                     data_cfg[split]['speakers'].append(spk_)
+            end_t = timeit.default_timer()
+            timings.append(end_t - beg_t)
+            beg_t = timeit.default_timer()
+            print('{}/{} processed spks for split {}/{} ({}) '
+                  'mbtime: {:.3f} s'.format(spk_i, len(split_spks),
+                                            si, len(splits),
+                                            split, np.mean(timings)),
+                 end='\r')
+        print('')
+        # write total wav dur
+        data_cfg[split]['total_wav_dur'] = total_wav_dur
         split_pointer += split_N
+
 
     # Write final config file onto specified output path
     with open(cfg_file, 'w') as cfg_f:
