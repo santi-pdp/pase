@@ -79,6 +79,12 @@ def main(opts):
                                           'p' + spk_, '*.wav'))
             for wi, wav in enumerate(wavs):
                 x, rate = librosa.load(wav, sr=None)
+                if x.shape[0] < opts.min_len:
+                    # Ignore  too short seqs
+                    print('Ignoring wav {} for len is {} < {}'.format(wav,
+                                                                      x.shape[0],
+                                                                      opts.min_len))
+                    continue
                 total_wav_dur += x.shape[0]
                 bname = os.path.basename(wav)
                 data_cfg[split]['data'].append(
@@ -108,15 +114,13 @@ def main(opts):
         cfg_f.write(json.dumps(data_cfg))
 
 
-
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('data_root', type=str, default=None)
     parser.add_argument('--cfg_file', type=str, default='vctk_data.cfg')
     parser.add_argument('--train_split', type=float, default=0.88)
     parser.add_argument('--valid_split', type=float, default=0.06)
+    parser.add_argument('--min_len', type=int, default=16000)
 
     opts = parser.parse_args()
 
