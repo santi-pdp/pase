@@ -1,18 +1,25 @@
-from modules import *
-from frontend import *
-from minions import *
+from .modules import *
+from .frontend import *
+from .minions import *
+from ..losses import *
+from tensorboardX import SummaryWriter
+import torch.optim as optim
+import numpy as np
+import random
+import json
+import timeit
 
 
 class Waveminionet(Model):
 
     def __init__(self, frontend=None, frontend_cfg=None,
-                 minions_cfg=None,
+                 minions_cfg=None, z_minion=True,
+                 z_cfg=None,
                  name='Waveminionet'):
         super().__init__(name=name)
         # augmented wav processing net
         # it trains simultaneously with many tasks
-        # forcing a hierarchy of abstraction to distill
-        # the contents within waveforms
+        # forcing a hierarchy of abstraction to distill # the contents within waveforms 
         if minions_cfg is None or len(minions_cfg) < 1:
             raise ValueError('Please specify a stack of minions'
                              ' config with at least 1 minion. '
@@ -27,38 +34,188 @@ class Waveminionet(Model):
                 self.frontend = WaveFe(**frontend_cfg)
         # -------- MINION STACK --------
         self.minions = nn.ModuleList()
+        self.mi_fwd = False
         ninp = self.frontend.emb_dim
+        self.min2idx = {}
         for minion_cfg in minions_cfg:
             minion_cfg['num_inputs'] = ninp
             minion = minion_maker(minion_cfg)
             self.minions.append(minion)
+            self.min2idx[minion.name] = len(self.min2idx) 
             if minion.skip:
                 nouts = minion.hidden_size
                 # acumulate num of inputs (concat skip connection)
                 ninp += nouts
-
+            if minion.name == 'mi':
+                # if MI minion is present, multi chunk forward
+                # is needed (3 chunks are fwd)
+                self.mi_fwd = True
+        if z_minion:
+            # Make the minion enforcing the shape of the latent space
+            # to be like some prior z_gen enforced in the loss
+            # This minion is disconnected from others, just enforcing
+            # frontend's output to follow Z, but no skip,
+            # and it always backprops even in random backprop selection
+            # as it acts as a regularizer
+            if z_cfg is None:
+                z_cfg = {
+                    'num_inputs':self.frontend.emb_dim,
+                    'num_outputs':1,
+                    'dropout':0.,
+                    'name':'z',
+                    'skip':False,
+                    'loss':L2AdversarialLoss()
+                }
+            self.z_minion = minion_maker(z_cfg)
+            self.z_minion.loss.register_DNet(self.z_minion)
 
     def forward(self, x):
         fe_h = self.frontend(x)
-        print('front-end inference: ', fe_h.size())
+        #print('front-end inference: ', fe_h.size())
         h = fe_h
         outs = {}
         for mi, minion in enumerate(self.minions, start=1):
             y, h_ = minion(h)
-            print('minion {}: {} -> {}'.format(mi, h.size(), h_.size()))
-            print('{}-> {}'.format(' ' * 36, y.size()))
             if minion.skip:
                 h_c = torch.cat((h, h_), dim=1)
-                print('Concat skip {} = [{}, {}]'.format(h_c.size(), 
-                                                         h.size(),
-                                                         h_.size()))
                 h = h_c
             else:
                 h = h
-                print('Skip flow is cut here!')
-            print('=' * 70)
             outs[minion.name] = y
         return outs, h
+
+    
+
+    def train(self, dloader, cfg, device='cpu'):
+        epoch = cfg['epoch']
+        bsize = cfg['batch_size']
+        save_path = cfg['save_path']
+        log_freq = cfg['log_freq']
+        writer = SummaryWriter(save_path)
+        bpe = cfg['bpe'] if 'bpe' in cfg else len(dloader)
+        print('=' * 50)
+        print('Beginning training...')
+        print('Batches per epoch: ', bpe)
+        # rndmin_train flag means we donly backprop one minion path        
+        # per batch update, selecting the minion randomly
+        rndmin_train = cfg['rndmin_train']
+        print('Randomized minion training: ', rndmin_train)
+        feopt = getattr(optim, cfg['fe_opt'])(self.frontend.parameters(), 
+                                              lr=cfg['fe_lr'])
+        if hasattr(self, 'z_minion'):
+            zopt = getattr(optim, cfg['min_opt'])(self.z_minion.parameters(), 
+                                                  lr=cfg['min_lr'])
+        minopts = {}
+        for mi, minion in enumerate(self.minions, start=1):
+            min_opt = cfg['min_opt']
+            minopts[minion.name] = getattr(optim, min_opt)(minion.parameters(),
+                                                           lr=cfg['min_lr'])
+        min_global_steps = {}
+        for epoch_ in range(epoch):
+            timings = []
+            beg_t = timeit.default_timer()
+            min_loss = {}
+            global_step = 0
+            for bidx, batch in enumerate(dloader, start=1):
+                feopt.zero_grad()
+                # Build chunk keys to know what to encode
+                chunk_keys = ['chunk']
+                if self.mi_fwd:
+                    chunk_keys += ['chunk_ctxt', 'chunk_rand']
+                fe_h = {}
+                # Forward chunk(s) through frontend
+                for k in chunk_keys:
+                    fe_h[k] = self.frontend(batch[k].to(device))
+                min_h = {}
+                h = fe_h['chunk']
+                for mi, minion in enumerate(self.minions, start=1):
+                    min_name = minion.name
+                    if self.mi_fwd and min_name == 'mi':
+                        # mi inference
+                        raise NotImplementedError
+                    else:
+                        if minion.skip:
+                            y, h_ = minion(h)
+                            h_c = torch.cat((h, h_), dim=1)
+                            h = h_c
+                        else:
+                            y = minion(h)
+                        min_h[min_name] = y
+
+                if hasattr(self, 'z_minion'):
+                    # First shape the hidden space as Z if needed
+                    zopt.zero_grad()
+                    # Adversarial learning to map Fe(wav) to Z ~ prior
+                    dreal_loss, dfake_loss, \
+                            greal_loss = self.z_minion.loss(fe_h['chunk'],
+                                                           zopt)
+                    d_loss = dreal_loss + dfake_loss
+                   
+                    greal_loss.backward(retain_graph=True)
+                    global_step += 1
+                # backprop time
+                if rndmin_train:
+                    min_names = list(min_h.keys())
+                    rnd_min = random.choice(min_names)
+                    minopts[rnd_min].zero_grad()
+                    y_ = min_h[rnd_min]
+                    y_lab = batch[rnd_min].to(device)
+                    loss = self.minions[self.min2idx[rnd_min]].loss(y_, y_lab)
+                    loss.backward()
+                    if rnd_min not in min_loss:
+                        min_loss[rnd_min] = []
+                        min_global_steps[rnd_min] = 0
+                    min_loss[rnd_min].append(loss.item())
+                    min_global_steps[rnd_min] += 1
+                    minopts[rnd_min].step()
+                else:
+                    # Compute all minion losses
+                    for min_name, y_ in min_h.items():
+                        minopts[min_name].zero_grad()
+                        y_lab = batch[min_name].to(device)
+                        loss = self.minions[self.min2idx[min_name]].loss(y_, y_lab)
+                        loss.backward()
+
+                        if min_name not in min_loss:
+                            min_loss[min_name] = []
+                            min_global_steps[min_name] = 0
+                        min_loss[min_name].append(loss.item())
+                        min_global_steps[min_name] += 1
+                        minopts[min_name].step()
+                end_t = timeit.default_timer()
+                timings.append(end_t - beg_t)
+                beg_t = timeit.default_timer()
+                feopt.step()
+                if bidx % log_freq == 0 or bidx >= bpe:
+                    print('-' * 50)
+                    print('Batch {}/{} (Epoch {}):'.format(bidx, bpe, epoch_))
+                    for min_name, losses in min_loss.items():
+                        print('Minion {} loss: {:.3f} gidx: '
+                              '{:5d} '.format(min_name, losses[-1], 
+                                              min_global_steps[min_name]))
+                        writer.add_scalar('train/{}_loss'.format(min_name),
+                                          losses[-1], min_global_steps[min_name])
+                        writer.add_histogram('train/{}'.format(min_name),
+                                             min_h[min_name].data,
+                                             bins='sturges')
+                    if hasattr(self, 'z_minion'):
+                        print('ZMinion dfake_loss: {:.3f}, dreal_loss: {:.3f}, '
+                              'gloss: {:.3f}'.format(dfake_loss.item(),
+                                                     dreal_loss.item(),
+                                                     greal_loss.item()))
+                        writer.add_scalar('train/dfake_loss',
+                                          dfake_loss.item(),
+                                          global_step)
+                        writer.add_scalar('train/dreal_loss',
+                                          dreal_loss.item(),
+                                          global_step)
+                        writer.add_scalar('train/g_loss',
+                                          greal_loss.item(),
+                                          global_step)
+
+                    print('Mean batch time: {:.3f} s'.format(np.mean(timings)))
+
+
 
 if __name__ == '__main__':
     import json
@@ -66,12 +223,12 @@ if __name__ == '__main__':
                           minions_cfg=[
                               {'num_outputs':1,
                                'dropout':0.2,
-                               'name':'recon',
+                               'name':'chunk',
                                'type':'decoder',
                               },
                               {'num_outputs':257,
                                'dropout':0.2,
-                               'name':'lps'
+                               'name':'lps',
                               },
                               {'num_outputs':40,
                                'dropout':0.2,
@@ -81,10 +238,13 @@ if __name__ == '__main__':
                                'dropout':0.2,
                                'name':'prosody'
                               },
-                              {'num_outputs':1,
-                               'dropout':0.2,
-                               'name':'mi'
-                              },
+                              #{'num_outputs':1,
+                              # 'dropout':0.2,
+                              # 'name':'mi',
+                              # 'keys':['chunk',
+                              #         'chunk_ctxt',
+                              #         'chunk_rand']
+                              #},
                           ]
                          )
     print(wmodel)

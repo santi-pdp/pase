@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from frontend import WaveFe
-from modules import *
+from .frontend import WaveFe
+from .modules import *
 import torch.nn.functional as F
 import json
 
@@ -40,6 +40,8 @@ class DecoderMinion(Model):
                  kwidths=[2, 2, 2, 2, 5],
                  norm_type=None,
                  skip=False,
+                 loss=None,
+                 keys=None,
                  name='DecoderMinion'):
         super().__init__(name=name)
         self.num_inputs = num_inputs
@@ -52,6 +54,10 @@ class DecoderMinion(Model):
         self.strides = strides
         self.kwidths = kwidths
         self.norm_type = norm_type
+        self.loss = loss
+        self.keys = keys
+        if keys is None:
+            keys = [name]
         self.blocks = nn.ModuleList()
         ninp = num_inputs
         # First go through deconvolving structure
@@ -73,7 +79,10 @@ class DecoderMinion(Model):
             h_ = h
             h = block(h)
         y = self.W(h)
-        return y, h
+        if self.skip:
+            return y, h
+        else:
+            return y
                  
 class MLPMinion(Model):
 
@@ -82,6 +91,8 @@ class MLPMinion(Model):
                  dropout, hidden_size=256,
                  hidden_layers=2,
                  skip=True,
+                 loss=None,
+                 keys=None,
                  name='MLPMinion'):
         super().__init__(name=name)
         # Implemented with Conv1d layers to not 
@@ -93,6 +104,10 @@ class MLPMinion(Model):
         self.skip = skip
         self.hidden_size = hidden_size
         self.hidden_layers = hidden_layers
+        self.loss = loss
+        self.keys = keys
+        if keys is None:
+            keys = [name]
         self.blocks = nn.ModuleList()
         ninp = num_inputs
         for _ in range(hidden_layers):
@@ -107,7 +122,10 @@ class MLPMinion(Model):
         for bi, block in enumerate(self.blocks, start=1):
             h = block(h)
         y = self.W(h)
-        return y, h
+        if self.skip:
+            return y, h
+        else:
+            return y
 
 if __name__ == '__main__':
     #minion = MLPMinion(256, 128, 0)
