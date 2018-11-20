@@ -8,6 +8,7 @@ import numpy as np
 import random
 import json
 import timeit
+import os
 
 
 class Waveminionet(Model):
@@ -38,6 +39,9 @@ class Waveminionet(Model):
         ninp = self.frontend.emb_dim
         self.min2idx = {}
         for minion_cfg in minions_cfg:
+            if minion_cfg['name'] == 'mi':
+                # add additional code for pair
+                ninp += self.frontend.emb_dim
             minion_cfg['num_inputs'] = ninp
             minion = minion_maker(minion_cfg)
             self.minions.append(minion)
@@ -84,7 +88,11 @@ class Waveminionet(Model):
             outs[minion.name] = y
         return outs, h
 
-    
+    def join_skip(self, x, skip):
+        if skip is None:
+            return x
+        else:
+            return torch.cat((x, skip), dim=1)
 
     def train(self, dloader, cfg, device='cpu'):
         epoch = cfg['epoch']
@@ -111,11 +119,11 @@ class Waveminionet(Model):
             minopts[minion.name] = getattr(optim, min_opt)(minion.parameters(),
                                                            lr=cfg['min_lr'])
         min_global_steps = {}
+        global_step = 0
         for epoch_ in range(epoch):
             timings = []
             beg_t = timeit.default_timer()
             min_loss = {}
-            global_step = 0
             for bidx, batch in enumerate(dloader, start=1):
                 feopt.zero_grad()
                 # Build chunk keys to know what to encode
@@ -128,19 +136,34 @@ class Waveminionet(Model):
                     fe_h[k] = self.frontend(batch[k].to(device))
                 min_h = {}
                 h = fe_h['chunk']
+                skip_acum = None
                 for mi, minion in enumerate(self.minions, start=1):
                     min_name = minion.name
-                    if self.mi_fwd and min_name == 'mi':
-                        # mi inference
-                        raise NotImplementedError
+                    if min_name == 'mi':
+                        # merge two pairs: (chunk, chunk_ctxt), (chunk,
+                        # chunk_rand)
+                        mi_true = minion(self.join_skip(torch.cat((fe_h['chunk'],
+                                                                   fe_h['chunk_ctxt']),
+                                                                  dim=1),
+                                         skip_acum))
+                        mi_fake = minion(self.join_skip(torch.cat((fe_h['chunk'],
+                                                                   fe_h['chunk_rand']),
+                                                                  dim=1),
+                                         skip_acum))
+                        y = torch.cat((mi_true, mi_fake), dim=0)
+                        batch['mi'] = torch.cat((torch.ones(mi_true.size()),
+                                                 torch.zeros(mi_fake.size())),
+                                                dim=0)
                     else:
                         if minion.skip:
-                            y, h_ = minion(h)
-                            h_c = torch.cat((h, h_), dim=1)
-                            h = h_c
+                            y, h_ = minion(self.join_skip(h, skip_acum))
+                            if skip_acum is None:
+                                skip_acum = h_
+                            else:
+                                skip_acum = torch.cat((skip_acum, h_), dim=1)
                         else:
-                            y = minion(h)
-                        min_h[min_name] = y
+                            y = minion(self.join_skip(h, skip_acum))
+                    min_h[min_name] = y
 
                 if hasattr(self, 'z_minion'):
                     # First shape the hidden space as Z if needed
@@ -153,17 +176,20 @@ class Waveminionet(Model):
                    
                     greal_loss.backward(retain_graph=True)
                     global_step += 1
+
                 # backprop time
                 if rndmin_train:
                     min_names = list(min_h.keys())
                     rnd_min = random.choice(min_names)
                     minopts[rnd_min].zero_grad()
                     y_ = min_h[rnd_min]
+                    minion = self.minions[self.min2idx[rnd_min]]
                     y_lab = batch[rnd_min].to(device)
-                    loss = self.minions[self.min2idx[rnd_min]].loss(y_, y_lab)
+                    loss = minion.loss(y_, y_lab)
                     loss.backward()
                     if rnd_min not in min_loss:
                         min_loss[rnd_min] = []
+                    if rnd_min not in min_global_steps:
                         min_global_steps[rnd_min] = 0
                     min_loss[rnd_min].append(loss.item())
                     min_global_steps[rnd_min] += 1
@@ -178,6 +204,7 @@ class Waveminionet(Model):
 
                         if min_name not in min_loss:
                             min_loss[min_name] = []
+                        if min_name not in min_global_steps:
                             min_global_steps[min_name] = 0
                         min_loss[min_name].append(loss.item())
                         min_global_steps[min_name] += 1
@@ -197,7 +224,12 @@ class Waveminionet(Model):
                                           losses[-1], min_global_steps[min_name])
                         writer.add_histogram('train/{}'.format(min_name),
                                              min_h[min_name].data,
-                                             bins='sturges')
+                                             bins='sturges',
+                                             global_step=min_global_steps[min_name])
+                        writer.add_histogram('train/gtruth_{}'.format(min_name),
+                                             batch[min_name].data,
+                                             bins='sturges',
+                                             global_step=min_global_steps[min_name])
                     if hasattr(self, 'z_minion'):
                         print('ZMinion dfake_loss: {:.3f}, dreal_loss: {:.3f}, '
                               'gloss: {:.3f}'.format(dfake_loss.item(),
@@ -212,8 +244,20 @@ class Waveminionet(Model):
                         writer.add_scalar('train/g_loss',
                                           greal_loss.item(),
                                           global_step)
+                        writer.add_histogram('train/z',
+                                             fe_h['chunk'],
+                                             bins='sturges',
+                                             global_step=global_step)
+
 
                     print('Mean batch time: {:.3f} s'.format(np.mean(timings)))
+            # epoch end
+            torch.save(self.frontend.state_dict(),
+                       os.path.join(save_path,
+                                    'FE_e{}.ckpt'.format(epoch_)))
+            torch.save(self.state_dict(),
+                       os.path.join(save_path,
+                                    'fullmodel_e{}.ckpt'.format(epoch_)))
 
 
 

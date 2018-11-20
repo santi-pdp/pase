@@ -39,11 +39,15 @@ def train(opts):
                            'name':'prosody',
                            'loss':nn.MSELoss()
                           },
-                          #{'num_outputs':1,
-                          # 'dropout':0.2,
-                          # 'name':'mi',
-                          # 'loss':nn.BCELoss()
-                          #},
+                          {'num_outputs':1,
+                           'dropout':0.2,
+                           'name':'mi',
+                           'loss':nn.BCEWithLogitsLoss(),
+                           'skip':False,
+                           'keys':['chunk',
+                                   'chunk_ctxt',
+                                   'chunk_rand']
+                          },
     ])
     print(model)
     model.to(device)
@@ -84,8 +88,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=100)
     parser.add_argument('--fe_opt', type=str, default='Adam')
     parser.add_argument('--min_opt', type=str, default='Adam')
-    parser.add_argument('--fe_lr', type=float, default=0.001)
-    parser.add_argument('--min_lr', type=float, default=0.001)
+    parser.add_argument('--fe_lr', type=float, default=0.0001)
+    parser.add_argument('--min_lr', type=float, default=0.0004)
     parser.add_argument('--rndmin_train', action='store_true',
                         default=False)
 

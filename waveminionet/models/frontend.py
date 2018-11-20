@@ -13,7 +13,7 @@ class WaveFe(Model):
                  kwidths=[251, 10, 5, 5, 5, 5, 5, 5], 
                  strides=[1, 5, 2, 1, 2, 1, 2, 2], 
                  fmaps=[64, 64, 128, 128, 256, 256, 512, 512],
-                 norm_type=None,
+                 norm_type='bnorm',
                  pad_mode='reflect', sr=16000,
                  emb_dim=256,
                  name='WaveFe'):

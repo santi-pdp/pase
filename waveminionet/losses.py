@@ -44,4 +44,3 @@ class L2AdversarialLoss(object):
         greal_loss = self.criterion(greal, lab_1)
         return dreal_loss, dfake_loss, greal_loss
 
-

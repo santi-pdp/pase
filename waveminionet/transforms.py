@@ -180,7 +180,8 @@ class Prosody(object):
         uv = torch.tensor(uv.astype(np.float32)).unsqueeze(0)[:, :max_frames]
         if torch.sum(uv) == 0:
             # if frame is completely unvoiced, make lf0 min val
-            lf0 = torch.ones(uv.size()) * self.f0_min
+            lf0 = torch.ones(uv.size()) * np.log(self.f0_min)
+        assert lf0.min() > 0, lf0.data.numpy()
         # secondly obtain zcr
         zcr = librosa.feature.zero_crossing_rate(y=wav,
                                                  frame_length=self.win,
