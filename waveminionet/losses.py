@@ -8,11 +8,18 @@ class RegressionLoss(object):
         loss = self.criterion(pred, gtruth)
         return loss
 
-class L2AdversarialLoss(object):
+class AdversarialLoss(object):
 
-    def __init__(self, z_gen=torch.randn):
+    def __init__(self, z_gen=torch.randn,
+                 loss='L2'):
         self.z_gen = z_gen
-        self.criterion = nn.MSELoss()
+        self.loss = loss
+        if loss == 'L2':
+            self.criterion = nn.MSELoss()
+        elif loss == 'BCE':
+            self.criterion = nn.BCEWithLogitsLoss()
+        else:
+            raise ValueError('Unrecognized loss ', loss)
 
     def register_DNet(self, Dnet):
         self.Dnet = Dnet

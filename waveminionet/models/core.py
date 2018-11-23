@@ -15,7 +15,7 @@ class Waveminionet(Model):
 
     def __init__(self, frontend=None, frontend_cfg=None,
                  minions_cfg=None, z_minion=True,
-                 z_cfg=None,
+                 z_cfg=None, adv_loss='BCE',
                  name='Waveminionet'):
         super().__init__(name=name)
         # augmented wav processing net
@@ -68,7 +68,7 @@ class Waveminionet(Model):
                     'dropout':0.,
                     'name':'z',
                     'skip':False,
-                    'loss':L2AdversarialLoss()
+                    'loss':AdversarialLoss(loss=adv_loss)
                 }
             self.z_minion = minion_maker(z_cfg)
             self.z_minion.loss.register_DNet(self.z_minion)
@@ -113,18 +113,28 @@ class Waveminionet(Model):
         if hasattr(self, 'z_minion'):
             zopt = getattr(optim, cfg['min_opt'])(self.z_minion.parameters(), 
                                                   lr=cfg['min_lr'])
+        if 'min_lrs' in cfg:
+            min_lrs = cfg['min_lrs']
+        else:
+            min_lrs = None
         minopts = {}
         for mi, minion in enumerate(self.minions, start=1):
             min_opt = cfg['min_opt']
+            min_lr = cfg['min_lr']
+            if min_lrs is not None and minion.name in min_lrs:
+                min_lr = min_lrs[minion.name]
+                print('Applying lr {:.5f} to minion {}'.format(min_lr,
+                                                               minion.name))
             minopts[minion.name] = getattr(optim, min_opt)(minion.parameters(),
-                                                           lr=cfg['min_lr'])
+                                                           lr=min_lr)
         min_global_steps = {}
         global_step = 0
         for epoch_ in range(epoch):
             timings = []
             beg_t = timeit.default_timer()
             min_loss = {}
-            for bidx, batch in enumerate(dloader, start=1):
+            for bidx in range(1, bpe + 1):
+                batch = next(dloader.__iter__())
                 feopt.zero_grad()
                 # Build chunk keys to know what to encode
                 chunk_keys = ['chunk']
@@ -171,7 +181,7 @@ class Waveminionet(Model):
                     # Adversarial learning to map Fe(wav) to Z ~ prior
                     dreal_loss, dfake_loss, \
                             greal_loss = self.z_minion.loss(fe_h['chunk'],
-                                                           zopt)
+                                                            zopt)
                     d_loss = dreal_loss + dfake_loss
                    
                     greal_loss.backward(retain_graph=True)

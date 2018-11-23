@@ -48,7 +48,8 @@ def train(opts):
                                    'chunk_ctxt',
                                    'chunk_rand']
                           },
-    ])
+                          ],
+                          adv_loss=opts.adv_loss)
     print(model)
     model.to(device)
     trans = Compose([
@@ -70,6 +71,8 @@ def train(opts):
     # chunks as total_train_wav_dur // chunk_size
     bpe = (dset.total_wav_dur // opts.chunk_size) // opts.batch_size
     opts.bpe = bpe
+    # fastet lr to MI
+    #opts.min_lrs = {'mi':0.001}
     model.train(dloader, vars(opts), device=device)
 
 if __name__ == '__main__':
@@ -92,6 +95,8 @@ if __name__ == '__main__':
     parser.add_argument('--min_lr', type=float, default=0.0004)
     parser.add_argument('--rndmin_train', action='store_true',
                         default=False)
+    parser.add_argument('--adv_loss', type=str, default='BCE',
+                        help='BCE or L2')
 
     opts = parser.parse_args()
     if not os.path.exists(opts.save_path):
