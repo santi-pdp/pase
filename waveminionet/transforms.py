@@ -95,7 +95,7 @@ class MIChunkWav(SingleChunkWav):
         self.assert_format(raw_rand)
         pkg['chunk'] = self.select_chunk(raw)
         pkg['chunk_ctxt'] = self.select_chunk(raw)
-        pkg['chunk_rand'] = self.select_chunk(raw)
+        pkg['chunk_rand'] = self.select_chunk(raw_rand)
         return pkg
 
 class LPS(object):
