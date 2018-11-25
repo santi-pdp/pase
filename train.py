@@ -11,12 +11,24 @@ import numpy as np
 import argparse
 import os
 import json
-
+import random
 
 
 def train(opts):
     CUDA = True if torch.cuda.is_available() and not opts.no_cuda else False
     device = 'cuda' if CUDA else 'cpu'
+    num_devices = 1
+    np.random.seed(opts.seed)
+    random.seed(opts.seed)
+    torch.manual_seed(opts.seed)
+    if CUDA:
+        torch.cuda.manual_seed_all(opts.seed)
+        num_devices = torch.cuda.device_count()
+        print('[*] Using CUDA {} devices'.format(num_devices))
+    else:
+        print('[!] Using CPU')
+    print('Seeds initialized to {}'.format(opts.seed))
+
     model = Waveminionet(minions_cfg=[
                           {'num_outputs':1,
                            'dropout':0.2,
@@ -47,9 +59,9 @@ def train(opts):
                            'keys':['chunk',
                                    'chunk_ctxt',
                                    'chunk_rand']
-                          },
-                          ],
-                          adv_loss=opts.adv_loss)
+                          }], 
+        adv_loss=opts.adv_loss,
+        num_devices=num_devices)
     print(model)
     model.to(device)
     trans = Compose([
@@ -84,6 +96,7 @@ if __name__ == '__main__':
     parser.add_argument('--stats', type=str, default='data/vctk_stats.pkl')
     parser.add_argument('--save_path', type=str, default='ckpt')
     parser.add_argument('--num_workers', type=int, default=2)
+    parser.add_argument('--seed', type=int, default=2)
     parser.add_argument('--no-cuda', action='store_true', default=False)
     parser.add_argument('--chunk_size', type=int, default=16000)
     parser.add_argument('--log_freq', type=int, default=100)
@@ -97,6 +110,11 @@ if __name__ == '__main__':
                         default=False)
     parser.add_argument('--adv_loss', type=str, default='BCE',
                         help='BCE or L2')
+    parser.add_argument('--warmup', type=int, default=1,
+                        help='Epoch to begin applying z adv '
+                             '(Def: 2).')
+    parser.add_argument('--zinit_weight', type=float, default=1)
+    parser.add_argument('--zinc', type=float, default=0.0002)
 
     opts = parser.parse_args()
     if not os.path.exists(opts.save_path):
