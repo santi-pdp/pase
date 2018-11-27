@@ -63,7 +63,7 @@ def train(opts):
         adv_loss=opts.adv_loss,
         num_devices=num_devices)
     if opts.pretrained_ckpt is not None:
-        model.load(opts.pretrained_ckpt)
+        model.load_pretrained(opts.pretrained_ckpt, load_last=True)
     print(model)
     model.to(device)
     trans = Compose([
