@@ -4,6 +4,7 @@ import math
 import torch.nn.functional as F
 from torch.nn.utils.spectral_norm import spectral_norm
 import numpy as np
+import os
 
 
 def build_norm_layer(norm_type, param=None, num_feats=None):
