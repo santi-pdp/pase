@@ -62,6 +62,8 @@ def train(opts):
                           }], 
         adv_loss=opts.adv_loss,
         num_devices=num_devices)
+    if opts.pretrained_ckpt is not None:
+        model.load(opts.pretrained_ckpt)
     print(model)
     model.to(device)
     trans = Compose([
@@ -94,6 +96,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_cfg', type=str, 
                         default='data/vctk_data.cfg')
     parser.add_argument('--stats', type=str, default='data/vctk_stats.pkl')
+    parser.add_argument('--pretrained_ckpt', type=str, default=None)
     parser.add_argument('--save_path', type=str, default='ckpt')
     parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--seed', type=int, default=2)
