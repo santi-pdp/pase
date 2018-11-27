@@ -151,8 +151,9 @@ class Waveminionet(Model):
             timings = []
             beg_t = timeit.default_timer()
             min_loss = {}
-            if epoch_ + 1 >= warmup_epoch and hasattr(self, 'z_minion'):
-                zweight = min(1, zinit_weight)
+            if epoch_ + 1 == warmup_epoch and hasattr(self, 'z_minion'):
+                zweight = zinit_weight
+
             for bidx in range(1, bpe + 1):
                 batch = next(dloader.__iter__())
                 feopt.zero_grad()
