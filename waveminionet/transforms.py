@@ -7,6 +7,10 @@ import pickle
 from ahoproc_tools.interpolate import interpolation
 
 
+def norm_and_scale(wav):
+    assert isinstance(wav, torch.Tensor), type(wav)
+    wav = wav / torch.max(torch.abs(wav))
+    return wav * torch.rand(1)
 
 def format_package(x):
     if not isinstance(x, dict):
@@ -50,8 +54,9 @@ class ZNorm(object):
 
 class SingleChunkWav(object):
 
-    def __init__(self, chunk_size):
+    def __init__(self, chunk_size, random_scale=True):
         self.chunk_size = chunk_size
+        self.random_scale = random_scale
 
     def assert_format(self, x):
         # assert it is a waveform and pytorch tensor
@@ -65,12 +70,14 @@ class SingleChunkWav(object):
         idx = random.choice(idxs)
         chk = wav[idx:idx + chksz]
         return chk
-        
+
     def __call__(self, pkg):
         pkg = format_package(pkg)
         raw = pkg['raw']
         self.assert_format(raw)
         pkg['chunk'] = self.select_chunk(raw)
+        if self.random_scale:
+            pkg['chunk'] = norm_and_scale(pkg['chunk'])
         return pkg
 
     def __repr__(self):
@@ -96,6 +103,10 @@ class MIChunkWav(SingleChunkWav):
         pkg['chunk'] = self.select_chunk(raw)
         pkg['chunk_ctxt'] = self.select_chunk(raw)
         pkg['chunk_rand'] = self.select_chunk(raw_rand)
+        if self.random_scale:
+            pkg['chunk'] = norm_and_scale(pkg['chunk'])
+            pkg['chunk_ctxt'] = norm_and_scale(pkg['chunk_ctxt'])
+            pkg['chunk_rand'] = norm_and_scale(pkg['chunk_rand'])
         return pkg
 
 class LPS(object):
