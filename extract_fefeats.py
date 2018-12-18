@@ -25,6 +25,7 @@ def extract(opts):
     model = WaveFe()
     model.load_pretrained(opts.ckpt, load_last=True)
     model.to(device)
+    model.eval()
 
     # Build dataset and dataloader
     dset = WavDataset(opts.data_root, opts.data_cfg, opts.split,
@@ -46,7 +47,10 @@ def extract(opts):
             out_name = os.path.join(opts.save_path,
                                     opts.split,
                                     uttname)
-            np.save(out_name, z[s_i][0].data.cpu().numpy())
+            maxlen = int(np.ceil(lens[s_i] / 80))
+            z_sample = z[s_i].data.cpu().numpy()
+            z_sample = z_sample[:, :maxlen]
+            np.save(out_name, z_sample) 
         end_t = timeit.default_timer()
         timings.append(end_t - beg_t)
         beg_t = timeit.default_timer()
