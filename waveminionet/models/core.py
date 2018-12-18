@@ -16,7 +16,7 @@ class Waveminionet(Model):
     def __init__(self, frontend=None, frontend_cfg=None,
                  minions_cfg=None, z_minion=True,
                  z_cfg=None, adv_loss='BCE',
-                 num_devices=1,
+                 num_devices=1, pretrained_ckpt=None,
                  name='Waveminionet'):
         super().__init__(name=name)
         # augmented wav processing net
@@ -36,9 +36,6 @@ class Waveminionet(Model):
                 self.frontend = WaveFe(**frontend_cfg)
         # -------- MINION STACK --------
         self.minions = nn.ModuleList()
-        if num_devices > 1:
-            self.frontend_dp = nn.DataParallel(self.frontend)
-            self.minions_dp = nn.ModuleList()
         self.mi_fwd = False
         ninp = self.frontend.emb_dim
         self.min2idx = {}
@@ -58,8 +55,6 @@ class Waveminionet(Model):
                 # if MI minion is present, multi chunk forward
                 # is needed (3 chunks are fwd)
                 self.mi_fwd = True
-            if hasattr(self, 'minions_dp'):
-                self.minions_dp.append(nn.DataParallel(minion))
         if z_minion:
             # Make the minion enforcing the shape of the latent space
             # to be like some prior z_gen enforced in the loss
@@ -78,6 +73,12 @@ class Waveminionet(Model):
                 }
             self.z_minion = minion_maker(z_cfg)
             self.z_minion.loss.register_DNet(self.z_minion)
+        if pretrained_ckpt is not None:
+            self.load_pretrained(pretrained_ckpt, load_last=True)
+        if num_devices > 1:
+            self.frontend_dp = nn.DataParallel(self.frontend)
+            self.minions_dp = nn.ModuleList([nn.DataParallel(m) for m in \
+                                             self.minions])
 
     def forward(self, x):
         fe_h = self.frontend(x)
@@ -234,14 +235,14 @@ class Waveminionet(Model):
                     min_global_steps[rnd_min] += 1
                     minopts[rnd_min].step()
                 else:
-                    raise NotImplementedError('DataParallel to be included')
+                    if hasattr(self, 'minions_dp'):
+                        raise NotImplementedError('DataParallel to be included')
                     # Compute all minion losses
                     for min_name, y_ in min_h.items():
                         minopts[min_name].zero_grad()
                         y_lab = batch[min_name].to(device)
                         loss = self.minions[self.min2idx[min_name]].loss(y_, y_lab)
-                        loss.backward()
-
+                        loss.backward(retain_graph=True)
                         if min_name not in min_loss:
                             min_loss[min_name] = []
                         if min_name not in min_global_steps:

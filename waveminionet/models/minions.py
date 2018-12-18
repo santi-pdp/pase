@@ -12,6 +12,8 @@ def minion_maker(cfg):
         minion = MLPMinion(**cfg)
     elif mtype == 'decoder':
         minion = DecoderMinion(**cfg)
+    elif mtype == 'gru':
+        minion = GRUMinion(**cfg)
     else:
         raise TypeError('Unrecognized minion type {}'.format(mtype))
     return minion
@@ -121,6 +123,45 @@ class MLPMinion(Model):
         h = x
         for bi, block in enumerate(self.blocks, start=1):
             h = block(h)
+        y = self.W(h)
+        if self.skip:
+            return y, h
+        else:
+            return y
+
+class GRUMinion(Model):
+
+    def __init__(self, num_inputs, 
+                 num_outputs,
+                 dropout, hidden_size=256,
+                 hidden_layers=2,
+                 skip=True,
+                 loss=None,
+                 keys=None,
+                 name='MLPMinion'):
+        super().__init__(name=name)
+        self.num_inputs = num_inputs
+        self.num_outputs = num_outputs
+        self.dropout = dropout
+        self.skip = skip
+        self.hidden_size = hidden_size
+        self.hidden_layers = hidden_layers
+        self.loss = loss
+        self.keys = keys
+        if keys is None:
+            keys = [name]
+        self.blocks = nn.ModuleList()
+        ninp = num_inputs
+        self.rnn = nn.GRU(ninp,
+                          hidden_size,
+                          num_layers=hidden_layers,
+                          batch_first=True,
+                          dropout=dropout)
+        self.W = nn.Conv1d(hidden_size, num_outputs, 1)
+        
+    def forward(self, x):
+        h, _ = self.rnn(x.transpose(1, 2))
+        h = h.transpose(1, 2)
         y = self.W(h)
         if self.skip:
             return y, h
