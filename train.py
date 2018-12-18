@@ -86,6 +86,7 @@ if __name__ == '__main__':
     parser.add_argument('--dout', type=float, default=0.2)
     parser.add_argument('--fe_lr', type=float, default=0.0001)
     parser.add_argument('--min_lr', type=float, default=0.0004)
+    parser.add_argument('--z_lr', type=float, default=0.0004)
     parser.add_argument('--rndmin_train', action='store_true',
                         default=False)
     parser.add_argument('--adv_loss', type=str, default='BCE',
