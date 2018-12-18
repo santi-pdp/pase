@@ -31,29 +31,46 @@ def train(opts):
 
     model = Waveminionet(minions_cfg=[
                           {'num_outputs':1,
-                           'dropout':0.2,
+                           'dropout':opts.dout,
+                           'hidden_layers': opts.hidden_layers,
                            'name':'chunk',
                            'type':'decoder',
+                           'hidden_size': opts.hidden_size,
                            'loss':nn.MSELoss()
                           },
-                          {'num_outputs':1025,
-                           'dropout':0.2,
+                          {'num_outputs':opts.nfft // 2 + 1,
+                           'dropout':opts.dout,
+                           'hidden_size': opts.hidden_size,
+                           'hidden_layers': opts.hidden_layers,
+                           #'type':'gru',
                            'name':'lps',
+                           #'skip':False,
                            'loss':nn.MSELoss()
                           },
                           {'num_outputs':20,
-                           'dropout':0.2,
+                           'dropout':opts.dout,
+                           'hidden_size': opts.hidden_size,
+                           'hidden_layers': opts.hidden_layers,
+                           #'type':'gru',
                            'name':'mfcc',
+                           #'skip':False,
                            'loss':nn.MSELoss()
                           },
                           {'num_outputs':4,
-                           'dropout':0.2,
+                           'dropout':opts.dout,
+                           'hidden_size': opts.hidden_size,
+                           'hidden_layers': opts.hidden_layers,
+                           #'type':'gru',
                            'name':'prosody',
+                           #'skip':False,
                            'loss':nn.MSELoss()
                           },
                           {'num_outputs':1,
-                           'dropout':0.2,
+                           'dropout':opts.dout,
+                           'hidden_size': opts.hidden_size,
+                           'hidden_layers': opts.hidden_layers,
                            'name':'mi',
+                           #'type':'gru',
                            'loss':nn.BCEWithLogitsLoss(),
                            'skip':False,
                            'keys':['chunk',
@@ -61,15 +78,15 @@ def train(opts):
                                    'chunk_rand']
                           }], 
         adv_loss=opts.adv_loss,
-        num_devices=num_devices)
-    if opts.pretrained_ckpt is not None:
-        model.load_pretrained(opts.pretrained_ckpt, load_last=True)
+        num_devices=num_devices,
+        pretrained_ckpt=opts.pretrained_ckpt
+        )
     print(model)
     model.to(device)
     trans = Compose([
         ToTensor(),
         MIChunkWav(opts.chunk_size),
-        LPS(),
+        LPS(opts.nfft),
         MFCC(),
         Prosody(),
         ZNorm(opts.stats)
@@ -104,9 +121,13 @@ if __name__ == '__main__':
     parser.add_argument('--chunk_size', type=int, default=16000)
     parser.add_argument('--log_freq', type=int, default=100)
     parser.add_argument('--epoch', type=int, default=1000)
+    parser.add_argument('--nfft', type=int, default=2048)
     parser.add_argument('--batch_size', type=int, default=100)
+    parser.add_argument('--hidden_size', type=int, default=256)
+    parser.add_argument('--hidden_layers', type=int, default=2)
     parser.add_argument('--fe_opt', type=str, default='Adam')
     parser.add_argument('--min_opt', type=str, default='Adam')
+    parser.add_argument('--dout', type=float, default=0.2)
     parser.add_argument('--fe_lr', type=float, default=0.0001)
     parser.add_argument('--min_lr', type=float, default=0.0004)
     parser.add_argument('--rndmin_train', action='store_true',
