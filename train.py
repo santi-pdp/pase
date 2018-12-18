@@ -3,6 +3,7 @@ from waveminionet.dataset import PairWavDataset, DictCollater
 from torchvision.transforms import Compose
 from waveminionet.transforms import *
 from waveminionet.losses import *
+from waveminionet.utils import waveminionet_parser
 from torch.utils.data import DataLoader
 import torch
 import pickle
@@ -29,58 +30,11 @@ def train(opts):
         print('[!] Using CPU')
     print('Seeds initialized to {}'.format(opts.seed))
 
-    model = Waveminionet(minions_cfg=[
-                          {'num_outputs':1,
-                           'dropout':opts.dout,
-                           'hidden_layers': opts.hidden_layers,
-                           'name':'chunk',
-                           'type':'decoder',
-                           'hidden_size': opts.hidden_size,
-                           'loss':nn.MSELoss()
-                          },
-                          {'num_outputs':opts.nfft // 2 + 1,
-                           'dropout':opts.dout,
-                           'hidden_size': opts.hidden_size,
-                           'hidden_layers': opts.hidden_layers,
-                           #'type':'gru',
-                           'name':'lps',
-                           #'skip':False,
-                           'loss':nn.MSELoss()
-                          },
-                          {'num_outputs':20,
-                           'dropout':opts.dout,
-                           'hidden_size': opts.hidden_size,
-                           'hidden_layers': opts.hidden_layers,
-                           #'type':'gru',
-                           'name':'mfcc',
-                           #'skip':False,
-                           'loss':nn.MSELoss()
-                          },
-                          {'num_outputs':4,
-                           'dropout':opts.dout,
-                           'hidden_size': opts.hidden_size,
-                           'hidden_layers': opts.hidden_layers,
-                           #'type':'gru',
-                           'name':'prosody',
-                           #'skip':False,
-                           'loss':nn.MSELoss()
-                          },
-                          {'num_outputs':1,
-                           'dropout':opts.dout,
-                           'hidden_size': opts.hidden_size,
-                           'hidden_layers': opts.hidden_layers,
-                           'name':'mi',
-                           #'type':'gru',
-                           'loss':nn.BCEWithLogitsLoss(),
-                           'skip':False,
-                           'keys':['chunk',
-                                   'chunk_ctxt',
-                                   'chunk_rand']
-                          }], 
-        adv_loss=opts.adv_loss,
-        num_devices=num_devices,
-        pretrained_ckpt=opts.pretrained_ckpt
-        )
+    model = Waveminionet(minions_cfg=waveminionet_parser(opts.net_cfg),
+                         adv_loss=opts.adv_loss,
+                         num_devices=num_devices,
+                         pretrained_ckpt=opts.pretrained_ckpt
+                        )
     print(model)
     model.to(device)
     trans = Compose([
@@ -112,6 +66,8 @@ if __name__ == '__main__':
                         default='data/VCTK')
     parser.add_argument('--data_cfg', type=str, 
                         default='data/vctk_data.cfg')
+    parser.add_argument('--net_cfg', type=str,
+                        default=None)
     parser.add_argument('--stats', type=str, default='data/vctk_stats.pkl')
     parser.add_argument('--pretrained_ckpt', type=str, default=None)
     parser.add_argument('--save_path', type=str, default='ckpt')
@@ -141,8 +97,12 @@ if __name__ == '__main__':
     parser.add_argument('--zinc', type=float, default=0.0002)
 
     opts = parser.parse_args()
+    if opts.net_cfg is None:
+        raise ValueError('Please specify a net_cfg file')
+
     if not os.path.exists(opts.save_path):
         os.makedirs(opts.save_path)
+
 
     with open(os.path.join(opts.save_path, 'train.opts'), 'w') as opts_f:
         opts_f.write(json.dumps(vars(opts), indent=2))
