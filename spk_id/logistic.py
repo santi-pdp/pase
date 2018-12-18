@@ -81,6 +81,7 @@ def train(opts):
         for bidx, batch in enumerate(dloader, start=1):
             opt.zero_grad()
             batchX, batchY = batch
+            print('X size: ', batchX.size())
             batchX = batchX.to(device)
             batchY = batchY.to(device)
             pred = model(batchX)
@@ -91,7 +92,7 @@ def train(opts):
             end_t = timeit.default_timer()
             timings.append(end_t - beg_t)
             beg_t = timeit.default_timer()
-            if bidx % opts.log_freq == 0:
+            if bidx % opts.log_freq == 0 or bidx >= len(dloader):
                 print('Batch {}/{} (Epoch {}) loss: {:.3f} mbtime: {:.3f}'
                       ' s'.format(bidx, len(dloader), e,
                                   loss.item(), np.mean(timings)))
