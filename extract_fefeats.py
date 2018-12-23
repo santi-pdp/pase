@@ -43,7 +43,11 @@ def extract(opts):
         wavs = wavs.to(device)
         z = model(wavs.unsqueeze(1))
         for s_i in range(wavs.size(0)):
-            uttname = os.path.splitext(os.path.basename(uttnames[s_i]))[0]
+            if opts.merge_uttname:
+                uname = uttnames[s_i].replace('/', '_')
+                uttname = os.path.splitext(uname)[0]
+            else:
+                uttname = os.path.splitext(os.path.basename(uttnames[s_i]))[0]
             out_name = os.path.join(opts.save_path,
                                     opts.split,
                                     uttname)
@@ -76,6 +80,10 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=20)
     parser.add_argument('--no-cuda', action='store_true', default=False)
     parser.add_argument('--log_freq', type=int, default=100)
+    parser.add_argument('--merge_uttname', action='store_true', default=False,
+                        help='Dont take basename, but merge with underscores '
+                             'uttnames (TFCommands format).')
+
 
     opts = parser.parse_args()
     if not os.path.exists(os.path.join(opts.save_path, opts.split)):
