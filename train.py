@@ -39,13 +39,14 @@ def train(opts):
     model.to(device)
     trans = Compose([
         ToTensor(),
-        MIChunkWav(opts.chunk_size),
-        LPS(opts.nfft),
-        MFCC(),
-        Prosody(),
+        MIChunkWav(opts.chunk_size, random_scale=opts.random_scale),
+        LPS(opts.nfft, hop=160, win=400),
+        MFCC(hop=160),
+        Prosody(hop=160, win=400),
         ZNorm(opts.stats)
     ])
     print(trans)
+    # Build Dataset(s) and DataLoader(s)
     dset = PairWavDataset(opts.data_root, opts.data_cfg, 'train',
                          transform=trans)
     dloader = DataLoader(dset, batch_size=opts.batch_size,
@@ -56,9 +57,17 @@ def train(opts):
     # chunks as total_train_wav_dur // chunk_size
     bpe = (dset.total_wav_dur // opts.chunk_size) // opts.batch_size
     opts.bpe = bpe
+    if opts.do_eval:
+        va_dset = PairWavDataset(opts.data_root, opts.data_cfg,
+                                 'valid', transform=trans)
+        va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
+                                shuffle=False, collate_fn=DictCollater(),
+                                num_workers=opts.num_workers)
+        va_bpe = (va_dset.total_wav_dur // opts.chunk_size) // opts.batch_size
+        opts.va_bpe = va_bpe
     # fastet lr to MI
     #opts.min_lrs = {'mi':0.001}
-    model.train(dloader, vars(opts), device=device)
+    model.train_(dloader, vars(opts), device=device, va_dloader=va_dloader)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -68,12 +77,14 @@ if __name__ == '__main__':
                         default='data/vctk_data.cfg')
     parser.add_argument('--net_cfg', type=str,
                         default=None)
+    parser.add_argument('--do_eval', action='store_true', default=False)
     parser.add_argument('--stats', type=str, default='data/vctk_stats.pkl')
     parser.add_argument('--pretrained_ckpt', type=str, default=None)
     parser.add_argument('--save_path', type=str, default='ckpt')
     parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--seed', type=int, default=2)
     parser.add_argument('--no-cuda', action='store_true', default=False)
+    parser.add_argument('--random_scale', action='store_true', default=False)
     parser.add_argument('--chunk_size', type=int, default=16000)
     parser.add_argument('--log_freq', type=int, default=100)
     parser.add_argument('--epoch', type=int, default=1000)

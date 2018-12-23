@@ -101,7 +101,7 @@ class Waveminionet(Model):
         else:
             return torch.cat((x, skip), dim=1)
 
-    def train(self, dloader, cfg, device='cpu'):
+    def train_(self, dloader, cfg, device='cpu', va_dloader=None):
         epoch = cfg['epoch']
         bsize = cfg['batch_size']
         save_path = cfg['save_path']
@@ -126,8 +126,9 @@ class Waveminionet(Model):
         feopt = getattr(optim, cfg['fe_opt'])(self.frontend.parameters(), 
                                               lr=cfg['fe_lr'])
         if hasattr(self, 'z_minion'):
+            z_lr = cfg['z_lr']
             zopt = getattr(optim, cfg['min_opt'])(self.z_minion.parameters(), 
-                                                  lr=cfg['min_lr'])
+                                                  lr=z_lr)
         if 'min_lrs' in cfg:
             min_lrs = cfg['min_lrs']
         else:
@@ -149,6 +150,7 @@ class Waveminionet(Model):
         min_global_steps = {}
         global_step = 0
         for epoch_ in range(epoch):
+            self.train()
             timings = []
             beg_t = timeit.default_timer()
             min_loss = {}
@@ -296,12 +298,100 @@ class Waveminionet(Model):
 
                     print('Mean batch time: {:.3f} s'.format(np.mean(timings)))
             # epoch end
+            if va_dloader is not None:
+                va_bpe = cfg['va_bpe']
+                self.eval_(va_dloader, bsize, va_bpe, log_freq=log_freq,
+                           epoch_idx=epoch_,
+                           writer=writer, device=device)
+
             torch.save(self.frontend.state_dict(),
                        os.path.join(save_path,
                                     'FE_e{}.ckpt'.format(epoch_)))
             torch.save(self.state_dict(),
                        os.path.join(save_path,
                                     'fullmodel_e{}.ckpt'.format(epoch_)))
+
+
+    def eval_(self, dloader, batch_size, bpe, log_freq,
+             epoch_idx=0, writer=None, device='cpu'):
+        self.eval()
+        with torch.no_grad():
+            bsize = batch_size
+            frontend = self.frontend
+            minions_run = self.minions
+            print('=' * 50)
+            print('Beginning evaluation...')
+            timings = []
+            beg_t = timeit.default_timer()
+            min_loss = {}
+            for bidx in range(1, bpe + 1):
+                batch = next(dloader.__iter__())
+                # Build chunk keys to know what to encode
+                chunk_keys = ['chunk']
+                if self.mi_fwd:
+                    chunk_keys += ['chunk_ctxt', 'chunk_rand']
+                fe_h = {}
+                # Forward chunk(s) through frontend
+                for k in chunk_keys:
+                    fe_h[k] = frontend(batch[k].to(device))
+                min_h = {}
+                h = fe_h['chunk']
+                skip_acum = None
+                for mi, minion in enumerate(minions_run, start=1):
+                    min_name = self.minions[mi - 1].name
+                    if min_name == 'mi':
+                        # merge two pairs: (chunk, chunk_ctxt), (chunk,
+                        # chunk_rand)
+                        mi_true = minion(self.join_skip(torch.cat((fe_h['chunk'],
+                                                                   fe_h['chunk_ctxt']),
+                                                                  dim=1),
+                                         skip_acum))
+                        mi_fake = minion(self.join_skip(torch.cat((fe_h['chunk'],
+                                                                   fe_h['chunk_rand']),
+                                                                  dim=1),
+                                         skip_acum))
+                        y = torch.cat((mi_true, mi_fake), dim=0)
+                        batch['mi'] = torch.cat((torch.ones(mi_true.size()),
+                                                 torch.zeros(mi_fake.size())),
+                                                dim=0)
+                    else:
+                        if self.minions[mi - 1].skip:
+                            y, h_ = minion(self.join_skip(h, skip_acum))
+                            if skip_acum is None:
+                                skip_acum = h_
+                            else:
+                                skip_acum = torch.cat((skip_acum, h_), dim=1)
+                        else:
+                            y = minion(self.join_skip(h, skip_acum))
+                    min_h[min_name] = y
+
+                # Compute all minion losses
+                for min_name, y_ in min_h.items():
+                    y_lab = batch[min_name].to(device)
+                    loss = self.minions[self.min2idx[min_name]].loss(y_, y_lab)
+                    if min_name not in min_loss:
+                        min_loss[min_name] = []
+                    min_loss[min_name].append(loss.item())
+                end_t = timeit.default_timer()
+                timings.append(end_t - beg_t)
+                beg_t = timeit.default_timer()
+                
+                if bidx % log_freq == 0 or bidx >= bpe:
+                    print('-' * 50)
+                    print('EVAL Batch {}/{} (Epoch {}):'.format(bidx, 
+                                                                bpe,
+                                                                epoch_idx))
+                    for min_name, losses in min_loss.items():
+                        print('Minion {} loss: {:.3f}'
+                              ''.format(min_name, losses[-1]))
+                    print('Mean batch time: {:.3f} s'.format(np.mean(timings)))
+
+            # --------------------------------------------------------------
+            # After all eval data, write mean values of epoch per minion
+            for min_name, losses in min_loss.items():
+                writer.add_scalar('eval/{}_loss'.format(min_name),
+                                  np.mean(losses), epoch_idx)
+
     def state_dict(self):
         sdict = {}
         for k, v in super().state_dict().items():
