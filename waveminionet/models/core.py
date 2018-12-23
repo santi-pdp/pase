@@ -388,9 +388,16 @@ class Waveminionet(Model):
 
             # --------------------------------------------------------------
             # After all eval data, write mean values of epoch per minion
+            aggregate = 0
             for min_name, losses in min_loss.items():
+                mlosses = np.mean(losses)
                 writer.add_scalar('eval/{}_loss'.format(min_name),
-                                  np.mean(losses), epoch_idx)
+                                  mlosses, epoch_idx)
+                aggregate += mlosses
+            # aggregate eval loss
+            writer.add_scalar('eval/total_loss', aggregate,
+                              epoch_idx)
+
 
     def state_dict(self):
         sdict = {}
