@@ -153,7 +153,8 @@ class Saver(object):
             print('[*] Loaded weights')
             return True
 
-    def load_pretrained_ckpt(self, ckpt_file, load_last=False, load_opt=True):
+    def load_pretrained_ckpt(self, ckpt_file, load_last=False, load_opt=True,
+                             verbose=True):
         model_dict = self.model.state_dict() 
         st_dict = torch.load(ckpt_file, 
                              map_location=lambda storage, loc: storage)
@@ -171,9 +172,10 @@ class Saver(object):
         # Filter unnecessary keys from loaded ones and those not existing
         pt_dict = {k: v for k, v in pt_dict.items() if k in model_dict and \
                    k in allowed_keys and v.size() == model_dict[k].size()}
-        print('Current Model keys: ', len(list(model_dict.keys())))
-        print('Loading Pt Model keys: ', len(list(pt_dict.keys())))
-        print('Loading matching keys: ', list(pt_dict.keys()))
+        if verbose:
+            print('Current Model keys: ', len(list(model_dict.keys())))
+            print('Loading Pt Model keys: ', len(list(pt_dict.keys())))
+            print('Loading matching keys: ', list(pt_dict.keys()))
         if len(pt_dict.keys()) != len(model_dict.keys()):
             print('WARNING: LOADING DIFFERENT NUM OF KEYS')
         # overwrite entries in existing dict
@@ -220,10 +222,10 @@ class Model(NeuralBlock):
             # consider it as ckpt to load per-se
             self.load_pretrained(save_path)
 
-    def load_pretrained(self, ckpt_path, load_last=False):
+    def load_pretrained(self, ckpt_path, load_last=False, verbose=True):
         # tmp saver
         saver = Saver(self, '.', optimizer=self.optim)
-        saver.load_pretrained_ckpt(ckpt_path, load_last)
+        saver.load_pretrained_ckpt(ckpt_path, load_last, verbose=verbose)
 
 
     def activation(self, name):
