@@ -30,10 +30,19 @@ def train(opts):
         print('[!] Using CPU')
     print('Seeds initialized to {}'.format(opts.seed))
 
+    # ---------------------
+    # Build Model
+    if opts.fe_cfg is not None:
+        with open(opts.fe_cfg, 'r') as fe_cfg_f:
+            fe_cfg = json.load(fe_cfg_f)
+            print(fe_cfg)
+    else:
+        fe_cfg = None
     model = Waveminionet(minions_cfg=waveminionet_parser(opts.net_cfg),
                          adv_loss=opts.adv_loss,
                          num_devices=num_devices,
-                         pretrained_ckpt=opts.pretrained_ckpt
+                         pretrained_ckpt=opts.pretrained_ckpt,
+                         frontend_cfg=fe_cfg
                         )
     print(model)
     model.to(device)
@@ -65,6 +74,8 @@ def train(opts):
                                 num_workers=opts.num_workers)
         va_bpe = (va_dset.total_wav_dur // opts.chunk_size) // opts.batch_size
         opts.va_bpe = va_bpe
+    else:
+        va_dloader = None
     # fastet lr to MI
     #opts.min_lrs = {'mi':0.001}
     model.train_(dloader, vars(opts), device=device, va_dloader=va_dloader)
@@ -77,6 +88,7 @@ if __name__ == '__main__':
                         default='data/vctk_data.cfg')
     parser.add_argument('--net_cfg', type=str,
                         default=None)
+    parser.add_argument('--fe_cfg', type=str, default=None)
     parser.add_argument('--do_eval', action='store_true', default=False)
     parser.add_argument('--stats', type=str, default='data/vctk_stats.pkl')
     parser.add_argument('--pretrained_ckpt', type=str, default=None)

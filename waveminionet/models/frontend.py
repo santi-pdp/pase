@@ -17,6 +17,7 @@ class WaveFe(Model):
                  norm_type='bnorm',
                  pad_mode='reflect', sr=16000,
                  emb_dim=256,
+                 rnn_pool=False,
                  name='WaveFe'):
         super().__init__(name=name) 
         # apply sincnet at first layer
@@ -40,14 +41,23 @@ class WaveFe(Model):
                                        sr=sr))
             ninp = fmap
         # last projection
-        self.W = nn.Conv1d(fmap, emb_dim, 1)
+        if rnn_pool:
+            self.W = nn.GRU(fmap, emb_dim // 2, bidirectional=True, 
+                            batch_first=True)
+        else:
+            self.W = nn.Conv1d(fmap, emb_dim, 1)
         self.emb_dim = emb_dim
+        self.rnn_pool = rnn_pool
 
     def forward(self, x):
         h = x
         for n, block in enumerate(self.blocks):
             h = block(h)
-        y = self.W(h)
+        if self.rnn_pool:
+            y, _ = self.W(h.transpose(1, 2))
+            y = y.transpose(1, 2)
+        else:
+            y = self.W(h)
         return y
 
 if __name__ == '__main__':
