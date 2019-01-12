@@ -66,9 +66,17 @@ def main(opts):
     splits = ['train', 'valid', 'test']
     splits_N = [train_N, valid_N, test_N]
 
+    spk_utts = dict((k, {}) for k in splits)
+    # if command line specification is zero, it is equivalent to infinite
+    spk_max_utts = {'train':np.inf if opts.max_train_utts_spk == 0 else opts.max_train_utts_spk,
+                    'valid':np.inf if opts.max_valid_utts_spk == 0 else opts.max_valid_utts_spk,
+                    'test':np.inf if opts.max_test_utts_spk == 0 else opts.max_test_utts_spk
+                   }
+
     # 1) Train split, 2) Valid split, 3) Test split
     split_pointer = 0
     for si, (split, split_N) in enumerate(zip(splits, splits_N), start=1):
+        TRAIN = (split == 'train')
         split_spks = spk_ids[split_pointer:split_pointer + split_N]
         total_wav_dur = 0
 
@@ -77,7 +85,17 @@ def main(opts):
         for spk_i, spk_ in enumerate(split_spks, start=1):
             wavs = glob.glob(os.path.join(data_root, WAV_DIR, 
                                           'p' + spk_, '*.wav'))
+            # Start utterance counter per spk
+            if spk_ not in spk_utts[split]:
+                spk_utts[split][spk_] = 0
             for wi, wav in enumerate(wavs):
+                if spk_utts[split][spk_] >= spk_max_utts[split]:
+                    # Skip utterance if this speaker already has maxed out
+                    #print('Speaker {} already maxed out (MAX {}): '
+                    #      '{}'.format(spk_, spk_max_utts, spk_utts[spk_]))
+                    continue
+                # Just count a new utterance in
+                spk_utts[split][spk_] += 1
                 x, rate = librosa.load(wav, sr=None)
                 if x.shape[0] < opts.min_len:
                     # Ignore  too short seqs
@@ -121,6 +139,25 @@ if __name__ == '__main__':
     parser.add_argument('--train_split', type=float, default=0.88)
     parser.add_argument('--valid_split', type=float, default=0.06)
     parser.add_argument('--min_len', type=int, default=16000)
+    parser.add_argument('--max_train_utts_spk', type=int, default=0,
+                        help='Maximum training utterances per spk. '
+                             'This allows to make smaller trainset '
+                             'to experiment with N utts per spk. '
+                             'If it is zero, it takes all utts '
+                             '(Def: 0).')
+    parser.add_argument('--max_valid_utts_spk', type=int, default=0,
+                        help='Maximum validation utterances per spk. '
+                             'This allows to make smaller valset '
+                             'to experiment with N utts per spk. '
+                             'If it is zero, it takes all utts '
+                             '(Def: 0).')
+
+    parser.add_argument('--max_test_utts_spk', type=int, default=0,
+                        help='Maximum test utterances per spk. '
+                             'This allows to make smaller testset '
+                             'to experiment with N utts per spk. '
+                             'If it is zero, it takes all utts '
+                             '(Def: 0).')
 
     opts = parser.parse_args()
 
