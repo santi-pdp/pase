@@ -44,15 +44,17 @@ def train(opts):
                          pretrained_ckpt=opts.pretrained_ckpt,
                          frontend_cfg=fe_cfg
                         )
+    
     print(model)
+    print('Frontend params: ', model.frontend.describe_params())
     model.to(device)
     trans = Compose([
         ToTensor(),
         MIChunkWav(opts.chunk_size, random_scale=opts.random_scale),
-        LPS(opts.nfft, hop=160, win=400),
-        MFCC(hop=160),
-        Prosody(hop=160, win=400),
-        ZNorm(opts.stats)
+        #LPS(opts.nfft, hop=160, win=400),
+        #MFCC(hop=160),
+        #Prosody(hop=160, win=400),
+        #ZNorm(opts.stats)
     ])
     print(trans)
     # Build Dataset(s) and DataLoader(s)
@@ -106,6 +108,12 @@ if __name__ == '__main__':
     parser.add_argument('--hidden_layers', type=int, default=2)
     parser.add_argument('--fe_opt', type=str, default='Adam')
     parser.add_argument('--min_opt', type=str, default='Adam')
+    parser.add_argument('--lrdecay', type=float, default=0,
+                        help='Learning rate decay factor with '
+                             'cross validation. After patience '
+                             'epochs, lr decays this amount in '
+                             'all optimizers. ' 
+                             'If zero, no decay is applied (Def: 0).')
     parser.add_argument('--dout', type=float, default=0.2)
     parser.add_argument('--fe_lr', type=float, default=0.0001)
     parser.add_argument('--min_lr', type=float, default=0.0004)
