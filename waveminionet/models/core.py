@@ -205,9 +205,7 @@ class Waveminionet(Model):
                                                               triplets[2]),
                                                              dim=1), skip_acum)
                         triplet_all = torch.cat((triplet_P, triplet_N), dim=0)
-                        print('triplet_all size: ', triplet_all.size())
                         y = minion(triplet_all)
-                        print('y size: ', y.size())
                         bsz = y.size(0)//2
                         slen = y.size(2)
                         batch['mi'] = torch.cat((torch.ones(bsz, 1, slen),
