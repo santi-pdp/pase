@@ -48,7 +48,7 @@ class Waveminionet(Model):
             minion = minion_maker(minion_cfg)
             self.minions.append(minion)
             self.min2idx[minion.name] = len(self.min2idx) 
-            if minion.skip:
+            if hasattr(minion, 'skip') and minion.skip:
                 nouts = minion.hidden_size
                 # acumulate num of inputs (concat skip connection)
                 ninp += nouts
@@ -181,33 +181,37 @@ class Waveminionet(Model):
             for bidx in range(1, bpe + 1):
                 batch = next(dloader.__iter__())
                 feopt.zero_grad()
-                # Build chunk keys to know what to encode
-                chunk_keys = ['chunk']
+                # forward chunk (alone) through frontend
+                fe_h = {'chunk':frontend(batch['chunk'].to(device))}
                 if self.mi_fwd:
-                    chunk_keys += ['chunk_ctxt', 'chunk_rand']
-                fe_h = {}
-                # Forward chunk(s) through frontend
-                for k in chunk_keys:
-                    fe_h[k] = frontend(batch[k].to(device))
+                    # build triplet batch and forward it too
+                    triplet = torch.cat((batch['chunk'],
+                                         batch['chunk_ctxt'],
+                                         batch['chunk_rand']),
+                                        dim=0)
+                    fe_h['triplet'] = frontend(triplet.to(device))
                 min_h = {}
                 h = fe_h['chunk']
                 skip_acum = None
                 for mi, minion in enumerate(minions_run, start=1):
                     min_name = self.minions[mi - 1].name
                     if min_name == 'mi':
-                        # merge two pairs: (chunk, chunk_ctxt), (chunk,
-                        # chunk_rand)
-                        mi_true = minion(self.join_skip(torch.cat((fe_h['chunk'],
-                                                                   fe_h['chunk_ctxt']),
-                                                                  dim=1),
-                                         skip_acum))
-                        mi_fake = minion(self.join_skip(torch.cat((fe_h['chunk'],
-                                                                   fe_h['chunk_rand']),
-                                                                  dim=1),
-                                         skip_acum))
-                        y = torch.cat((mi_true, mi_fake), dim=0)
-                        batch['mi'] = torch.cat((torch.ones(mi_true.size()),
-                                                 torch.zeros(mi_fake.size())),
+                        triplets = torch.chunk(fe_h['triplet'], 3,
+                                               dim=0)
+                        triplet_P = self.join_skip(torch.cat((triplets[0],
+                                                              triplets[1]),
+                                                             dim=1), skip_acum)
+                        triplet_N = self.join_skip(torch.cat((triplets[0],
+                                                              triplets[2]),
+                                                             dim=1), skip_acum)
+                        triplet_all = torch.cat((triplet_P, triplet_N), dim=0)
+                        print('triplet_all size: ', triplet_all.size())
+                        y = minion(triplet_all)
+                        print('y size: ', y.size())
+                        bsz = y.size(0)//2
+                        slen = y.size(2)
+                        batch['mi'] = torch.cat((torch.ones(bsz, 1, slen),
+                                                 torch.zeros(bsz, 1, slen)),
                                                 dim=0)
                     else:
                         if self.minions[mi - 1].skip:
