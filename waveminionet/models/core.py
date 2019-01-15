@@ -4,6 +4,7 @@ from .minions import *
 from ..losses import *
 from tensorboardX import SummaryWriter
 import torch.optim as optim
+import torch.optim.lr_scheduler as lr_scheduler
 import numpy as np
 import random
 import json
@@ -125,15 +126,27 @@ class Waveminionet(Model):
         print('Randomized minion training: ', rndmin_train)
         feopt = getattr(optim, cfg['fe_opt'])(self.frontend.parameters(), 
                                               lr=cfg['fe_lr'])
+        lrdecay = cfg['lrdecay']
+        if lrdecay > 0:
+            fesched = optim.lr_scheduler.ReduceLROnPlateau(feopt,
+                                                           mode='min',
+                                                           factor=lrdecay,
+                                                           verbose=True)
         if hasattr(self, 'z_minion'):
             z_lr = cfg['z_lr']
             zopt = getattr(optim, cfg['min_opt'])(self.z_minion.parameters(), 
                                                   lr=z_lr)
+            if lrdecay > 0:
+                zsched = optim.lr_scheduler.ReduceLROnPlateau(zopt,
+                                                              mode='min',
+                                                              factor=lrdecay,
+                                                              verbose=True)
         if 'min_lrs' in cfg:
             min_lrs = cfg['min_lrs']
         else:
             min_lrs = None
         minopts = {}
+        minscheds = {}
         for mi, minion in enumerate(self.minions, start=1):
             min_opt = cfg['min_opt']
             min_lr = cfg['min_lr']
@@ -143,6 +156,14 @@ class Waveminionet(Model):
                                                                minion.name))
             minopts[minion.name] = getattr(optim, min_opt)(minion.parameters(),
                                                            lr=min_lr)
+            if lrdecay > 0:
+                minsched = lr_scheduler.ReduceLROnPlateau(minopts[minion.name],
+                                                          mode='min',
+                                                          factor=lrdecay,
+                                                          verbose=True)
+                minscheds[minion.name] = minsched
+
+
         minions_run = self.minions
         if hasattr(self, 'minions_dp'):
             minions_run = self.minions_dp
@@ -300,9 +321,19 @@ class Waveminionet(Model):
             # epoch end
             if va_dloader is not None:
                 va_bpe = cfg['va_bpe']
-                self.eval_(va_dloader, bsize, va_bpe, log_freq=log_freq,
-                           epoch_idx=epoch_,
-                           writer=writer, device=device)
+                eloss = self.eval_(va_dloader, bsize, va_bpe, log_freq=log_freq,
+                                   epoch_idx=epoch_,
+                                   writer=writer, device=device)
+                if lrdecay > 0:
+                    # update frontend lr
+                    fesched.step(eloss)
+                    # update Z minion lr
+                    if hasattr(self, 'z_minion'):
+                        zsched.step(eloss)
+                    # update each minion lr
+                    for mi, minion in enumerate(self.minions, start=1):
+                        minscheds[minion.name].step(eloss)
+
 
             torch.save(self.frontend.state_dict(),
                        os.path.join(save_path,
@@ -397,6 +428,7 @@ class Waveminionet(Model):
             # aggregate eval loss
             writer.add_scalar('eval/total_loss', aggregate,
                               epoch_idx)
+            return aggregate
 
 
     def state_dict(self):
