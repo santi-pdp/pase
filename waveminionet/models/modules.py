@@ -393,7 +393,7 @@ def sinc(band,t_right, cuda=False):
 # Modified from https://github.com/mravanelli/SincNet
 class SincConv(nn.Module):
 
-    def __init__(self, N_filt, Filt_dim, fs,
+    def __init__(self, N_filt, Filt_dim, fs, stride=1,
                  padding='VALID', pad_mode='reflect'):
         super(SincConv, self).__init__()
 
@@ -417,6 +417,7 @@ class SincConv(nn.Module):
         self.Filt_dim = Filt_dim
         self.fs = fs
         self.padding = padding
+        self.stride =stride
         self.pad_mode = pad_mode
         
     def forward(self, x):
@@ -453,11 +454,16 @@ class SincConv(nn.Module):
 
             filters[i,:]=band_pass * window
         if self.padding == 'SAME':
-            x_p = F.pad(x, (self.Filt_dim // 2,
-                            self.Filt_dim // 2), mode=self.pad_mode)
+            if self.stride > 1:
+                x_p = F.pad(x, (self.Filt_dim // 2 - 1,
+                                self.Filt_dim // 2), mode=self.pad_mode)
+            else:
+                x_p = F.pad(x, (self.Filt_dim // 2,
+                                self.Filt_dim // 2), mode=self.pad_mode)
         else:
             x_p = x
-        out = F.conv1d(x_p, filters.view(self.N_filt, 1, self.Filt_dim))
+        out = F.conv1d(x_p, filters.view(self.N_filt, 1, self.Filt_dim),
+                       stride=self.stride)
         return out
 
 
@@ -483,6 +489,7 @@ class FeBlock(NeuralBlock):
             self.conv = SincConv(fmaps,
                                  kwidth, sr,
                                  padding='SAME',
+                                 stride=stride,
                                  pad_mode=pad_mode)
         else:
             self.conv = nn.Conv1d(num_inputs,
