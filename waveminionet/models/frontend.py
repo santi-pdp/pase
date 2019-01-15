@@ -42,8 +42,9 @@ class WaveFe(Model):
             ninp = fmap
         # last projection
         if rnn_pool:
-            self.W = nn.GRU(fmap, emb_dim // 2, bidirectional=True, 
-                            batch_first=True)
+            self.rnn = nn.GRU(fmap, emb_dim // 2, bidirectional=True, 
+                              batch_first=True)
+            self.W = nn.Linear(emb_dim, emb_dim)
         else:
             self.W = nn.Conv1d(fmap, emb_dim, 1)
         self.emb_dim = emb_dim
@@ -54,7 +55,8 @@ class WaveFe(Model):
         for n, block in enumerate(self.blocks):
             h = block(h)
         if self.rnn_pool:
-            y, _ = self.W(h.transpose(1, 2))
+            ht, _ = self.rnn(h.transpose(1, 2))
+            y = self.W(ht) 
             y = y.transpose(1, 2)
         else:
             y = self.W(h)
