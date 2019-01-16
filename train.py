@@ -15,6 +15,44 @@ import json
 import random
 
 
+def make_transforms(opts, minions_cfg):
+    trans = [ToTensor()]
+    # go through all minions first to check whether
+    # there is MI or not to make chunker
+    mi = False
+    for minion in minions_cfg:
+        if minion['name'] == 'mi':
+            mi = True
+    if mi:
+        trans.append(MIChunkWav(opts.chunk_size, random_scale=opts.random_scale))
+    else:
+        trans.append(ChunkWav(opts.chunk_size, random_scale=opts.random_scale))
+
+    znorm = False
+    for minion in minions_cfg:
+        name = minion['name']
+        if name == 'mi':
+            continue
+        elif name == 'lps':
+            znorm = True
+            trans.append(LPS(opts.nfft, hop=160, win=400))
+        elif name == 'mfcc':
+            znorm = True
+            trans.append(MFCC(hop=160))
+        elif name == 'prosody':
+            znorm = True
+            trans.append(Prosody(hop=160, win=400))
+        elif name == 'chunk':
+            znorm = True
+        else:
+            raise TypeError('Unrecognized module \"{}\"'
+                            'whilst building transfromations'.format(name))
+    if znorm:
+        trans.append(ZNorm(opts.stats))
+    trans = Compose(trans)
+    return trans
+
+
 def train(opts):
     CUDA = True if torch.cuda.is_available() and not opts.no_cuda else False
     device = 'cuda' if CUDA else 'cpu'
@@ -38,7 +76,9 @@ def train(opts):
             print(fe_cfg)
     else:
         fe_cfg = None
-    model = Waveminionet(minions_cfg=waveminionet_parser(opts.net_cfg),
+    minions_cfg = waveminionet_parser(opts.net_cfg)
+    make_transforms(opts, minions_cfg)
+    model = Waveminionet(minions_cfg=minions_cfg,
                          adv_loss=opts.adv_loss,
                          num_devices=num_devices,
                          pretrained_ckpt=opts.pretrained_ckpt,
@@ -48,14 +88,7 @@ def train(opts):
     print(model)
     print('Frontend params: ', model.frontend.describe_params())
     model.to(device)
-    trans = Compose([
-        ToTensor(),
-        MIChunkWav(opts.chunk_size, random_scale=opts.random_scale),
-        #LPS(opts.nfft, hop=160, win=400),
-        #MFCC(hop=160),
-        #Prosody(hop=160, win=400),
-        #ZNorm(opts.stats)
-    ])
+    trans = make_transforms(opts, minions_cfg)
     print(trans)
     # Build Dataset(s) and DataLoader(s)
     dset = PairWavDataset(opts.data_root, opts.data_cfg, 'train',
