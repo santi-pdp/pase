@@ -181,8 +181,8 @@ class Waveminionet(Model):
             for bidx in range(1, bpe + 1):
                 batch = next(dloader.__iter__())
                 feopt.zero_grad()
+                fe_h = {}
                 # forward chunk (alone) through frontend
-                fe_h = {'chunk':frontend(batch['chunk'].to(device))}
                 if self.mi_fwd:
                     # build triplet batch and forward it too
                     triplet = torch.cat((batch['chunk'],
@@ -190,14 +190,17 @@ class Waveminionet(Model):
                                          batch['chunk_rand']),
                                         dim=0)
                     fe_h['triplet'] = frontend(triplet.to(device))
+                    triplets = torch.chunk(fe_h['triplet'], 3,
+                                           dim=0)
+                    fe_h['chunk'] = triplets[0]
+                else:
+                    fe_h['chunk'] = frontend(batch['chunk'].to(device))
                 min_h = {}
                 h = fe_h['chunk']
                 skip_acum = None
                 for mi, minion in enumerate(minions_run, start=1):
                     min_name = self.minions[mi - 1].name
                     if min_name == 'mi':
-                        triplets = torch.chunk(fe_h['triplet'], 3,
-                                               dim=0)
                         triplet_P = self.join_skip(torch.cat((triplets[0],
                                                               triplets[1]),
                                                              dim=1), skip_acum)
