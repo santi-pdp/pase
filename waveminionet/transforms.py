@@ -41,12 +41,12 @@ class ZNorm(object):
     def __call__(self, pkg):
         pkg = format_package(pkg)
         for k, st in self.stats.items():
-            assert k in pkg, '{} != {}'.format(list(pkg.keys()),
-                                               list(self.stats.keys()))
-
-            mean = st['mean'].unsqueeze(1)
-            std = st['std'].unsqueeze(1)
-            pkg[k] = (pkg[k] - mean) / std
+            #assert k in pkg, '{} != {}'.format(list(pkg.keys()),
+            #                                   list(self.stats.keys()))
+            if k in pkg:
+                mean = st['mean'].unsqueeze(1)
+                std = st['std'].unsqueeze(1)
+                pkg[k] = (pkg[k] - mean) / std
         return pkg
 
     def __repr__(self):
