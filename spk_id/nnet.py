@@ -150,7 +150,7 @@ class RNNClassifier(Model):
                  ft_fe=False,
                  hidden_size=1300,
                  z_bnorm=False,
-                 name='MLP'):
+                 name='RNN'):
         # 1300 default size raises 5.25M params
         super().__init__(name=name)
         self.frontend = frontend
@@ -242,10 +242,11 @@ def main(opts):
                                     collate_fn=cc_vate,
                                     shuffle=False)
         # Build Model
-        fe = WaveFe(rnn_pool=opts.rnn_pool)
+        fe = WaveFe(rnn_pool=opts.rnn_pool, emb_dim=opts.emb_dim)
         fe.load_pretrained(opts.fe_ckpt, load_last=True, verbose=True)
         model = select_model(opts, fe, NSPK)
         model.to(device)
+        print(model)
         # Build optimizer and scheduler
         opt = select_optimizer(opts, model)
         sched = lr_scheduler.ReduceLROnPlateau(opt,
@@ -279,7 +280,7 @@ def main(opts):
                                            writer=writer, device=device, key='test')
     if opts.test:
         print('Entering test mode')
-        fe = WaveFe(rnn_pool=opts.rnn_pool)
+        fe = WaveFe(rnn_pool=opts.rnn_pool, emb_dim=opts.emb_dim)
         model = select_model(opts, fe, NSPK)
         model.load_pretrained(opts.test_ckpt, load_last=True, verbose=True)
         model.to(device)
@@ -288,31 +289,80 @@ def main(opts):
             te_files = [l.rstrip() for l in te_guia_f]
             te_dset = LibriSpkIDDataset(opts.data_root,
                                         te_files, spk2idx)
+            cc = WavCollater(max_len=None)
             te_dloader = DataLoader(te_dset, batch_size=1,
+                                    #collate_fn=cc,
                                     shuffle=False)
+            def filter_by_slens(T, slens, sfactor=160):
+                dims = len(T.size())
+                # extract each sequence by its length
+                seqs =[]
+                for bi in range(T.size(0)):
+                    slen = int(np.ceil(slens[bi] / sfactor ))
+                    if dims == 3:
+                        seqs.append(T[bi, :, :slen])
+                    else: 
+                        seqs.append(T[bi, :slen])
+                return seqs
             with torch.no_grad():
                 teloss = []
                 teacc = []
                 timings = []
                 beg_t = timeit.default_timer()
+                if opts.test_log_file is not None:
+                    test_log_f = open(opts.test_log_file, 'w')
+                    test_log_f.write('Filename\tAccuracy [%]\tError [%]\n')
+                else:
+                    test_log_f = None
                 for bidx, batch in enumerate(te_dloader, start=1):
+                    #X, Y, slen = batch
                     X, Y = batch
                     X = X.unsqueeze(1)
                     X = X.to(device)
                     Y = Y.to(device)
                     Y_ = model(X)
                     Y = Y.view(-1, 1).repeat(1, Y_.size(2))
-                    loss = F.nll_loss(Y_.squeeze(-1), Y)
+                    #Y__seqs = filter_by_slens(Y_, slen)
+                    #Y_seqs = filter_by_slens(Y, slen)
+                    #assert len(Y__seqs) == len(Y_seqs)
+                    #for sidx in range(len(Y__seqs)):
+                    #    y_ = Y__seqs[sidx].unsqueeze(0)
+                    #    y = Y_seqs[sidx].unsqueeze(0)
+                    #    loss = F.nll_loss(y_, y)
+                    #    teacc.append(accuracy(y_, y))
+                    #    teloss.append(loss)
+                    loss = F.nll_loss(Y_, Y)
+                    acc = accuracy(Y_, Y)
+                    if test_log_f:
+                        test_log_f.write('{}\t{:.2f}\t{:.2f}\n' \
+                                         ''.format(te_files[bidx - 1],
+                                                   acc * 100,
+                                                   100 - (acc * 100)))
                     teacc.append(accuracy(Y_, Y))
                     teloss.append(loss)
                     end_t = timeit.default_timer()
                     timings.append(end_t - beg_t)
                     beg_t = timeit.default_timer()
-                    print('Processed test file {}/{} mfiletime: {:.2f} s'
-                          ''.format(bidx, len(te_dloader), np.mean(timings)),
+                    if bidx % 100 == 0 or bidx == 1:
+                        mteloss = np.mean(teloss)
+                        mteacc = np.mean(teacc)
+                        mtimings = np.mean(timings)
+                    print('Processed test file {}/{} mfiletime: {:.2f} s, '
+                          'macc: {:.4f}, mloss: {:.2f}'
+                          ''.format(bidx, len(te_dloader), mtimings,
+                                    mteacc, mteloss),
                           end='\r')
                 print() 
-                print('Test accuracy: {:.2f}'.format(np.mean(teacc)))
+                if test_log_f:
+                    test_log_f.write('-' * 30 + '\n')
+                    test_log_f.write('Test accuracy: ' \
+                                     '{:.2f}\n'.format(np.mean(teacc) * 100))
+                    test_log_f.write('Test error: ' \
+                                     '{:.2f}\n'.format(100 - (np.mean(teacc) *100)))
+                    test_log_f.write('Test loss: ' \
+                                     '{:.2f}\n'.format(np.mean(teloss)))
+                    test_log_f.close()
+                print('Test accuracy: {:.4f}'.format(np.mean(teacc)))
                 print('Test loss: {:.2f}'.format(np.mean(teloss)))
 
 
@@ -420,6 +470,7 @@ if __name__ == '__main__':
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--max_len', type=int, default=16000)
     parser.add_argument('--hidden_size', type=int, default=256)
+    parser.add_argument('--emb_dim', type=int, default=256)
     parser.add_argument('--stats', type=str, default=None)
     parser.add_argument('--opt', type=str, default='adam')
     parser.add_argument('--lrdec', type=float, default=0.1,
@@ -435,6 +486,8 @@ if __name__ == '__main__':
                         help='(1) cls, (2) mlp (Def: cls).')
     parser.add_argument('--train', action='store_true', default=False)
     parser.add_argument('--test', action='store_true', default=False)
+    parser.add_argument('--test_log_file', type=str, default=None,
+                        help='Possible test log file (Def: None).')
     
     opts = parser.parse_args()
     
