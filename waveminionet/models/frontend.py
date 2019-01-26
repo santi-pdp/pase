@@ -17,6 +17,7 @@ class WaveFe(Model):
                  pad_mode='reflect', sr=16000,
                  emb_dim=256,
                  rnn_pool=False,
+                 inorm_code=False,
                  name='WaveFe'):
         super().__init__(name=name) 
         # apply sincnet at first layer
@@ -48,6 +49,8 @@ class WaveFe(Model):
             self.W = nn.Conv1d(fmap, emb_dim, 1)
         self.emb_dim = emb_dim
         self.rnn_pool = rnn_pool
+        if inorm_code:
+            self.inorm_code = nn.InstanceNorm1d(emb_dim)
 
     def forward(self, x):
         h = x
@@ -59,6 +62,8 @@ class WaveFe(Model):
             y = y.transpose(1, 2)
         else:
             y = self.W(h)
+        if hasattr(self, 'inorm_code'):
+            y = self.inorm_code(y)
         return y
 
 if __name__ == '__main__':
