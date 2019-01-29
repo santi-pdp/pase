@@ -41,8 +41,9 @@ class Waveminionet(Model):
         ninp = self.frontend.emb_dim
         self.min2idx = {}
         for minion_cfg in minions_cfg:
-            if minion_cfg['name'] == 'mi':
-                # add additional code for pair
+            if 'mi' in minion_cfg['name'] and not self.mi_fwd:
+                # add additional code for pair (either CMI or MI)
+                # (just once, thus use mi_fwd flag)
                 ninp += self.frontend.emb_dim
             minion_cfg['num_inputs'] = ninp
             minion = minion_maker(minion_cfg)
@@ -52,7 +53,7 @@ class Waveminionet(Model):
                 nouts = minion.hidden_size
                 # acumulate num of inputs (concat skip connection)
                 ninp += nouts
-            if minion.name == 'mi':
+            if 'mi' in minion.name:
                 # if MI minion is present, multi chunk forward
                 # is needed (3 chunks are fwd)
                 self.mi_fwd = True
@@ -82,6 +83,7 @@ class Waveminionet(Model):
                                              self.minions])
 
     def forward(self, x):
+        raise NotImplementedError
         fe_h = self.frontend(x)
         #print('front-end inference: ', fe_h.size())
         h = fe_h
@@ -200,7 +202,7 @@ class Waveminionet(Model):
                 skip_acum = None
                 for mi, minion in enumerate(minions_run, start=1):
                     min_name = self.minions[mi - 1].name
-                    if min_name == 'mi':
+                    if 'mi' in min_name:
                         triplet_P = self.join_skip(torch.cat((triplets[0],
                                                               triplets[1]),
                                                              dim=1), skip_acum)
@@ -208,12 +210,17 @@ class Waveminionet(Model):
                                                               triplets[2]),
                                                              dim=1), skip_acum)
                         triplet_all = torch.cat((triplet_P, triplet_N), dim=0)
+                        if min_name == 'cmi':
+                            # average through time dimension for ChunkMI
+                            triplet_all = torch.mean(triplet_all, dim=2,
+                                                     keepdim=True)
                         y = minion(triplet_all)
                         bsz = y.size(0)//2
                         slen = y.size(2)
-                        batch['mi'] = torch.cat((torch.ones(bsz, 1, slen),
-                                                 torch.zeros(bsz, 1, slen)),
-                                                dim=0)
+                        batch[min_name] = torch.cat((torch.ones(bsz, 1, slen),
+                                                     torch.zeros(bsz, 1, slen)),
+                                                    dim=0)
+
                     else:
                         if self.minions[mi - 1].skip:
                             y, h_ = minion(self.join_skip(h, skip_acum))
@@ -375,21 +382,24 @@ class Waveminionet(Model):
                 skip_acum = None
                 for mi, minion in enumerate(minions_run, start=1):
                     min_name = self.minions[mi - 1].name
-                    if min_name == 'mi':
-                        # merge two pairs: (chunk, chunk_ctxt), (chunk,
-                        # chunk_rand)
-                        mi_true = minion(self.join_skip(torch.cat((fe_h['chunk'],
-                                                                   fe_h['chunk_ctxt']),
-                                                                  dim=1),
-                                         skip_acum))
-                        mi_fake = minion(self.join_skip(torch.cat((fe_h['chunk'],
-                                                                   fe_h['chunk_rand']),
-                                                                  dim=1),
-                                         skip_acum))
-                        y = torch.cat((mi_true, mi_fake), dim=0)
-                        batch['mi'] = torch.cat((torch.ones(mi_true.size()),
-                                                 torch.zeros(mi_fake.size())),
-                                                dim=0)
+                    if 'mi' in min_name:
+                        triplet_P = self.join_skip(torch.cat((fe_h['chunk'],
+                                                              fe_h['chunk_ctxt']),
+                                                             dim=1), skip_acum)
+                        triplet_N = self.join_skip(torch.cat((fe_h['chunk'],
+                                                              fe_h['chunk_rand']),
+                                                             dim=1), skip_acum)
+                        triplet_all = torch.cat((triplet_P, triplet_N), dim=0)
+                        if min_name == 'cmi':
+                            # average through time dimension for ChunkMI
+                            triplet_all = torch.mean(triplet_all, dim=2,
+                                                     keepdim=True)
+                        y = minion(triplet_all)
+                        bsz = y.size(0)//2
+                        slen = y.size(2)
+                        batch[min_name] = torch.cat((torch.ones(bsz, 1, slen),
+                                                     torch.zeros(bsz, 1, slen)),
+                                                    dim=0)
                     else:
                         if self.minions[mi - 1].skip:
                             y, h_ = minion(self.join_skip(h, skip_acum))

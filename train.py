@@ -31,7 +31,7 @@ def make_transforms(opts, minions_cfg):
     znorm = False
     for minion in minions_cfg:
         name = minion['name']
-        if name == 'mi':
+        if name == 'mi' or name == 'cmi':
             continue
         elif name == 'lps':
             znorm = True
