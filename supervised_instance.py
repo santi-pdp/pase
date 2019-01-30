@@ -20,8 +20,8 @@ import os
 
 INSTANCE="data/interface/inter1en/all_wav/"
 OUT_DICT="data/interface/inter1en/interface_dict.npy"
-TRAIN_SCP="data/interface/inter1en/train.scp"
-TEST_SCP="data/interface/inter1en/test.scp"
+TRAIN_SCP="data/interface/inter1en/interface_tr.scp"
+TEST_SCP="data/interface/inter1en/interface_te.scp"
 OUT_SENT2IDX="data/interface/inter1en/sent2idx.json"
 
 wavs = os.listdir(INSTANCE)
