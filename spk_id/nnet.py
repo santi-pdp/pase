@@ -122,6 +122,8 @@ class MLPClassifier(Model):
         super().__init__(name=name)
         self.frontend = frontend
         self.ft_fe = ft_fe
+        if ft_fe:
+            print('Training the front-end')
         if z_bnorm:
             # apply z-norm to the input
             self.z_bnorm = nn.BatchNorm1d(frontend.emb_dim, affine=False)
@@ -208,8 +210,8 @@ def main(opts):
     spk2idx = load_spk2idx(opts.spk2idx)
     NSPK=len(set(spk2idx.values()))
     if opts.train:
-        if opts.fe_ckpt is None:
-            raise ValueError('Please specify a valid ckpt to FE weights')
+        #if opts.fe_ckpt is None:
+        #    raise ValueError('Please specify a valid ckpt to FE weights')
         with open(os.path.join(opts.save_path, 'train.opts'), 'w') as cfg_f:
             cfg_f.write(json.dumps(vars(opts), indent=2))
         # Open up guia and split valid
@@ -242,8 +244,17 @@ def main(opts):
                                     collate_fn=cc_vate,
                                     shuffle=False)
         # Build Model
-        fe = WaveFe(rnn_pool=opts.rnn_pool, emb_dim=opts.emb_dim)
-        fe.load_pretrained(opts.fe_ckpt, load_last=True, verbose=True)
+        fe = WaveFe(rnn_pool=opts.rnn_pool, emb_dim=opts.emb_dim,
+                    inorm_code=opts.inorm_code)
+        if opts.fe_ckpt is not None:
+            fe.load_pretrained(opts.fe_ckpt, load_last=True, verbose=True)
+        else:
+            print('*' * 50)
+            print('** WARNING: TRAINING WITHOUT PRETRAIED WEIGHTS FOR THE '
+                  'FRONT-END **')
+            print('*' * 50)
+            # Enforce training the frontend
+            opts.ft_fe = True
         model = select_model(opts, fe, NSPK)
         model.to(device)
         print(model)
@@ -370,7 +381,8 @@ def main(opts):
 def train_epoch(dloader_, model, opt, epoch, log_freq=1, writer=None,
                 device='cpu'):
     model.train()
-    model.frontend.eval()
+    if not model.ft_fe:
+        model.frontend.eval()
     global_idx = epoch * len(dloader_)
     timings = []
     beg_t = timeit.default_timer()
@@ -488,6 +500,7 @@ if __name__ == '__main__':
     parser.add_argument('--test', action='store_true', default=False)
     parser.add_argument('--test_log_file', type=str, default=None,
                         help='Possible test log file (Def: None).')
+    parser.add_argument('--inorm_code', action='store_true', default=False)
     
     opts = parser.parse_args()
     
