@@ -209,6 +209,9 @@ def main(opts):
     spk2idx = load_spk2idx(opts.spk2idx)
     NSPK=len(set(spk2idx.values()))
     if opts.train:
+        print('=' * 20)
+        print('Entering TRAIN mode')
+        print('=' * 20)
         #if opts.fe_ckpt is None:
         #    raise ValueError('Please specify a valid ckpt to FE weights')
         with open(os.path.join(opts.save_path, 'train.opts'), 'w') as cfg_f:
@@ -285,7 +288,10 @@ def main(opts):
                 teloss, teacc = eval_epoch(te_dloader, model, epoch, opts.log_freq,
                                            writer=writer, device=device, key='test')
     if opts.test:
-        print('Entering test mode')
+        print('=' * 20)
+        print('Entering TEST mode')
+        print('=' * 20)
+
         fe = WaveFe(rnn_pool=opts.rnn_pool, emb_dim=opts.emb_dim)
         model = select_model(opts, fe, NSPK)
         model.load_pretrained(opts.test_ckpt, load_last=True, verbose=True)
