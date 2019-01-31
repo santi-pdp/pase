@@ -9,7 +9,6 @@ import timeit
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.optim.lr_scheduler as lr_scheduler
 import torch.nn.functional as F
 from ahoproc_tools.io import read_aco_file
 import os
@@ -260,11 +259,7 @@ def main(opts):
         print(model)
         # Build optimizer and scheduler
         opt = select_optimizer(opts, model)
-        sched = lr_scheduler.ReduceLROnPlateau(opt,
-            mode=opts.sched_mode,
-            factor=opts.lrdec,
-            patience=opts.patience,
-            verbose=True)
+        sched = select_scheduler(opts, opt)
         # Make writer
         writer = SummaryWriter(opts.save_path)
         best_val_acc = 0
@@ -277,16 +272,16 @@ def main(opts):
                                      writer=writer, device=device, key='valid')
             sched.step(eacc)
             if eacc > best_val_acc:
-                print('New best val acc: {:.3f} => {:.3f}. Patience: {}'
-                      ''.format(best_val_acc, eacc, opts.patience))
+                print('*' * 40)
+                print('New best val acc: {:.3f} => {:.3f}.'
+                      ''.format(best_val_acc, eacc))
+                print('*' * 40)
                 best_val_acc = eacc
                 best_val = True
-
-            if best_val:
-                model.save(opts.save_path, epoch, best_val=best_val)
+            model.save(opts.save_path, epoch, best_val=best_val)
             best_val = False
             if opts.test_guia is not None:
-                # Eval test on the fly with training/valid
+                # Eval test on the fly whilst training/validating
                 teloss, teacc = eval_epoch(te_dloader, model, epoch, opts.log_freq,
                                            writer=writer, device=device, key='test')
     if opts.test:
@@ -485,14 +480,20 @@ if __name__ == '__main__':
     parser.add_argument('--emb_dim', type=int, default=256)
     parser.add_argument('--stats', type=str, default=None)
     parser.add_argument('--opt', type=str, default='adam')
+    parser.add_argument('--sched_mode', type=str, default='plateau',
+                        help='(1) plateau (validation), (2) '
+                             'step (step decay) (Def: plateau).')
+    parser.add_argument('--sched_step_size', type=int,
+                        default=30, help='Number of epochs to apply '
+                                          'a learning rate decay (Def: 30).')
     parser.add_argument('--lrdec', type=float, default=0.1,
                         help='Decay factor of learning rate after '
                              'patience epochs of valid accuracy not '
                              'improving (Def: 0.1).')
     parser.add_argument('--test_ckpt', type=str, default=None)
     parser.add_argument('--fe_ckpt', type=str, default=None)
-    parser.add_argument('--sched_mode', type=str, default='max',
-                        help='LR Scheduling mode; (1) max, (2) min '
+    parser.add_argument('--plateau_mode', type=str, default='max',
+                        help='LR Plateau scheduling mode; (1) max, (2) min '
                              '(Def: max).')
     parser.add_argument('--model', type=str, default='cls',
                         help='(1) cls, (2) mlp (Def: cls).')
