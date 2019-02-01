@@ -192,10 +192,11 @@ class Saver(object):
 
 class Model(NeuralBlock):
 
-    def __init__(self, name='BaseModel'):
+    def __init__(self, max_ckpts=5, name='BaseModel'):
         super().__init__()
         self.name = name
         self.optim = None
+        self.max_ckpts = max_ckpts
 
     def save(self, save_path, step, best_val=False, saver=None):
         model_name = self.name
@@ -203,7 +204,8 @@ class Model(NeuralBlock):
         if not hasattr(self, 'saver') and saver is None:
             self.saver = Saver(self, save_path,
                                optimizer=self.optim,
-                               prefix=model_name + '-')
+                               prefix=model_name + '-',
+                               max_ckpts=self.max_ckpts)
 
         if saver is None:
             self.saver.save(model_name, step, best_val=best_val)
@@ -216,7 +218,8 @@ class Model(NeuralBlock):
             if not hasattr(self, 'saver'):
                 self.saver = Saver(self, save_path, 
                                    optimizer=self.optim,
-                                   prefix=model_name + '-')
+                                   prefix=model_name + '-',
+                                   max_ckpts=self.max_ckpts)
             self.saver.load_weights()
         else:
             print('Loading ckpt from ckpt: ', save_path)
