@@ -230,6 +230,16 @@ class Waveminionet(Model):
                                 skip_acum = torch.cat((skip_acum, h_), dim=1)
                         else:
                             y = minion(self.join_skip(h, skip_acum))
+                        if min_name == 'spc':
+                            # we must create the spc labels, composed of 
+                            # B ones and B zeros (future and past). It
+                            # internally creates 2B samples
+                            bsz = y.size(0) // 2
+                            slen = y.size(2)
+                            batch['spc'] = torch.cat((torch.ones(bsz, 1, slen),
+                                                      torch.zeros(bsz, 1,
+                                                                  slen)),
+                                                     dim=0)
                     min_h[min_name] = y
 
                 if epoch_ + 1 >= warmup_epoch and hasattr(self, 'z_minion'):
@@ -409,6 +419,16 @@ class Waveminionet(Model):
                                 skip_acum = torch.cat((skip_acum, h_), dim=1)
                         else:
                             y = minion(self.join_skip(h, skip_acum))
+                        if min_name == 'spc':
+                            # we must create the spc labels, composed of 
+                            # B ones and B zeros (future and past). It
+                            # internally creates 2B samples
+                            bsz = y.size(0) // 2
+                            slen = y.size(2)
+                            batch['spc'] = torch.cat((torch.ones(bsz, 1, slen),
+                                                      torch.zeros(bsz, 1,
+                                                                  slen)),
+                                                     dim=0)
                     min_h[min_name] = y
 
                 # Compute all minion losses
