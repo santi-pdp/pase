@@ -118,7 +118,7 @@ class MLPClassifier(Model):
                  z_bnorm=False,
                  name='MLP'):
         # 2048 default size raises 5.6M params
-        super().__init__(name=name)
+        super().__init__(name=name, max_ckpts=100)
         self.frontend = frontend
         self.ft_fe = ft_fe
         if ft_fe:
@@ -246,8 +246,13 @@ def main(opts):
                                     collate_fn=cc_vate,
                                     shuffle=False)
         # Build Model
-        fe = WaveFe(rnn_pool=opts.rnn_pool, emb_dim=opts.emb_dim,
-                    inorm_code=opts.inorm_code)
+        if opts.fe_cfg is not None:
+            with open(opts.fe_cfg, 'r') as fe_cfg_f:
+                fe_cfg = json.load(fe_cfg_f)
+                print(fe_cfg)
+                fe = WaveFe(**fe_cfg)
+        else:
+            fe = WaveFe()
         if opts.fe_ckpt is not None:
             fe.load_pretrained(opts.fe_ckpt, load_last=True, verbose=True)
         else:
@@ -281,7 +286,7 @@ def main(opts):
                 print('*' * 40)
                 best_val_acc = eacc
                 best_val = True
-            model.save(opts.save_path, epoch, best_val=best_val)
+            model.save(opts.save_path, epoch - 1, best_val=best_val)
             best_val = False
             if opts.test_guia is not None:
                 # Eval test on the fly whilst training/validating
@@ -462,6 +467,8 @@ def eval_epoch(dloader_, model, epoch, log_freq=1, writer=None, device='cpu',
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--fe_cfg', type=str,
+                        default=None)
     parser.add_argument('--save_path', type=str, default='ckpt_mfcc')
     parser.add_argument('--data_root', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=20)
