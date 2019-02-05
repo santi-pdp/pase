@@ -208,6 +208,12 @@ def main(opts):
         torch.cuda.manual_seed_all(opts.seed)
     spk2idx = load_spk2idx(opts.spk2idx)
     NSPK=len(set(spk2idx.values()))
+    # Build Model
+    if opts.fe_cfg is not None:
+        with open(opts.fe_cfg, 'r') as fe_cfg_f:
+            fe_cfg = json.load(fe_cfg_f)
+            print(fe_cfg)
+            fe = WaveFe(**fe_cfg)
     if opts.train:
         print('=' * 20)
         print('Entering TRAIN mode')
@@ -226,6 +232,16 @@ def main(opts):
 
         tr_files_, va_files = build_valid_list(tr_files, spk2idx,
                                                va_split=opts.va_split)
+        # compute total samples dur
+        beg_t = timeit.default_timer()
+        tr_durs, sr = compute_utterances_durs(tr_files_, opts.data_root)
+        va_durs, _ = compute_utterances_durs(va_files, opts.data_root)
+        train_dur = np.sum(tr_durs)
+        valid_dur = np.sum(va_durs)
+        end_t = timeit.default_timer()
+        print('Read tr/va {:.1f} s/{:.1f} s in {} s'.format(train_dur / sr,
+                                                            valid_dur / sr,
+                                                            end_t - beg_t))
         # Build Datasets
         dset = LibriSpkIDDataset(opts.data_root,
                                  tr_files_, spk2idx)
@@ -239,20 +255,14 @@ def main(opts):
         va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
                                 collate_fn=cc_vate,
                                 shuffle=False)
+        tr_bpe = (train_dur // opts.max_len) // opts.batch_size
+        va_bpe = (valid_dur // opts.max_len) // opts.batch_size
         if opts.test_guia is not None:
             te_dset = LibriSpkIDDataset(opts.data_root,
                                         te_files, spk2idx)
             te_dloader = DataLoader(te_dset, batch_size=opts.batch_size,
                                     collate_fn=cc_vate,
                                     shuffle=False)
-        # Build Model
-        if opts.fe_cfg is not None:
-            with open(opts.fe_cfg, 'r') as fe_cfg_f:
-                fe_cfg = json.load(fe_cfg_f)
-                print(fe_cfg)
-                fe = WaveFe(**fe_cfg)
-        else:
-            fe = WaveFe()
         if opts.fe_ckpt is not None:
             fe.load_pretrained(opts.fe_ckpt, load_last=True, verbose=True)
         else:
@@ -275,10 +285,14 @@ def main(opts):
         best_val = False
         for epoch in range(1, opts.epoch + 1):
             train_epoch(dloader, model, opt, epoch, opts.log_freq, writer=writer,
-                        device=device)
+                        device=device, bpe=tr_bpe)
             eloss, eacc = eval_epoch(va_dloader, model, epoch, opts.log_freq,
-                                     writer=writer, device=device, key='valid')
-            sched.step(eacc)
+                                     writer=writer, device=device, bpe=va_bpe,
+                                     key='valid')
+            if opts.sched_mode == 'step':
+                sched.step()
+            else:
+                sched.step(eacc)
             if eacc > best_val_acc:
                 print('*' * 40)
                 print('New best val acc: {:.3f} => {:.3f}.'
@@ -297,7 +311,7 @@ def main(opts):
         print('Entering TEST mode')
         print('=' * 20)
 
-        fe = WaveFe(rnn_pool=opts.rnn_pool, emb_dim=opts.emb_dim)
+        #fe = WaveFe(rnn_pool=opts.rnn_pool, emb_dim=opts.emb_dim)
         model = select_model(opts, fe, NSPK)
         model.load_pretrained(opts.test_ckpt, load_last=True, verbose=True)
         model.to(device)
@@ -385,14 +399,19 @@ def main(opts):
 
 
 def train_epoch(dloader_, model, opt, epoch, log_freq=1, writer=None,
-                device='cpu'):
+                device='cpu', bpe=None):
     model.train()
     if not model.ft_fe:
         model.frontend.eval()
     global_idx = epoch * len(dloader_)
+    if bpe is None:
+        # default is just dataloader length
+        bpe = len(dloader_)
     timings = []
     beg_t = timeit.default_timer()
-    for bidx, batch in enumerate(dloader_, start=1):
+    #for bidx, batch in enumerate(dloader_, start=1):
+    for bidx in range(1, bpe + 1):
+        batch = next(dloader_.__iter__())
         opt.zero_grad()
         X, Y, slens = batch
         #X = X.transpose(1, 2)
@@ -410,7 +429,7 @@ def train_epoch(dloader_, model, opt, epoch, log_freq=1, writer=None,
         if bidx % log_freq == 0 or bidx >= len(dloader_):
             acc = accuracy(Y_, Y)
             log_str = 'Batch {:5d}/{:5d} (Epoch {:3d}, Gidx {:5d})' \
-                      ' '.format(bidx, len(dloader_),
+                      ' '.format(bidx, bpe,
                                  epoch, global_idx)
             log_str += 'loss: {:.3f} '.format(loss.item())
             log_str += 'bacc: {:.2f} '.format(acc)
@@ -423,14 +442,19 @@ def train_epoch(dloader_, model, opt, epoch, log_freq=1, writer=None,
         global_idx += 1
 
 def eval_epoch(dloader_, model, epoch, log_freq=1, writer=None, device='cpu',
-               key='eval'):
+               bpe=None, key='eval'):
     model.eval()
     with torch.no_grad():
+        if bpe is None:
+            # default is just dataloader length
+            bpe = len(dloader_)
         eval_losses = []
         eval_accs = []
         timings = []
         beg_t = timeit.default_timer()
-        for bidx, batch in enumerate(dloader_, start=1):
+        #for bidx, batch in enumerate(dloader_, start=1):
+        for bidx in range(1, bpe + 1):
+            batch = next(dloader_.__iter__())
             X, Y, slens = batch
             #X = X.transpose(1, 2)
             X = X.unsqueeze(1)
@@ -448,7 +472,7 @@ def eval_epoch(dloader_, model, epoch, log_freq=1, writer=None, device='cpu',
             if bidx % log_freq == 0 or bidx >= len(dloader_):
                 
                 log_str = 'EVAL::{} Batch {:4d}/{:4d} (Epoch {:3d})' \
-                          ' '.format(key, bidx, len(dloader_),
+                          ' '.format(key, bidx, bpe,
                                      epoch)
                 log_str += 'loss: {:.3f} '.format(loss.item())
                 log_str += 'bacc: {:.2f} '.format(acc)
