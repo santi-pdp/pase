@@ -403,10 +403,10 @@ def train_epoch(dloader_, model, opt, epoch, log_freq=1, writer=None,
     model.train()
     if not model.ft_fe:
         model.frontend.eval()
-    global_idx = epoch * len(dloader_)
     if bpe is None:
         # default is just dataloader length
         bpe = len(dloader_)
+    global_idx = (epoch - 1) * bpe
     timings = []
     beg_t = timeit.default_timer()
     #for bidx, batch in enumerate(dloader_, start=1):
@@ -426,7 +426,7 @@ def train_epoch(dloader_, model, opt, epoch, log_freq=1, writer=None,
         end_t = timeit.default_timer()
         timings.append(end_t - beg_t)
         beg_t = timeit.default_timer()
-        if bidx % log_freq == 0 or bidx >= len(dloader_):
+        if bidx % log_freq == 0 or bidx >= bpe:
             acc = accuracy(Y_, Y)
             log_str = 'Batch {:5d}/{:5d} (Epoch {:3d}, Gidx {:5d})' \
                       ' '.format(bidx, bpe,
@@ -469,7 +469,7 @@ def eval_epoch(dloader_, model, epoch, log_freq=1, writer=None, device='cpu',
             end_t = timeit.default_timer()
             timings.append(end_t - beg_t)
             beg_t = timeit.default_timer()
-            if bidx % log_freq == 0 or bidx >= len(dloader_):
+            if bidx % log_freq == 0 or bidx >= bpe:
                 
                 log_str = 'EVAL::{} Batch {:4d}/{:4d} (Epoch {:3d})' \
                           ' '.format(key, bidx, bpe,
