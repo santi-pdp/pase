@@ -9,6 +9,7 @@ import pickle
 import torch.nn as nn
 import torch.optim as optim
 from random import shuffle
+import librosa
 
 
 def build_valid_list(tr_list, spk2idx, va_split=0.2):
@@ -29,6 +30,15 @@ def build_valid_list(tr_list, spk2idx, va_split=0.2):
 		va_files += files[:spk_vaN]
 		tr_files += files[spk_vaN:]
 	return tr_files, va_files
+
+def compute_utterances_durs(files, data_root):
+    durs = []
+    for file_ in files:
+        wav, rate = librosa.load(os.path.join(data_root,
+                                              file_),
+                                 sr=None)
+        durs.append(wav.shape[0])
+    return durs, rate
 
 class LibriSpkIDMFCCDataset(Dataset):
     
