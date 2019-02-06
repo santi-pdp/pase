@@ -669,6 +669,77 @@ class FeBlock(NeuralBlock):
         h = self.act(h)
         return h
 
+
+class VQEMA(nn.Module):
+    """ VQ w/ Exp. Moving Averages,
+        as in (https://arxiv.org/pdf/1711.00937.pdf A.1).
+        Partly based on
+        https://github.com/zalandoresearch/pytorch-vq-vae/blob/master/vq-vae.ipynb
+    """
+    def __init__(self, emb_K, emb_dim, beta,
+                 gamma, eps=1e-5):
+        super().__init__()
+        self.emb_K = emb_K
+        self.emb_dim = emb_dim
+        self.emb = nn.Embedding(self.emb_K,
+                                self.emb_dim)
+        self.emb.weight.data.normal_()
+        self.beta = beta
+        self.gamma = gamma
+        self.register_buffer('ema_cluster_size', torch.zeros(emb_K))
+        self.ema_w = nn.Parameter(torch.Tensor(emb_K, emb_dim))
+        self.ema_w.data.normal_()
+
+        self.gamma = gamma
+        self.eps = eps
+
+    def forward(self, inputs, device='cpu'):
+        # convert inputs [B, F, T] -> [BxT, F]
+        inputs = inputs.permute(0, 2, 1).contiguous()
+        input_shape = inputs.shape
+        flat_input = inputs.view(-1, self.emb_dim)
+
+        # TODO: UNDERSTAND THIS COMPUTATION
+        # compute distances
+        dist = (torch.sum(flat_input ** 2, dim=1, keepdim=True) + \
+                torch.sum(self.emb.weight ** 2, dim=1) - \
+                2 * torch.matmul(flat_input, self.emb.weight.t()))
+
+        # Encoding
+        enc_indices = torch.argmin(dist, dim=1).unsqueeze(1)
+        enc = torch.zeros(enc_indices.shape[0], self.emb_K).to(device)
+        enc.scatter_(1, enc_indices, 1)
+        
+        # Use EMA to update emb vectors
+        if self.training:
+            self.ema_cluster_size = self.ema_cluster_size * self.gamma + \
+                    (1 - self.gamma) * torch.sum(enc, 0)
+            n = torch.sum(self.ema_cluster_size.data)
+            self.ema_cluster_size = (
+                (self.ema_cluster_size + self.eps) / \
+                (n + self.emb_K * self.eps) * n
+            )
+            dw = torch.matmul(enc.t(), flat_input)
+            self.ema_w = nn.Parameter(self.ema_w * self.gamma + \
+                                      (1 - self.gamma) * dw)
+            self.emb.weight = nn.Parameter(self.ema_w / \
+                                           self.ema_cluster_size.unsqueeze(1))
+
+        # Quantize and reshape
+        Q = torch.matmul(enc, self.emb.weight).view(input_shape)
+
+        # Loss 
+        e_latent_loss = torch.mean((Q.detach() - inputs) ** 2)
+        loss = self.beta * e_latent_loss
+
+        Q = inputs + (Q - inputs).detach()
+        avg_probs = torch.mean(enc, dim=0)
+        # perplexity
+        PP = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
+        return loss, Q.permute(0, 2, 1).contiguous(), PP, enc
+
+
+
 if __name__ == '__main__':
     """
     import matplotlib
@@ -715,11 +786,15 @@ if __name__ == '__main__':
     print('y: {} -> z: {} conv'.format(y.size(),
                                        z.size()))
     """
-    x = torch.randn(1, 1, 16384)
+    #x = torch.randn(1, 1, 16384)
     #sincnet = SincConv(1024, 251, 16000, padding='SAME')
-    feblock = FeBlock(1, 100, 251, 1)
-    y = feblock(x)
-    print('y size: ', y.size())
+    #feblock = FeBlock(1, 100, 251, 1)
+    #y = feblock(x)
+    #print('y size: ', y.size())
+    vq = VQEMA(50, 100, 0.25, 0.99)
+    x = torch.randn(10, 100, 160)
+    _, Q, PP , _ = vq(x)
+
 
 
 
