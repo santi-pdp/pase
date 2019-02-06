@@ -1,7 +1,10 @@
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
-from .modules import *
+if  __name__ == '__main__':
+    from modules import *
+else:
+    from .modules import *
 
 
 class WaveFe(Model):
@@ -18,6 +21,7 @@ class WaveFe(Model):
                  emb_dim=256,
                  rnn_pool=False,
                  inorm_code=False,
+                 quantizer=None,
                  name='WaveFe'):
         super().__init__(name=name) 
         # apply sincnet at first layer
@@ -51,6 +55,9 @@ class WaveFe(Model):
         self.rnn_pool = rnn_pool
         if inorm_code:
             self.inorm_code = nn.InstanceNorm1d(emb_dim)
+        if quantizer is not None:
+            self.quantizer = quantizer
+            assert self.quantizer.emb_dim == self.emb_dim
 
     def forward(self, x):
         h = x
@@ -64,12 +71,27 @@ class WaveFe(Model):
             y = self.W(h)
         if hasattr(self, 'inorm_code'):
             y = self.inorm_code(y)
+        if hasattr(self, 'quantizer'):
+            qloss, y, pp, enc = self.quantizer(y)
+            if self.training:
+                return qloss, y, pp, enc
+            else:
+                return y
         return y
 
 if __name__ == '__main__':
+    from modules import *
     wavefe = WaveFe(norm_type='bnorm')
     print(wavefe)
     wavefe.describe_params()
     x = torch.randn(1, 1, 16000)
     y = wavefe(x)
     print(y.size())
+    vq = VQEMA(50, 20, 0.25, 0.99)
+    _, yq, _ , _ = vq(y)
+    print(yq.size())
+    qwavefe = WaveFe(norm_type='bnorm', emb_dim=20, 
+                     quantizer=vq)
+    qwavefe.eval()
+    yq2 = qwavefe(x)
+    print(yq2.size())
