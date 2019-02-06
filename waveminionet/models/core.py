@@ -35,6 +35,10 @@ class Waveminionet(Model):
                 self.frontend = WaveFe()
             else:
                 self.frontend = WaveFe(**frontend_cfg)
+        if self.frontend.quantizer is not None:
+            self.vq = True
+        else:
+            self.vq = False
         # -------- MINION STACK --------
         self.minions = nn.ModuleList()
         self.mi_fwd = False
@@ -191,12 +195,23 @@ class Waveminionet(Model):
                                          batch['chunk_ctxt'],
                                          batch['chunk_rand']),
                                         dim=0)
-                    fe_h['triplet'] = frontend(triplet.to(device))
+                    if self.vq:
+                        vq_loss, fe_Q, \
+                        vq_pp, vq_idx = frontend(triplet.to(device))
+                        fe_h['triplet'] = fe_Q
+                    else:
+                        fe_h['triplet'] = frontend(triplet.to(device))
                     triplets = torch.chunk(fe_h['triplet'], 3,
                                            dim=0)
                     fe_h['chunk'] = triplets[0]
                 else:
-                    fe_h['chunk'] = frontend(batch['chunk'].to(device))
+                    if self.vq:
+                        vq_loss, fe_Q, \
+                        vq_pp, vq_idx = frontend(batch['chunk'].to(device))
+                        fe_h['chunk'] = fe_Q
+                    else:
+                        fe_h['chunk'] = frontend(batch['chunk'].to(device))
+
                 min_h = {}
                 h = fe_h['chunk']
                 skip_acum = None
@@ -298,6 +313,9 @@ class Waveminionet(Model):
                 end_t = timeit.default_timer()
                 timings.append(end_t - beg_t)
                 beg_t = timeit.default_timer()
+                if self.vq:
+                    # Backprop VQ related stuff
+                    vq_loss.backward()
                 feopt.step()
                 if bidx % log_freq == 0 or bidx >= bpe:
                     print('-' * 50)
@@ -337,6 +355,11 @@ class Waveminionet(Model):
                                              fe_h['chunk'],
                                              bins='sturges',
                                              global_step=global_step)
+                    if self.vq:
+                        writer.add_scalar('train/vq_loss', vq_loss.item(),
+                                          global_step=global_step)
+                        writer.add_scalar('train/vq_pp', vq_pp.item(),
+                                          global_step=global_step)
 
 
                     print('Mean batch time: {:.3f} s'.format(np.mean(timings)))

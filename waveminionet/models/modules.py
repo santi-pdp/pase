@@ -693,11 +693,12 @@ class VQEMA(nn.Module):
         self.gamma = gamma
         self.eps = eps
 
-    def forward(self, inputs, device='cpu'):
+    def forward(self, inputs):
         # convert inputs [B, F, T] -> [BxT, F]
         inputs = inputs.permute(0, 2, 1).contiguous()
         input_shape = inputs.shape
         flat_input = inputs.view(-1, self.emb_dim)
+        device = 'cuda' if inputs.is_cuda else 'cpu'
 
         # TODO: UNDERSTAND THIS COMPUTATION
         # compute distances

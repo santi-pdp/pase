@@ -21,7 +21,9 @@ class WaveFe(Model):
                  emb_dim=256,
                  rnn_pool=False,
                  inorm_code=False,
-                 quantizer=None,
+                 vq_K=None,
+                 vq_beta=0.25,
+                 vq_gamma=0.99,
                  name='WaveFe'):
         super().__init__(name=name) 
         # apply sincnet at first layer
@@ -55,9 +57,9 @@ class WaveFe(Model):
         self.rnn_pool = rnn_pool
         if inorm_code:
             self.inorm_code = nn.InstanceNorm1d(emb_dim)
-        if quantizer is not None:
-            self.quantizer = quantizer
-            assert self.quantizer.emb_dim == self.emb_dim
+        if vq_K is not None or vq_K > 0:
+            self.quantizer = VQEMA(vq_K, self.emb_dim,
+                                   vq_beta, vq_gamma)
 
     def forward(self, x):
         h = x
