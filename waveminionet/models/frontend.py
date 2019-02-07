@@ -1,11 +1,17 @@
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
+import json
 if  __name__ == '__main__':
     from modules import *
 else:
     from .modules import *
 
+
+def wf_builder(cfg_path):
+    with open(cfg_path, 'r') as cfg_f:
+        cfg = json.load(cfg_f)
+        return WaveFe(**cfg)
 
 class WaveFe(Model):
     """ Convolutional front-end to process waveforms
@@ -94,8 +100,10 @@ if __name__ == '__main__':
     vq = VQEMA(50, 20, 0.25, 0.99)
     _, yq, _ , _ = vq(y)
     print(yq.size())
-    qwavefe = WaveFe(norm_type='bnorm', emb_dim=20, 
-                     quantizer=vq)
+    qwavefe = WaveFe(norm_type='bnorm', emb_dim=20)
     qwavefe.eval()
     yq2 = qwavefe(x)
     print(yq2.size())
+    # try builder
+    wfb = wf_builder('../../cfg/frontend_RF160ms_emb100.cfg')
+    print(wfb)
