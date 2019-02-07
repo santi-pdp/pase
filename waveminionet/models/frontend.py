@@ -60,7 +60,9 @@ class WaveFe(Model):
         if vq_K is not None and vq_K > 0:
             self.quantizer = VQEMA(vq_K, self.emb_dim,
                                    vq_beta, vq_gamma)
-
+        else:
+            self.quantizer = None
+        
     def forward(self, x):
         h = x
         for n, block in enumerate(self.blocks):
@@ -73,7 +75,7 @@ class WaveFe(Model):
             y = self.W(h)
         if hasattr(self, 'inorm_code'):
             y = self.inorm_code(y)
-        if hasattr(self, 'quantizer'):
+        if self.quantizer is not None:
             qloss, y, pp, enc = self.quantizer(y)
             if self.training:
                 return qloss, y, pp, enc
