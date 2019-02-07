@@ -57,7 +57,7 @@ class WaveFe(Model):
         self.rnn_pool = rnn_pool
         if inorm_code:
             self.inorm_code = nn.InstanceNorm1d(emb_dim)
-        if vq_K is not None or vq_K > 0:
+        if vq_K is not None and vq_K > 0:
             self.quantizer = VQEMA(vq_K, self.emb_dim,
                                    vq_beta, vq_gamma)
 
