@@ -26,10 +26,10 @@ class WaveFe(Model):
                  pad_mode='reflect', sr=16000,
                  emb_dim=256,
                  rnn_pool=False,
-                 inorm_code=False,
                  vq_K=None,
                  vq_beta=0.25,
                  vq_gamma=0.99,
+                 norm_out=False,
                  name='WaveFe'):
         super().__init__(name=name) 
         # apply sincnet at first layer
@@ -61,13 +61,15 @@ class WaveFe(Model):
             self.W = nn.Conv1d(fmap, emb_dim, 1)
         self.emb_dim = emb_dim
         self.rnn_pool = rnn_pool
-        if inorm_code:
-            self.inorm_code = nn.InstanceNorm1d(emb_dim)
         if vq_K is not None and vq_K > 0:
             self.quantizer = VQEMA(vq_K, self.emb_dim,
                                    vq_beta, vq_gamma)
         else:
             self.quantizer = None
+        # ouptut vectors are normalized to norm^2 1
+        if norm_out:
+            self.norm_out = nn.BatchNorm1d(self.emb_dim, affine=False)
+
         
     def forward(self, x):
         h = x
@@ -79,8 +81,9 @@ class WaveFe(Model):
             y = y.transpose(1, 2)
         else:
             y = self.W(h)
-        if hasattr(self, 'inorm_code'):
-            y = self.inorm_code(y)
+        if hasattr(self, 'norm_out'):
+            y = self.norm_out(y)
+
         if self.quantizer is not None:
             qloss, y, pp, enc = self.quantizer(y)
             if self.training:
