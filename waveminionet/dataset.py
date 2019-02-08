@@ -1,10 +1,13 @@
 import torch
 from torch.utils.data import Dataset
+import soundfile as sf
 import json
 import librosa
 import os
 import random
 import numpy as np
+from collections import defaultdict
+
 
 class DictCollater(object):
 
@@ -119,14 +122,23 @@ class WavDataset(Dataset):
                     print('Loaded spk2idx with {} '
                           'speakers'.format(len(self.spk2idx)))
             self.wavs = wavs
+        self.wav_cache = {}
 
     def __len__(self):
         return len(self.wavs)
 
+    def retrieve_cache(self, fname, cache):
+        if fname in cache:
+            return cache[fname]
+        else:
+            wav, rate = librosa.load(fname, sr=self.sr)
+            cache[fname] = wav
+            return wav
+
     def __getitem__(self, index):
         uttname = self.wavs[index]['filename']
         wname = os.path.join(self.data_root, uttname)
-        wav, rate = librosa.load(wname, sr=self.sr)
+        wav = self.retrieve_cache(wname, self.wav_cache)
         if self.transform is not None:
             wav = self.transform(wav)
         rets = [wav]
@@ -148,18 +160,18 @@ class PairWavDataset(WavDataset):
         super().__init__(data_root, data_cfg_file, split, transform=transform, 
                          sr=sr,
                          verbose=verbose)
-
+        self.rwav_cache = {}
 
     def __getitem__(self, index):
         # Here we select two wavs, the current one and a randomly chosen one
         wname = os.path.join(self.data_root, self.wavs[index]['filename'])
-        wav, rate = librosa.load(wname, sr=self.sr)
+        wav = self.retrieve_cache(wname, self.wav_cache)
         # create candidate indices without current index
         indices = list(range(len(self.wavs)))
         indices.remove(index)
         rindex = random.choice(indices)
         rwname = os.path.join(self.data_root, self.wavs[rindex]['filename'])
-        rwav, rrate = librosa.load(rwname, sr=self.sr)
+        rwav = self.retrieve_cache(rwname, self.rwav_cache)
         if self.transform is not None:
             ret = self.transform({'raw': wav, 'raw_rand': rwav})
             return ret
