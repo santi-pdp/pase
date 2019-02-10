@@ -134,10 +134,13 @@ class Waveminionet(Model):
                                               lr=cfg['fe_lr'])
         lrdecay = cfg['lrdecay']
         if lrdecay > 0:
-            fesched = optim.lr_scheduler.ReduceLROnPlateau(feopt,
-                                                           mode='min',
-                                                           factor=lrdecay,
-                                                           verbose=True)
+            fesched = optim.lr_scheduler.StepLR(feopt,
+                                                step_size=cfg['lrdec_step'],
+                                                gamma=cfg['lrdecay'])
+            #fesched = optim.lr_scheduler.ReduceLROnPlateau(feopt,
+            #                                               mode='min',
+            #                                               factor=lrdecay,
+            #                                               verbose=True)
         if hasattr(self, 'z_minion'):
             z_lr = cfg['z_lr']
             zopt = getattr(optim, cfg['min_opt'])(self.z_minion.parameters(), 
@@ -147,6 +150,10 @@ class Waveminionet(Model):
                                                               mode='min',
                                                               factor=lrdecay,
                                                               verbose=True)
+                zsched = optim.lr_scheduler.StepLR(zopt,
+                                                   step_size=cfg['lrdec_step'],
+                                                   gamma=cfg['lrdecay'])
+
         if 'min_lrs' in cfg:
             min_lrs = cfg['min_lrs']
         else:
@@ -163,10 +170,13 @@ class Waveminionet(Model):
             minopts[minion.name] = getattr(optim, min_opt)(minion.parameters(),
                                                            lr=min_lr)
             if lrdecay > 0:
-                minsched = lr_scheduler.ReduceLROnPlateau(minopts[minion.name],
-                                                          mode='min',
-                                                          factor=lrdecay,
-                                                          verbose=True)
+                #minsched = lr_scheduler.ReduceLROnPlateau(minopts[minion.name],
+                #                                          mode='min',
+                #                                          factor=lrdecay,
+                #                                          verbose=True)
+                minsched = lr_scheduler.StepLR(minopts[minion.name],
+                                               step_size=cfg['lrdec_step'],
+                                               gamma=cfg['lrdecay'])
                 minscheds[minion.name] = minsched
 
 
@@ -356,6 +366,8 @@ class Waveminionet(Model):
                                              bins='sturges',
                                              global_step=global_step)
                     if self.vq:
+                        print('VQLoss: {:.2f}, VQPP: '
+                              '{:.2f}'.format(vq_loss.item(), vq_pp.item()))
                         writer.add_scalar('train/vq_loss', vq_loss.item(),
                                           global_step=global_step)
                         writer.add_scalar('train/vq_pp', vq_pp.item(),
@@ -369,6 +381,7 @@ class Waveminionet(Model):
                 eloss = self.eval_(va_dloader, bsize, va_bpe, log_freq=log_freq,
                                    epoch_idx=epoch_,
                                    writer=writer, device=device)
+                """
                 if lrdecay > 0:
                     # update frontend lr
                     fesched.step(eloss)
@@ -378,7 +391,17 @@ class Waveminionet(Model):
                     # update each minion lr
                     for mi, minion in enumerate(self.minions, start=1):
                         minscheds[minion.name].step(eloss)
+                """
 
+            if lrdecay > 0:
+                # update frontend lr
+                fesched.step()
+                # update Z minion lr
+                if hasattr(self, 'z_minion'):
+                    zsched.step()
+                # update each minion lr
+                for mi, minion in enumerate(self.minions, start=1):
+                    minscheds[minion.name].step()
 
             torch.save(self.frontend.state_dict(),
                        os.path.join(save_path,
