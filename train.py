@@ -1,4 +1,5 @@
 from waveminionet.models.core import Waveminionet
+from waveminionet.models.modules import VQEMA
 from waveminionet.dataset import PairWavDataset, DictCollater
 from torchvision.transforms import Compose
 from waveminionet.transforms import *
@@ -21,12 +22,12 @@ def make_transforms(opts, minions_cfg):
     # there is MI or not to make chunker
     mi = False
     for minion in minions_cfg:
-        if minion['name'] == 'mi':
+        if 'mi' in minion['name']:
             mi = True
     if mi:
         trans.append(MIChunkWav(opts.chunk_size, random_scale=opts.random_scale))
     else:
-        trans.append(ChunkWav(opts.chunk_size, random_scale=opts.random_scale))
+        trans.append(SingleChunkWav(opts.chunk_size, random_scale=opts.random_scale))
 
     znorm = False
     for minion in minions_cfg:
@@ -141,6 +142,8 @@ if __name__ == '__main__':
     parser.add_argument('--hidden_layers', type=int, default=2)
     parser.add_argument('--fe_opt', type=str, default='Adam')
     parser.add_argument('--min_opt', type=str, default='Adam')
+    parser.add_argument('--lrdec_step', type=int, default=15,
+                        help='Number of epochs to scale lr (Def: 15).')
     parser.add_argument('--lrdecay', type=float, default=0,
                         help='Learning rate decay factor with '
                              'cross validation. After patience '
@@ -160,6 +163,11 @@ if __name__ == '__main__':
                              '(Def: 2).')
     parser.add_argument('--zinit_weight', type=float, default=1)
     parser.add_argument('--zinc', type=float, default=0.0002)
+    parser.add_argument('--vq_K', type=int, default=50,
+                        help='Number of K embeddings in VQ-enc. '
+                             '(Def: 50).')
+    parser.add_argument('--vq', action='store_true', default=False,
+                        help='Do VQ quantization of enc output (Def: False).')
 
     opts = parser.parse_args()
     if opts.net_cfg is None:
