@@ -29,7 +29,7 @@ SEPOCHS="${params[@]:2}"
 
 UE_MATRIX_FILE="$2"
 
-# NOTE: leave black FT_FE if don't want finetune
+# NOTE: leave blank FT_FE if don't want finetune
 FT_FE="--ft_fe"
 
 # DATASET params
@@ -83,7 +83,7 @@ python -u nnet.py --spk2idx $SPK2IDX --data_root $DATA_ROOT --train_guia $TRAIN_
 	--model $SUP_MODEL --opt $OPT --patience $PATIENCE --train --lrdec $LRDEC \
 	--hidden_size $HIDDEN_SIZE --epoch $EPOCH --sched_mode $SCHED_MODE \
 	--fe_cfg $FE_CFG \
-	--fe_ckpt $FE_CKPT
+	--fe_ckpt $FE_CKPT --seed $SEED
 
 CKPT=$(python select_best_supervised_ckpt.py $SAVE_PATH)
 echo $CKPT
