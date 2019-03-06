@@ -40,6 +40,16 @@ def compute_utterances_durs(files, data_root):
         durs.append(wav.shape[0])
     return durs, rate
 
+def compute_aco_durs(files, data_root, order=39):
+    durs = []
+    for file_ in files:
+        bname = os.path.splitext(file_)[0]
+        data = read_aco_file(os.path.join(data_root, 
+                                          bname + '.mfcc'), 
+                             (-1, order))
+        durs.append(data.shape[0])
+    return durs
+
 class LibriSpkIDMFCCDataset(Dataset):
     
     def __init__(self, data_root, files_list, spk2idx, order,
