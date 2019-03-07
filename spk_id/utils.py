@@ -41,26 +41,31 @@ def compute_utterances_durs(files, data_root):
     return durs, rate
 
 def compute_aco_durs(files, data_root, order=39,
-                     ext='mfcc'):
+                     ext='mfcc', np_fmt=False):
     durs = []
     for file_ in files:
         bname = os.path.splitext(file_)[0]
-        data = read_aco_file(os.path.join(data_root, 
-                                          bname + '.' + ext), 
-                             (-1, order))
+        if np_fmt:
+            data = np.load(os.path.join(data_root, 
+                                        bname + '.' + ext))
+        else:
+            data = read_aco_file(os.path.join(data_root, 
+                                              bname + '.' + ext), 
+                                 (-1, order))
         durs.append(data.shape[0])
     return durs
 
 class LibriSpkIDMFCCDataset(Dataset):
     
     def __init__(self, data_root, files_list, spk2idx, order,
-                 stats_f=None, ext='mfcc'):
+                 stats_f=None, ext='mfcc', np_fmt=False):
         super().__init__()
         self.files_list = files_list
         self.data_root = data_root
         self.spk2idx = spk2idx
         self.order = order
         self.ext = ext
+        self.np_fmt = np_fmt
         with open(stats_f, 'rb') as f:
             self.stats = pickle.load(f)
 
@@ -68,8 +73,11 @@ class LibriSpkIDMFCCDataset(Dataset):
         fpath = os.path.join(self.data_root, self.files_list[idx])
         bname = os.path.splitext(fpath)[0]
         #data = np.load(bname + '.npy')
-        data = read_aco_file(bname + '.' + self.ext, 
-                             (-1, self.order))
+        if self.np_fmt:
+            data = np.load(bname + '.' + self.ext)
+        else:
+            data = read_aco_file(bname + '.' + self.ext, 
+                                 (-1, self.order))
         data = data - np.array(self.stats['mean'])
         data = data / np.array(self.stats['std'])
         lab = self.spk2idx[self.files_list[idx]]

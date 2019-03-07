@@ -115,9 +115,9 @@ def main(opts):
         # compute total samples dur
         beg_t = timeit.default_timer()
         tr_durs = compute_aco_durs(tr_files_, opts.data_root, opts.order, 
-                                   ext=opts.ext)
+                                   ext=opts.ext, np_fmt=opts.np_fmt)
         va_durs = compute_aco_durs(va_files, opts.data_root, opts.order,
-                                   ext=opts.ext)
+                                   ext=opts.ext, np_fmt=opts.np_fmt)
         train_dur = np.sum(tr_durs)
         valid_dur = np.sum(va_durs)
         hop = 160
@@ -131,12 +131,14 @@ def main(opts):
                                      tr_files_, spk2idx,
                                      opts.order,
                                      opts.stats,
-                                     ext=opts.ext)
+                                     ext=opts.ext,
+                                     np_fmt=opts.np_fmt)
         va_dset = LibriSpkIDMFCCDataset(opts.data_root,
                                         va_files, spk2idx,
                                         opts.order, 
                                         opts.stats,
-                                        ext=opts.ext)
+                                        ext=opts.ext,
+                                        np_fmt=opts.np_fmt)
         cc = Collater(max_len=opts.max_len)
         dloader = DataLoader(dset, batch_size=opts.batch_size, collate_fn=cc,
                              shuffle=True)
@@ -186,7 +188,9 @@ def main(opts):
             te_dset = LibriSpkIDMFCCDataset(opts.data_root,
                                             te_files, spk2idx,
                                             opts.order,
-                                            opts.stats)
+                                            opts.stats,
+                                            ext=opts.ext,
+                                            np_fmt=opts.np_fmt)
             te_dloader = DataLoader(te_dset, batch_size=1,
                                     shuffle=False)
             with torch.no_grad():
@@ -247,7 +251,7 @@ def train_epoch(dloader_, model, opt, epoch, log_freq=1, writer=None,
     if bpe is None:
         # default is just dataloader length
         bpe = len(dloader_)
-    global_idx = epoch * len(dloader_)
+    global_idx = (epoch - 1) * bpe
     timings = []
     beg_t = timeit.default_timer()
     #for bidx, batch in enumerate(dloader_, start=1):
@@ -375,6 +379,9 @@ if __name__ == '__main__':
     parser.add_argument('--ext', type=str, default='mfcc')
     parser.add_argument('--test_log_file', type=str, default=None,
                         help='Possible test log file (Def: None).')
+    parser.add_argument('--np-fmt', action='store_true', default=False,
+                        help='Whether or not aco files are in numpy '
+                             'format (Def: False).')
     
     opts = parser.parse_args()
 
