@@ -114,8 +114,10 @@ def main(opts):
                                                va_split=opts.va_split)
         # compute total samples dur
         beg_t = timeit.default_timer()
-        tr_durs = compute_aco_durs(tr_files_, opts.data_root)
-        va_durs = compute_aco_durs(va_files, opts.data_root)
+        tr_durs = compute_aco_durs(tr_files_, opts.data_root, opts.order, 
+                                   ext=opts.ext)
+        va_durs = compute_aco_durs(va_files, opts.data_root, opts.order,
+                                   ext=opts.ext)
         train_dur = np.sum(tr_durs)
         valid_dur = np.sum(va_durs)
         hop = 160
@@ -128,11 +130,13 @@ def main(opts):
         dset = LibriSpkIDMFCCDataset(opts.data_root,
                                      tr_files_, spk2idx,
                                      opts.order,
-                                     opts.stats)
+                                     opts.stats,
+                                     ext=opts.ext)
         va_dset = LibriSpkIDMFCCDataset(opts.data_root,
                                         va_files, spk2idx,
                                         opts.order, 
-                                        opts.stats)
+                                        opts.stats,
+                                        ext=opts.ext)
         cc = Collater(max_len=opts.max_len)
         dloader = DataLoader(dset, batch_size=opts.batch_size, collate_fn=cc,
                              shuffle=True)
@@ -368,6 +372,7 @@ if __name__ == '__main__':
                         help='(1) cls, (2) mlp (Def: mlp).')
     parser.add_argument('--train', action='store_true', default=False)
     parser.add_argument('--test', action='store_true', default=False)
+    parser.add_argument('--ext', type=str, default='mfcc')
     parser.add_argument('--test_log_file', type=str, default=None,
                         help='Possible test log file (Def: None).')
     
