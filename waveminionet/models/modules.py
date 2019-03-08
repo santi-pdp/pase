@@ -14,6 +14,8 @@ def build_norm_layer(norm_type, param=None, num_feats=None):
     elif norm_type == 'snorm':
         spectral_norm(param)
         return None
+    elif norm_type == 'inorm':
+        return nn.InstanceNorm1d(num_feats)
     elif norm_type is None:
         return None
     else:
@@ -648,9 +650,10 @@ class FeBlock(NeuralBlock):
                                   fmaps,
                                   kwidth,
                                   stride)
-        self.norm = build_norm_layer(norm_type,
-                                     self.conv,
-                                     fmaps)
+        if not (norm_type == 'snorm' and sincnet):
+            self.norm = build_norm_layer(norm_type,
+                                         self.conv,
+                                         fmaps)
         self.act = nn.PReLU(fmaps)
 
 
@@ -665,7 +668,8 @@ class FeBlock(NeuralBlock):
                      self.kwidth // 2)
             x = F.pad(x, P, mode=self.pad_mode)
         h = self.conv(x)
-        h = forward_norm(h, self.norm)
+        if hasattr(self, 'norm'):
+            h = forward_norm(h, self.norm)
         h = self.act(h)
         return h
 
