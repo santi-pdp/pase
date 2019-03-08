@@ -305,10 +305,11 @@ class Waveminionet(Model):
                     min_global_steps[rnd_min] += 1
                     minopts[rnd_min].step()
                 else:
-                    if hasattr(self, 'minions_dp'):
-                        raise NotImplementedError('DataParallel to be included')
+                    #if hasattr(self, 'minions_dp'):
+                    #    raise NotImplementedError('DataParallel to be included')
                     # Compute all minion losses
                     for min_name, y_ in min_h.items():
+                        minion = minions_run[self.min2idx[min_name]]
                         minopts[min_name].zero_grad()
                         y_lab = batch[min_name].to(device)
                         loss = self.minions[self.min2idx[min_name]].loss(y_, y_lab)
