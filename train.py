@@ -87,6 +87,9 @@ def train(opts):
                         )
     
     print(model)
+    if opts.net_ckpt is not None:
+        model.load_pretrained(opts.net_ckpt, load_last=True,
+                              verbose=True)
     print('Frontend params: ', model.frontend.describe_params())
     model.to(device)
     trans = make_transforms(opts, minions_cfg)
@@ -122,6 +125,9 @@ if __name__ == '__main__':
                         default='data/VCTK')
     parser.add_argument('--data_cfg', type=str, 
                         default='data/vctk_data.cfg')
+    parser.add_argument('--net_ckpt', type=str, default=None,
+                        help='Ckpt to initialize the full network '
+                             '(Def: None).')
     parser.add_argument('--net_cfg', type=str,
                         default=None)
     parser.add_argument('--fe_cfg', type=str, default=None)
