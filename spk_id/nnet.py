@@ -12,7 +12,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from ahoproc_tools.io import read_aco_file
 import os
-from waveminionet.models.frontend import WaveFe
+from waveminionet.models.frontend import WaveFe, wf_builder
 from waveminionet.models.modules import Model
 import librosa
 from random import shuffle
@@ -118,7 +118,7 @@ class MLPClassifier(Model):
                  z_bnorm=False,
                  name='MLP'):
         # 2048 default size raises 5.6M params
-        super().__init__(name=name, max_ckpts=100)
+        super().__init__(name=name, max_ckpts=1000)
         self.frontend = frontend
         self.ft_fe = ft_fe
         if ft_fe:
@@ -209,11 +209,12 @@ def main(opts):
     spk2idx = load_spk2idx(opts.spk2idx)
     NSPK=len(set(spk2idx.values()))
     # Build Model
-    if opts.fe_cfg is not None:
-        with open(opts.fe_cfg, 'r') as fe_cfg_f:
-            fe_cfg = json.load(fe_cfg_f)
-            print(fe_cfg)
-            fe = WaveFe(**fe_cfg)
+    #if opts.fe_cfg is not None:
+    #    with open(opts.fe_cfg, 'r') as fe_cfg_f:
+    #        fe_cfg = json.load(fe_cfg_f)
+    #        print(fe_cfg)
+    #        fe = WaveFe(**fe_cfg)
+    fe = wf_builder(opts.fe_cfg)
     if opts.train:
         print('=' * 20)
         print('Entering TRAIN mode')
