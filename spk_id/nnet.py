@@ -151,18 +151,25 @@ class RNNClassifier(Model):
                  ft_fe=False,
                  hidden_size=1300,
                  z_bnorm=False,
+                 uni=False,
                  name='RNN'):
         # 1300 default size raises 5.25M params
-        super().__init__(name=name)
+        super().__init__(name=name, max_ckpts=1000)
         self.frontend = frontend
         self.ft_fe = ft_fe
+        if ft_fe:
+            print('Training the front-end')
         if z_bnorm:
             # apply z-norm to the input
             self.z_bnorm = nn.BatchNorm1d(frontend.emb_dim, affine=False)
         if num_spks is None:
             raise ValueError('Please specify a number of spks.')
-        self.rnn = nn.GRU(frontend.emb_dim, hidden_size // 2,
-                          bidirectional=True,
+        if uni:
+            hsize = hidden_size
+        else:
+            hsize = hidden_size // 2
+        self.rnn = nn.GRU(frontend.emb_dim, hsize,
+                          bidirectional=not uni,
                           batch_first=True)
         self.model = nn.Sequential(
             nn.Conv1d(hidden_size, num_spks, 1),
@@ -192,7 +199,8 @@ def select_model(opts, fe, num_spks):
         model = RNNClassifier(fe, num_spks=num_spks,
                               hidden_size=opts.hidden_size,
                               ft_fe=opts.ft_fe,
-                              z_bnorm=opts.z_bnorm)
+                              z_bnorm=opts.z_bnorm,
+                              uni=opts.uni)
     else:
         raise TypeError('Unrecognized model {}'.format(opts.model))
     return model
@@ -209,18 +217,11 @@ def main(opts):
     spk2idx = load_spk2idx(opts.spk2idx)
     NSPK=len(set(spk2idx.values()))
     # Build Model
-    #if opts.fe_cfg is not None:
-    #    with open(opts.fe_cfg, 'r') as fe_cfg_f:
-    #        fe_cfg = json.load(fe_cfg_f)
-    #        print(fe_cfg)
-    #        fe = WaveFe(**fe_cfg)
     fe = wf_builder(opts.fe_cfg)
     if opts.train:
         print('=' * 20)
         print('Entering TRAIN mode')
         print('=' * 20)
-        #if opts.fe_ckpt is None:
-        #    raise ValueError('Please specify a valid ckpt to FE weights')
         with open(os.path.join(opts.save_path, 'train.opts'), 'w') as cfg_f:
             cfg_f.write(json.dumps(vars(opts), indent=2))
         # Open up guia and split valid
@@ -371,7 +372,7 @@ def main(opts):
                                                    acc * 100,
                                                    100 - (acc * 100)))
                     teacc.append(accuracy(Y_, Y))
-                    teloss.append(loss)
+                    teloss.append(loss.item())
                     end_t = timeit.default_timer()
                     timings.append(end_t - beg_t)
                     beg_t = timeit.default_timer()
@@ -540,6 +541,8 @@ if __name__ == '__main__':
     parser.add_argument('--test_log_file', type=str, default=None,
                         help='Possible test log file (Def: None).')
     parser.add_argument('--inorm_code', action='store_true', default=False)
+    parser.add_argument('--uni', action='store_true', default=False,
+                        help='Make RNN model unidirectional (Def: False).')
     
     opts = parser.parse_args()
     
