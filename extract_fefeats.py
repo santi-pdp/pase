@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
-from waveminionet.models.frontend import WaveFe
-from waveminionet.dataset import WavDataset, uttwav_collater
+from pase.models.frontend import WaveFe
+from pase.dataset import WavDataset, uttwav_collater
 import pickle
 import torch.nn as nn
 import numpy as np

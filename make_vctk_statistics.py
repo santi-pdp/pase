@@ -1,8 +1,8 @@
 import torch
 from torch.utils.data import DataLoader
-from waveminionet.dataset import PairWavDataset, DictCollater
+from pase.dataset import PairWavDataset, DictCollater
 from torchvision.transforms import Compose
-from waveminionet.transforms import *
+from pase.transforms import *
 import argparse
 import pickle
 

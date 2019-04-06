@@ -1,10 +1,10 @@
-from waveminionet.models.core import Waveminionet
-from waveminionet.models.modules import VQEMA
-from waveminionet.dataset import PairWavDataset, DictCollater
+from pase.models.core import Waveminionet
+from pase.models.modules import VQEMA
+from pase.dataset import PairWavDataset, DictCollater
 from torchvision.transforms import Compose
-from waveminionet.transforms import *
-from waveminionet.losses import *
-from waveminionet.utils import waveminionet_parser
+from pase.transforms import *
+from pase.losses import *
+from pase.utils import pase_parser
 from torch.utils.data import DataLoader
 import torch
 import pickle
@@ -77,7 +77,7 @@ def train(opts):
             print(fe_cfg)
     else:
         fe_cfg = None
-    minions_cfg = waveminionet_parser(opts.net_cfg)
+    minions_cfg = pase_parser(opts.net_cfg)
     make_transforms(opts, minions_cfg)
     model = Waveminionet(minions_cfg=minions_cfg,
                          adv_loss=opts.adv_loss,

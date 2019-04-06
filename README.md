@@ -1,18 +1,19 @@
 ### Data preparation
 
-Execute the data configuration to generate the description of the VCTK dataset:
-
-```
-python data_cfg_vctk.py --cfg_file data/vctk_data.cfg ~/DB/VCTK
-```
+TODO
 
 ### Training
 
-Train a minionet model with command:
+Train a PASE self-supervisedly with all active workers with command:
 
 ```
-python train.py --rndmin_train --batch_size 16 --save_path ckpt_bsz16
+python -u train.py --batch_size 32 --epoch 100 --save_path pase_ckpt --num_workers 1 \
+	--warmup 10000000 --net_cfg cfg/all.cfg --fe_cfg cfg/frontend_RF160ms_norm-emb100.cfg \
+	--do_eval --data_cfg data/librispeech_data.cfg --min_lr 0.0005 --fe_lr 0.0005 \
+	--data_root data/LibriSpeech/wavs/ --stats data/librispeech_stats.pkl --lrdec_step 30 --lrdecay 0.5
 ```
 
-`--rndmin_train` picks a random minion to backprop each turn, and this
-trains a hardcoded architecture so far.
+### Training Supervised Auxiliary Task
+
+TODO
+

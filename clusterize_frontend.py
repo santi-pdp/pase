@@ -1,8 +1,8 @@
 from sklearn.cluster import KMeans
-from waveminionet.models.frontend import wf_builder
-from waveminionet.dataset import PairWavDataset, DictCollater
+from pase.models.frontend import wf_builder
+from pase.dataset import PairWavDataset, DictCollater
 from torchvision.transforms import Compose
-from waveminionet.transforms import *
+from pase.transforms import *
 from torch.utils.data import DataLoader
 import numpy as np
 import argparse
@@ -46,7 +46,7 @@ def cluster(opts):
     timings = []
     N = opts.num_samples // opts.batch_size
     beg_t = timeit.default_timer()
-    for bidx in range(1, N, 1):
+    for bidx in range(1, N + 1, 1):
         batch = next(dloader.__iter__())
         chunk = batch['chunk']
         y = fe(chunk.to(device)).mean(dim=2)
