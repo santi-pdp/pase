@@ -164,9 +164,9 @@ if __name__ == '__main__':
                         default=False)
     parser.add_argument('--adv_loss', type=str, default='BCE',
                         help='BCE or L2')
-    parser.add_argument('--warmup', type=int, default=1,
+    parser.add_argument('--warmup', type=int, default=1000000000,
                         help='Epoch to begin applying z adv '
-                             '(Def: 2).')
+                             '(Def: 1000000000 to not apply it).')
     parser.add_argument('--zinit_weight', type=float, default=1)
     parser.add_argument('--zinc', type=float, default=0.0002)
     parser.add_argument('--vq_K', type=int, default=50,
