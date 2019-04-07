@@ -48,14 +48,13 @@ def extract_stats(opts):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_root', type=str, 
-                        default='data/VCTK')
+                        default='data/LibriSpeech/Librispeech_spkid_sel')
     parser.add_argument('--data_cfg', type=str, 
-                        default='data/vctk_data.cfg')
-    parser.add_argument('--save_path', type=str, default='ckpt')
+                        default='data/librispeech_data.cfg')
     parser.add_argument('--num_workers', type=int, default=1)
     parser.add_argument('--chunk_size', type=int, default=16000)
     parser.add_argument('--max_batches', type=int, default=20)
-    parser.add_argument('--out_file', type=str, default='data/vctk_stats.pkl')
+    parser.add_argument('--out_file', type=str, default='data/librispeech_stats.pkl')
 
     opts = parser.parse_args()
     extract_stats(opts)
