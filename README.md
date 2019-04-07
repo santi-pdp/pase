@@ -1,5 +1,9 @@
 # Problem Agnostic Speech Encoder (PASE)
 
+This repository is the official implementation of PASE, a speech waveform encoder trained in a self-supervised framework with the so called workers.
+
+![SimplePASE](https://user-images.githubusercontent.com/7583502/55691535-5ad39a80-599f-11e9-81aa-4ea5ad949d09.png)
+
 ## Pre-trained Model
 
 The PASE parameters used in the published work can be found <a href='http://veu.talp.cat/models/PASE.ckpt'>here</a>. This `ckpt` file
