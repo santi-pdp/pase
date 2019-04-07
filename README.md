@@ -2,6 +2,10 @@
 
 TODO
 
+### Pre-trained model
+
+PASE pre-trained parameters on LibriSpeech can be found <a href='veu.talp.cat/models/PASE.ckpt'>here</a>.
+
 ### Training
 
 Train a PASE self-supervisedly with all active workers with command:
