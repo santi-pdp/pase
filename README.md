@@ -56,7 +56,23 @@ python unsupervised_data_cfg_librispeech.py --data_root data/LibriSpeech/wavs \
 
 ```
 
-Now we have the ingredients to train our PASE model.
+#### Making the trainset statistics file
+
+The `make_trainset_statistics.py` script will load a certain amount of training batches with the config file we just generated,
+and will compute the normalization statistics for the workers to work properly in the self-supervised training. We use this script
+as follows:
+
+```
+python make_trainset_statistics.py --data_root data/LibriSpeech/wavs \
+	--data_cfg data/librispeech_data.cfg \
+	--out_file data/librispeech_stats.pkl
+```
+
+The file `data/librispeech_stats.pkl` will be generated. If this goes too slow, you may try with
+a smaller amount of training batches with the `--max_batches 10` argument for example. The default
+is 20.
+
+**Now we have the ingredients to train our PASE model.**
 
 ### Training
 
