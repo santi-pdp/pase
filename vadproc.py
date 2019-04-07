@@ -40,6 +40,7 @@ def main(opts):
         plt.show()
 
     if opts.trim_sil > 0:
+        assert opts.out_file is not None 
         # post-process to find silence regions over
         # this value, and delete those pieces of speech
         count0 = 0
@@ -66,10 +67,11 @@ def main(opts):
                 out_samples += frame[:]
                 count0 = 0
         out_samples = np.array(out_samples, dtype=np.int16)
-        print('Input num samples: ', len(wav))
-        print('Output num samples: ', len(out_samples))
-        print('Discarded {} % of samples'
-              ''.format(100 - ((len(out_samples) / len(wav)) * 100.)))
+        R = 100 - ((len(out_samples) / len(wav)) * 100.)
+        if opts.verbose:
+            print('Input num samples: ', len(wav))
+            print('Output num samples: ', len(out_samples))
+            print('Discarded {} % of samples'.format(R))
         if opts.show:
             plt.subplot(3,1,1)
             plt.plot(wav)
@@ -78,8 +80,11 @@ def main(opts):
             plt.subplot(3,1,3)
             plt.plot(out_samples)
             plt.show()
-        
         sf.write(opts.out_file, out_samples, rate, 'PCM_16')
+        if opts.out_log is not None:
+            with open(opts.out_log, 'w') as out_log_f:
+                out_log_f.write('isamples\tosamples\treduction[%]\n{}\t{}\t{:.2f}\n'
+                                ''.format(len(wav), len(out_samples), R))
 
 
 
@@ -94,9 +99,11 @@ if __name__ == '__main__':
                         help='Silence regions over this value '
                              'will be trimmed. The value 0 has no effect. '
                              'Specify in milisec, please (Def: 0).')
+    parser.add_argument('--verbose', action='store_true', default=False)
     parser.add_argument('--out_file', type=str, default=None)
+    parser.add_argument('--out_log', type=str, default=None,
+                        help='Will write log in this file if specified')
     parser.add_argument('--show', action='store_true', default=False)
-    parser.add_argument('--std', action='store_true', default=False)
     parser.add_argument('--win_len', type=float, default=0.02, 
                         help='In seconds (Def: 0.02).')
     parser.add_argument('--vad_mode', type=int, default=3)
