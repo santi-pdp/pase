@@ -1,0 +1,13 @@
+tqdm==4.28.1
+numpy==1.15.4
+scipy==1.1.0
+librosa==0.6.3
+SoundFile==0.10.2
+pysptk==0.1.16
+matplotlib==3.0.2
+python_speech_features==0.6
+scikit_learn==0.20.3
+tensorboardX==1.6
+torch==1.0.1.post2
+torchvision==0.2.2.post3
+webrtcvad==2.0.10
