@@ -102,7 +102,7 @@ we do not activate it for these experiments, but it can be used if it is of any 
 ## Authors
 
 * Santiago Pascual (Universitat Politècnica de Catalunya - Barcelona)
-* Mirco Ravanelli (MILA, Université de Montréal - Montreal)
-* Joan Serrà (Telefónica Research Barcelona)
+* Mirco Ravanelli (MILA, Université de Montréal - Montréal)
+* Joan Serrà (Telefónica Research - Barcelona)
 * Antonio Bonafonte (Universitat Politècnica de Catalunya - Barcelona)
 * Yoshua Bengio (MILA, Université de Montréal - Montréal, CIFAR Fellow)
