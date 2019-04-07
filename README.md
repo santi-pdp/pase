@@ -4,7 +4,7 @@ TODO
 
 ### Pre-trained model
 
-PASE pre-trained parameters on LibriSpeech can be found <a href='veu.talp.cat/models/PASE.ckpt'>here</a>.
+PASE pre-trained parameters on LibriSpeech can be found <a href='http://veu.talp.cat/models/PASE.ckpt'>here</a>.
 
 ### Training
 
