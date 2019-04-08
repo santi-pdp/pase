@@ -1,6 +1,6 @@
 # Problem Agnostic Speech Encoder (PASE)
 
-This repository is the official implementation of PASE, a speech waveform encoder trained in a self-supervised framework with the so called workers.
+This repository is the official implementation of PASE, a speech waveform encoder trained in a self-supervised framework with the so called workers. PASE can be used as a speech feature extractor or can be used to pre-train a network that perform a speech classification task such as speech recognition, speaker identification, emotion classification, etc.
 
 ![SimplePASE](https://user-images.githubusercontent.com/7583502/55691535-5ad39a80-599f-11e9-81aa-4ea5ad949d09.png)
 
