@@ -13,6 +13,7 @@ encoder in the following simple manner:
 ```
 from pase.models.frontend import wf_builder
 pase = wf_builder('cfg/PASE.cfg')
+pase.eval()
 pase.load_pretrained('PASE.ckpt', load_last=True, verbose=True)
 
 # Now we can forward waveforms as Torch tensors
