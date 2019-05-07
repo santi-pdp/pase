@@ -1,5 +1,9 @@
 # Problem Agnostic Speech Encoder (PASE)
 
+This repository is the official implementation of [PASE](https://arxiv.org/abs/1904.03416), a speech waveform encoder trained in a self-supervised framework with the so called workers. PASE can be used as a speech feature extractor or can be used to pre-train a network that perform a speech classification task such as speech recognition, speaker identification, emotion classification, etc.
+
+![SimplePASE](https://user-images.githubusercontent.com/7583502/55691535-5ad39a80-599f-11e9-81aa-4ea5ad949d09.png)
+
 ## Pre-trained Model
 
 The PASE parameters used in the published work can be found <a href='http://veu.talp.cat/models/PASE.ckpt'>here</a>. This `ckpt` file
@@ -9,6 +13,7 @@ encoder in the following simple manner:
 ```
 from pase.models.frontend import wf_builder
 pase = wf_builder('cfg/PASE.cfg')
+pase.eval()
 pase.load_pretrained('PASE.ckpt', load_last=True, verbose=True)
 
 # Now we can forward waveforms as Torch tensors
@@ -98,7 +103,7 @@ we do not activate it for these experiments, but it can be used if it is of any 
 ## Authors
 
 * Santiago Pascual (Universitat Politècnica de Catalunya - Barcelona)
-* Mirco Ravanelli (MILA, Université de Montréal - Montreal)
-* Joan Serrà (Telefónica Research Barcelona)
+* Mirco Ravanelli (MILA, Université de Montréal - Montréal)
+* Joan Serrà (Telefónica Research - Barcelona)
 * Antonio Bonafonte (Universitat Politècnica de Catalunya - Barcelona)
 * Yoshua Bengio (MILA, Université de Montréal - Montréal, CIFAR Fellow)
