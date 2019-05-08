@@ -39,10 +39,10 @@ def extract_acos(dloader, transform, save_path, split):
                                  total=len(dloader)):
         # transform the wav batch element
         wav, uttname, _ = batch
-        uttname = os.path.basename(uttname[0])
+        uttname = os.path.splitext(os.path.basename(uttname[0]))[0]
         aco = transform(wav.view(-1))
         for k in aco.keys():
-            if 'uttname' in k or 'raw' in k:
+            if 'uttname' in k or 'raw' in k or 'chunk' in k:
                 continue
             save_dir = os.path.join(save_path, split, k)
             if not os.path.exists(save_dir):
@@ -50,9 +50,6 @@ def extract_acos(dloader, transform, save_path, split):
             kname = uttname + '.{}'.format(k)
             torch.save(aco[k], os.path.join(save_dir,
                                             kname))
-
-            if bidx >= 100:
-                break
 
 def main(opts):
     minions_cfg = pase_parser(opts.net_cfg)
