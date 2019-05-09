@@ -1,7 +1,7 @@
 from pase.models.core import Waveminionet
 from pase.models.modules import VQEMA
 from pase.dataset import PairWavDataset, DictCollater
-from torchvision.transforms import Compose
+#from torchvision.transforms import Compose
 from pase.transforms import *
 from pase.losses import *
 from pase.utils import pase_parser
@@ -18,6 +18,7 @@ import random
 
 def make_transforms(opts, minions_cfg):
     trans = [ToTensor()]
+    keys = ['totensor']
     # go through all minions first to check whether
     # there is MI or not to make chunker
     mi = False
@@ -48,9 +49,14 @@ def make_transforms(opts, minions_cfg):
         else:
             raise TypeError('Unrecognized module \"{}\"'
                             'whilst building transfromations'.format(name))
+        keys.append(name)
     if znorm:
         trans.append(ZNorm(opts.stats))
-    trans = Compose(trans)
+        keys.append('znorm')
+    if opts.trans_cache is None:
+        trans = Compose(trans)
+    else:
+        trans = CachedCompose(trans, keys, opts.trans_cache)
     return trans
 
 
@@ -96,10 +102,12 @@ def train(opts):
     print(trans)
     # Build Dataset(s) and DataLoader(s)
     dset = PairWavDataset(opts.data_root, opts.data_cfg, 'train',
-                         transform=trans)
+                         transform=trans,
+                         preload_wav=opts.preload_wav)
     dloader = DataLoader(dset, batch_size=opts.batch_size,
                          shuffle=True, collate_fn=DictCollater(),
-                         num_workers=opts.num_workers)
+                         num_workers=opts.num_workers,
+                         pin_memory=CUDA)
     # Compute estimation of bpe. As we sample chunks randomly, we
     # should say that an epoch happened after seeing at least as many
     # chunks as total_train_wav_dur // chunk_size
@@ -107,10 +115,12 @@ def train(opts):
     opts.bpe = bpe
     if opts.do_eval:
         va_dset = PairWavDataset(opts.data_root, opts.data_cfg,
-                                 'valid', transform=trans)
+                                 'valid', transform=trans,
+                                 preload_wav=opts.preload_wav)
         va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
                                 shuffle=False, collate_fn=DictCollater(),
-                                num_workers=opts.num_workers)
+                                num_workers=opts.num_workers,
+                                pin_memory=CUDA)
         va_bpe = (va_dset.total_wav_dur // opts.chunk_size) // opts.batch_size
         opts.va_bpe = va_bpe
     else:
@@ -122,9 +132,9 @@ def train(opts):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_root', type=str, 
-                        default='data/VCTK')
+                        default='data/LibriSpeech/Librispeech_spkid_sel')
     parser.add_argument('--data_cfg', type=str, 
-                        default='data/vctk_data.cfg')
+                        default='data/librispeech_data.cfg')
     parser.add_argument('--net_ckpt', type=str, default=None,
                         help='Ckpt to initialize the full network '
                              '(Def: None).')
@@ -132,9 +142,11 @@ if __name__ == '__main__':
                         default=None)
     parser.add_argument('--fe_cfg', type=str, default=None)
     parser.add_argument('--do_eval', action='store_true', default=False)
-    parser.add_argument('--stats', type=str, default='data/vctk_stats.pkl')
+    parser.add_argument('--stats', type=str, default='data/librispeech_stats.pkl')
     parser.add_argument('--pretrained_ckpt', type=str, default=None)
     parser.add_argument('--save_path', type=str, default='ckpt')
+    parser.add_argument('--trans_cache', type=str,
+                        default=None)
     parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--seed', type=int, default=2)
     parser.add_argument('--no-cuda', action='store_true', default=False)
@@ -174,6 +186,8 @@ if __name__ == '__main__':
                              '(Def: 50).')
     parser.add_argument('--vq', action='store_true', default=False,
                         help='Do VQ quantization of enc output (Def: False).')
+    parser.add_argument('--preload_wav', action='store_true', default=False,
+                        help='Preload wav files in Dataset (Def: False).')
 
     opts = parser.parse_args()
     if opts.net_cfg is None:

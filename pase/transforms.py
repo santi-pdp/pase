@@ -2,8 +2,10 @@ import torch
 import numpy as np
 import random
 import pysptk
+import os
 import librosa
 import pickle
+from torchvision.transforms import Compose
 from ahoproc_tools.interpolate import interpolation
 
 
@@ -15,6 +17,9 @@ def norm_and_scale(wav):
 def format_package(x):
     if not isinstance(x, dict):
         return {'raw':x}
+    else:
+        if 'chunk' not in x:
+            x['chunk'] = x['raw']
     return x
 
 class ToTensor(object):
@@ -24,7 +29,7 @@ class ToTensor(object):
         for k, v in pkg.items():
             # convert everything in the package
             # into tensors
-            if not isinstance(v, torch.Tensor):
+            if not isinstance(v, torch.Tensor) and not isinstance(v, str):
                 pkg[k] = torch.tensor(v)
         return pkg
 
@@ -38,11 +43,13 @@ class ZNorm(object):
         with open(stats, 'rb') as stats_f:
             self.stats = pickle.load(stats_f)
 
-    def __call__(self, pkg):
+    def __call__(self, pkg, ignore_keys=[]):
         pkg = format_package(pkg)
         for k, st in self.stats.items():
             #assert k in pkg, '{} != {}'.format(list(pkg.keys()),
             #                                   list(self.stats.keys()))
+            if k in ignore_keys:
+                continue
             if k in pkg:
                 mean = st['mean'].unsqueeze(1)
                 std = st['std'].unsqueeze(1)
@@ -51,6 +58,48 @@ class ZNorm(object):
 
     def __repr__(self):
         return self.__class__.__name__ + '({})'.format(self.stats_name)
+
+class CachedCompose(Compose):
+
+    def __init__(self, transforms, keys, cache_path):
+        super().__init__(transforms)
+        self.cache_path = cache_path
+        self.keys = keys
+        assert len(keys) == len(transforms), '{} != {}'.format(len(keys),
+                                                               len(transforms))
+        print('Keys: ', keys)
+
+    def __call__(self, x):
+        if 'uttname' not in x:
+            raise ValueError('Utterance name not found when '
+                             'looking for cached transforms')
+        if 'split' not in x:
+            raise ValueError('Split name not found when '
+                             'looking for cached transforms')
+
+        znorm_ignore_flags = []
+        # traverse the keys to look for cache sub-folders
+        for key, t in zip(self.keys, self.transforms):
+            if key == 'totensor' or key == 'chunk':
+                x = t(x)
+            elif key == 'znorm':
+                x = t(x, znorm_ignore_flags)
+            else:
+                aco_dir = os.path.join(self.cache_path, x['split'], key)
+                if os.path.exists(aco_dir):
+                    # look for cached file by name
+                    bname = os.path.splitext(os.path.basename(x['uttname']))[0]
+                    acofile = os.path.join(aco_dir, bname + '.' + key)
+                    if not os.path.exists(acofile):
+                        acofile = None
+                    else:
+                        znorm_ignore_flags.append(key)
+                    x = t(x, cached_file=acofile)
+        return x
+
+    def __repr__(self):
+        return super().__repr__()
+        
 
 class SingleChunkWav(object):
 
@@ -63,19 +112,25 @@ class SingleChunkWav(object):
         assert isinstance(x, torch.Tensor), type(x)
         assert x.dim() == 1, x.size()
 
-    def select_chunk(self, wav):
+    def select_chunk(self, wav, ret_bounds=False):
         # select random index
         chksz = self.chunk_size
         idxs = list(range(wav.size(0) - chksz))
         idx = random.choice(idxs)
         chk = wav[idx:idx + chksz]
-        return chk
+        if ret_bounds:
+            return chk, idx, idx + chksz
+        else:
+            return chk
 
     def __call__(self, pkg):
         pkg = format_package(pkg)
         raw = pkg['raw']
         self.assert_format(raw)
-        pkg['chunk'] = self.select_chunk(raw)
+        chunk, beg_i, end_i = self.select_chunk(raw, ret_bounds=True)
+        pkg['chunk'] = chunk
+        pkg['chunk_beg_i'] = beg_i
+        pkg['chunk_end_i'] = end_i
         if self.random_scale:
             pkg['chunk'] = norm_and_scale(pkg['chunk'])
         return pkg
@@ -100,7 +155,10 @@ class MIChunkWav(SingleChunkWav):
         raw_rand = pkg['raw_rand']
         self.assert_format(raw)
         self.assert_format(raw_rand)
-        pkg['chunk'] = self.select_chunk(raw)
+        chunk, beg_i, end_i = self.select_chunk(raw, ret_bounds=True)
+        pkg['chunk'] = chunk
+        pkg['chunk_beg_i'] = beg_i
+        pkg['chunk_end_i'] = end_i
         pkg['chunk_ctxt'] = self.select_chunk(raw)
         pkg['chunk_rand'] = self.select_chunk(raw_rand)
         if self.random_scale:
@@ -119,15 +177,23 @@ class LPS(object):
         self.win = win
         self.device = device
 
-    def __call__(self, pkg):
+    def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
         wav = pkg['chunk']
         max_frames = wav.size(0) // self.hop
-        wav = wav.to(self.device)
-        X = torch.stft(wav, self.n_fft,
-                       self.hop, self.win)
-        X = torch.norm(X, 2, dim=2).cpu()[:, :max_frames]
-        pkg['lps'] = 10 * torch.log10(X ** 2 + 10e-20).cpu()
+        if cached_file is not None:
+            # load pre-computed data
+            X = torch.load(cached_file)
+            beg_i = pkg['chunk_beg_i'] // self.hop
+            end_i = pkg['chunk_end_i'] // self.hop
+            X = X[:, beg_i:end_i]
+            pkg['lps'] = X
+        else:
+            wav = wav.to(self.device)
+            X = torch.stft(wav, self.n_fft,
+                           self.hop, self.win)
+            X = torch.norm(X, 2, dim=2).cpu()[:, :max_frames]
+            pkg['lps'] = 10 * torch.log10(X ** 2 + 10e-20).cpu()
         return pkg
 
     def __repr__(self):
@@ -146,17 +212,25 @@ class MFCC(object):
         self.order = order
         self.sr = 16000
 
-    def __call__(self, pkg):
+    def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
         wav = pkg['chunk']
         y = wav.data.numpy()
         max_frames = y.shape[0] // self.hop
-        mfcc = librosa.feature.mfcc(y, sr=self.sr,
-                                    n_mfcc=self.order,
-                                    n_fft=self.n_fft,
-                                    hop_length=self.hop
-                                   )[:, :max_frames]
-        pkg['mfcc'] = torch.tensor(mfcc.astype(np.float32))
+        if cached_file is not None:
+            # load pre-computed data
+            mfcc = torch.load(cached_file)
+            beg_i = pkg['chunk_beg_i'] // self.hop
+            end_i = pkg['chunk_end_i'] // self.hop
+            mfcc = mfcc[:, beg_i:end_i]
+            pkg['mfcc'] = mfcc
+        else:
+            mfcc = librosa.feature.mfcc(y, sr=self.sr,
+                                        n_mfcc=self.order,
+                                        n_fft=self.n_fft,
+                                        hop_length=self.hop
+                                       )[:, :max_frames]
+            pkg['mfcc'] = torch.tensor(mfcc.astype(np.float32))
         return pkg
 
     def __repr__(self):
@@ -174,39 +248,47 @@ class Prosody(object):
         self.f0_max = f0_max
         self.sr = sr
 
-    def __call__(self, pkg):
+    def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
         wav = pkg['chunk']
         wav = wav.data.numpy()
         max_frames = wav.shape[0] // self.hop
-        # first compute logF0 and voiced/unvoiced flag
-        f0 = pysptk.swipe(wav.astype(np.float64),
-                          fs=self.sr, hopsize=self.hop,
-                          min=self.f0_min,
-                          max=self.f0_max,
-                          otype='f0')
-        lf0 = np.log(f0 + 1e-10)
-        lf0, uv = interpolation(lf0, -1)
-        lf0 = torch.tensor(lf0.astype(np.float32)).unsqueeze(0)[:, :max_frames]
-        uv = torch.tensor(uv.astype(np.float32)).unsqueeze(0)[:, :max_frames]
-        if torch.sum(uv) == 0:
-            # if frame is completely unvoiced, make lf0 min val
-            lf0 = torch.ones(uv.size()) * np.log(self.f0_min)
-        assert lf0.min() > 0, lf0.data.numpy()
-        # secondly obtain zcr
-        zcr = librosa.feature.zero_crossing_rate(y=wav,
-                                                 frame_length=self.win,
-                                                 hop_length=self.hop)
-        zcr = torch.tensor(zcr.astype(np.float32))
-        zcr = zcr[:, :max_frames]
-        # finally obtain energy
-        egy = librosa.feature.rmse(y=wav, frame_length=self.win,
-                                   hop_length=self.hop,
-                                   pad_mode='constant')
-        egy = torch.tensor(egy.astype(np.float32))
-        egy = egy[:, :max_frames]
-        proso = torch.cat((lf0, uv, egy, zcr), dim=0)
-        pkg['prosody'] = proso
+        if cached_file is not None:
+            # load pre-computed data
+            proso = torch.load(cached_file)
+            beg_i = pkg['chunk_beg_i'] // self.hop
+            end_i = pkg['chunk_end_i'] // self.hop
+            proso = proso[:, beg_i:end_i]
+            pkg['prosody'] = proso
+        else:
+            # first compute logF0 and voiced/unvoiced flag
+            f0 = pysptk.swipe(wav.astype(np.float64),
+                              fs=self.sr, hopsize=self.hop,
+                              min=self.f0_min,
+                              max=self.f0_max,
+                              otype='f0')
+            lf0 = np.log(f0 + 1e-10)
+            lf0, uv = interpolation(lf0, -1)
+            lf0 = torch.tensor(lf0.astype(np.float32)).unsqueeze(0)[:, :max_frames]
+            uv = torch.tensor(uv.astype(np.float32)).unsqueeze(0)[:, :max_frames]
+            if torch.sum(uv) == 0:
+                # if frame is completely unvoiced, make lf0 min val
+                lf0 = torch.ones(uv.size()) * np.log(self.f0_min)
+            assert lf0.min() > 0, lf0.data.numpy()
+            # secondly obtain zcr
+            zcr = librosa.feature.zero_crossing_rate(y=wav,
+                                                     frame_length=self.win,
+                                                     hop_length=self.hop)
+            zcr = torch.tensor(zcr.astype(np.float32))
+            zcr = zcr[:, :max_frames]
+            # finally obtain energy
+            egy = librosa.feature.rmse(y=wav, frame_length=self.win,
+                                       hop_length=self.hop,
+                                       pad_mode='constant')
+            egy = torch.tensor(egy.astype(np.float32))
+            egy = egy[:, :max_frames]
+            proso = torch.cat((lf0, uv, egy, zcr), dim=0)
+            pkg['prosody'] = proso
         return pkg
 
     def __repr__(self):

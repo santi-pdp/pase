@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import Dataset
 import soundfile as sf
 import json
+import tqdm
 import librosa
 import os
 import random
@@ -54,7 +55,9 @@ class DictCollater(object):
         if labs is not None:
             rets = [batches]
             for li in range(len(lab_batches)):
-                rets.append(torch.tensor(lab_batches[li]))
+                lab_batches_T = lab_batches[li]
+                lab_batches_T = torch.tensor(lab_batches_T)
+                rets.append(lab_batches_T)
         else:
             rets = batches
         return rets
@@ -90,8 +93,11 @@ def uttwav_collater(batch):
 class WavDataset(Dataset):
 
     def __init__(self, data_root, data_cfg_file, split, 
-                 transform=None, sr=None, return_uttname=False,
+                 transform=None, sr=None,
                  return_spk=False,
+                 preload_wav=False,
+                 return_uttname=False,
+                 transforms_cache=None,
                  verbose=True):
         # sr: sampling rate, (Def: None, the one in the wav header)
         self.sr = sr
@@ -105,6 +111,7 @@ class WavDataset(Dataset):
         self.return_spk = return_spk
         self.split = split
         self.transform = transform
+        self.transforms_cache = transforms_cache
         with open(data_cfg_file, 'r') as data_cfg_f:
             self.data_cfg = json.load(data_cfg_f)
             self.spk_info = self.data_cfg['speakers']
@@ -123,6 +130,12 @@ class WavDataset(Dataset):
                           'speakers'.format(len(self.spk2idx)))
             self.wavs = wavs
         self.wav_cache = {}
+        if preload_wav:
+            print('Pre-loading wavs to memory')
+            for wavstruct in tqdm.tqdm(self.wavs, total=len(self.wavs)):
+                uttname = wavstruct['filename']
+                wname = os.path.join(self.data_root, uttname)
+                self.retrieve_cache(wname, self.wav_cache)
 
     def __len__(self):
         return len(self.wavs)
@@ -131,7 +144,8 @@ class WavDataset(Dataset):
         if fname in cache:
             return cache[fname]
         else:
-            wav, rate = librosa.load(fname, sr=self.sr)
+            wav, rate = sf.read(fname)
+            wav = wav.astype(np.float32)
             cache[fname] = wav
             return wav
 
@@ -156,15 +170,21 @@ class PairWavDataset(WavDataset):
         chosen one.
     """
     def __init__(self, data_root, data_cfg_file, split, 
-                 transform=None, sr=None, verbose=True):
+                 transform=None, sr=None, verbose=True,
+                 return_uttname=False,
+                 transforms_cache=None,
+                 preload_wav=False):
         super().__init__(data_root, data_cfg_file, split, transform=transform, 
-                         sr=sr,
+                         sr=sr, preload_wav=preload_wav,
+                         return_uttname=return_uttname,
+                         transforms_cache=transforms_cache,
                          verbose=verbose)
         self.rwav_cache = {}
 
     def __getitem__(self, index):
+        uttname = self.wavs[index]['filename']
         # Here we select two wavs, the current one and a randomly chosen one
-        wname = os.path.join(self.data_root, self.wavs[index]['filename'])
+        wname = os.path.join(self.data_root, uttname)
         wav = self.retrieve_cache(wname, self.wav_cache)
         # create candidate indices without current index
         indices = list(range(len(self.wavs)))
@@ -173,8 +193,10 @@ class PairWavDataset(WavDataset):
         rwname = os.path.join(self.data_root, self.wavs[rindex]['filename'])
         rwav = self.retrieve_cache(rwname, self.rwav_cache)
         if self.transform is not None:
-            ret = self.transform({'raw': wav, 'raw_rand': rwav})
-            return ret
+            pkg = {'raw': wav, 'raw_rand': rwav,
+                   'uttname':uttname, 'split':self.split}
+            pkg = self.transform(pkg)
+            return pkg
         else:
             return wav, rwav
 
