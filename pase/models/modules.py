@@ -624,6 +624,7 @@ class FeBlock(NeuralBlock):
 
     def __init__(self, num_inputs,
                  fmaps, kwidth, stride,
+                 dilation,
                  pad_mode='reflect',
                  norm_type=None,
                  sincnet=False,
@@ -634,6 +635,7 @@ class FeBlock(NeuralBlock):
         self.fmaps = fmaps
         self.kwidth = kwidth
         self.stride = stride
+        self.dilation = dilation
         self.pad_mode = pad_mode
         self.sincnet = sincnet
         if sincnet:
@@ -649,7 +651,8 @@ class FeBlock(NeuralBlock):
             self.conv = nn.Conv1d(num_inputs,
                                   fmaps,
                                   kwidth,
-                                  stride)
+                                  stride,
+                                  dilation=dilation)
         if not (norm_type == 'snorm' and sincnet):
             self.norm = build_norm_layer(norm_type,
                                          self.conv,
@@ -661,11 +664,15 @@ class FeBlock(NeuralBlock):
         if self.kwidth > 1 and not self.sincnet:
             # compute pad factor
             if self.stride > 1:
+                if self.dilation > 1:
+                    raise ValueError('Cannot make dilated convolution with '
+                                     'stride > 1')
                 P = (self.kwidth // 2 - 1,
                      self.kwidth // 2)
             else:
-                P = (self.kwidth // 2,
-                     self.kwidth // 2)
+                pad = (self.kwidth // 2) * (self.dilation - 1) + \
+                        (self.kwidth // 2)
+                P = (pad, pad)
             x = F.pad(x, P, mode=self.pad_mode)
         h = self.conv(x)
         if hasattr(self, 'norm'):

@@ -21,6 +21,7 @@ class WaveFe(Model):
                  sincnet=True,
                  kwidths=[251, 10, 5, 5, 5, 5, 5, 5], 
                  strides=[1, 10, 2, 1, 2, 1, 2, 2], 
+                 dilations=[1, 1, 1, 1, 1, 1, 1, 1],
                  fmaps=[64, 64, 128, 128, 256, 256, 512, 512],
                  norm_type='bnorm',
                  pad_mode='reflect', sr=16000,
@@ -41,12 +42,16 @@ class WaveFe(Model):
         assert len(kwidths) == len(strides)
         assert len(strides) == len(fmaps)
         ninp = num_inputs
-        for n, (kwidth, stride, fmap) in enumerate(zip(kwidths, strides,
-                                                       fmaps), start=1):
+        for n, (kwidth, stride, dilation, fmap) in enumerate(zip(kwidths, 
+                                                                 strides,
+                                                                 dilations,
+                                                                 fmaps), 
+                                                             start=1):
             if n > 1:
                 # make sure sincnet is deactivated after first layer
                 sincnet = False
             self.blocks.append(FeBlock(ninp, fmap, kwidth, stride,
+                                       dilation,
                                        pad_mode=pad_mode,
                                        norm_type=norm_type,
                                        sincnet=sincnet,
