@@ -12,7 +12,7 @@ class StatisticalPooling(nn.Module):
     def forward(self, x):
         # x is 3-D with axis [B, feats, T]
         mu = x.mean(dim=2, keepdim=True)
-        std = x.mean(dim=2, keepdim=True)
+        std = x.std(dim=2, keepdim=True)
         return torch.cat((mu, std), dim=1)
 
 class TDNN(Model):
