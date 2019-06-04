@@ -6,6 +6,7 @@ import soundfile as sf
 import json
 import tqdm
 import librosa
+import pickle
 import os
 import random
 import numpy as np
@@ -315,7 +316,7 @@ class PairWavDataset(WavDataset):
         
 class FbankSpkDataset(Dataset):
     def __init__(self, data_root, utt2spk, split_list, 
-                 max_len=1000, verbose=True, ext='fb.npy'):
+                 stats=None, max_len=1000, verbose=True, ext='fb.npy'):
         self.data_root = data_root
         self.max_len = max_len
         self.ext = ext
@@ -336,15 +337,28 @@ class FbankSpkDataset(Dataset):
         with open(split_list, 'r') as sl_f:
             self.split_list = [l.rstrip() for l in sl_f]
             print('Found {} fbank files'.format(len(self.split_list)))
+        if stats is not None:
+            with open(stats, 'rb') as stats_f:
+                self.stats = pickle.load(stats_f)
 
     def __len__(self):
         return len(self.split_list)
+
+    def z_norm(self, x):
+        assert hasattr(self, 'stats')
+        stats = self.stats
+        mean = torch.FloatTensor(stats['mean']).view(-1, 1)
+        std = torch.FloatTensor(stats['std']).view(-1, 1)
+        x = (x - mean) / std
+        return x
 
     def __getitem__(self, index):
         item = self.split_list[index]
         bname = os.path.splitext(item)[0]
         ft_file = os.path.join(self.data_root, bname + '.' + self.ext)
         ft = torch.FloatTensor(np.load(ft_file).T)
+        if hasattr(self, 'stats'):
+            ft = self.z_norm(ft)
         seq_len = ft.shape[1]
         spk_id = self.utt2spk[item]
         return ft, torch.LongTensor([spk_id])
