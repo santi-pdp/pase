@@ -4,6 +4,9 @@ Created on Tue May 23 17:24:02 2017
 @author: eesungkim
 
 Src repo: https://github.com/eesungkim/Speech_Emotion_Recognition_DNN-ELM
+
+Modified on June 2019 by Santi Pascual
+
 """
 import os
 import re
