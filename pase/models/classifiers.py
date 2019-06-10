@@ -13,7 +13,9 @@ class EmoDRNLSTM(Model):
         (Li et al. 2019), without MHA
     """
     def __init__(self, num_inputs, num_outputs, max_ckpts=5, 
-                 frontend=None, ft_fe=False,
+                 frontend=None, ft_fe=False, dropout=0,
+                 rnn_dropout=0, att=False, att_heads=4,
+                 att_dropout=0,
                  name='EmoDRNMHA'):
         super().__init__(max_ckpts=max_ckpts, name=name)
         self.num_inputs = num_inputs
@@ -26,24 +28,53 @@ class EmoDRNLSTM(Model):
             # decimating x2
             nn.Conv1d(32, 64, 2, stride=2),
             # first residual blocks (2 resblocks)
-            ResBasicBlock1D(64, 64, kwidth=5),
-            ResBasicBlock1D(64, 64, kwidth=5),
+            ResBasicBlock1D(64, 64, kwidth=5, att=att,
+                            att_heads=att_heads,
+                            att_dropout=att_dropout), 
+            ResBasicBlock1D(64, 64, kwidth=5, att=att,
+                            att_heads=att_heads,
+                            att_dropout=att_dropout), 
+            # dropout feature maps
+            nn.Dropout2d(dropout),
             # decimating x2
             nn.Conv1d(64, 128, 2, stride=2),
             # second residual blocks (2 resblocks)
-            ResBasicBlock1D(128, 128, kwidth=5),
-            ResBasicBlock1D(128, 128, kwidth=5),
+            ResBasicBlock1D(128, 128, kwidth=5, att=att,
+                            att_heads=att_heads,
+                            att_dropout=att_dropout), 
+            ResBasicBlock1D(128, 128, kwidth=5, att=att,
+                            att_heads=att_heads,
+                            att_dropout=att_dropout), 
+            # dropout feature maps
+            nn.Dropout2d(dropout),
             nn.Conv1d(128, 256, 1, stride=1),
             # third residual blocks (2 dilated resblocks)
-            ResBasicBlock1D(256, 256, kwidth=3, dilation=2),
-            ResBasicBlock1D(256, 256, kwidth=3, dilation=2),
+            ResBasicBlock1D(256, 256, kwidth=3, dilation=2,
+                            att=att,
+                            att_heads=att_heads,
+                            att_dropout=att_dropout), 
+            ResBasicBlock1D(256, 256, kwidth=3, dilation=2,
+                            att=att,
+                            att_heads=att_heads,
+                            att_dropout=att_dropout), 
+            # dropout feature maps
+            nn.Dropout2d(dropout),
             nn.Conv1d(256, 512, 1, stride=1),
             # fourth residual blocks (2 dilated resblocks)
-            ResBasicBlock1D(512, 512,  kwidth=3, dilation=4),
-            ResBasicBlock1D(512, 512, kwidth=3, dilation=4)
+            ResBasicBlock1D(512, 512, kwidth=3, dilation=4,
+                            att=att,
+                            att_heads=att_heads,
+                            att_dropout=att_dropout), 
+            ResBasicBlock1D(512, 512, kwidth=3, dilation=4,
+                            att=att,
+                            att_heads=att_heads,
+                            att_dropout=att_dropout), 
+            # dropout feature maps
+            nn.Dropout2d(dropout)
         )
         # recurrent pooling with 2 LSTM layers
-        self.rnn = nn.LSTM(512, 512, num_layers=2, batch_first=True)
+        self.rnn = nn.LSTM(512, 512, num_layers=2, batch_first=True,
+                           dropout=rnn_dropout)
         # mlp on top (https://ieeexplore.ieee.org/abstract/document/7366551)
         self.mlp = nn.Sequential(
             nn.Conv1d(512, 200, 1),
@@ -77,7 +108,8 @@ class EmoDRNLSTM(Model):
 
 class MLPClassifier(Model):
 
-    def __init__(self, frontend,
+    def __init__(self, num_inputs,
+                 frontend=None,
                  num_spks=None,
                  ft_fe=False,
                  hidden_size=2048,
@@ -88,16 +120,17 @@ class MLPClassifier(Model):
                  name='MLP'):
         # 2048 default size raises 5.6M params
         super().__init__(name=name, max_ckpts=max_ckpts)
+        self.num_inputs = num_inputs
         self.frontend = frontend
         self.ft_fe = ft_fe
         if ft_fe:
             print('Training the front-end')
         if z_bnorm:
             # apply z-norm to the input
-            self.z_bnorm = nn.BatchNorm1d(frontend.emb_dim, affine=False)
+            self.z_bnorm = nn.BatchNorm1d(num_inputs, affine=False)
         if num_spks is None:
             raise ValueError('Please specify a number of spks.')
-        layers = [nn.Conv1d(frontend.emb_dim, hidden_size, 1),
+        layers = [nn.Conv1d(num_inputs, hidden_size, 1),
                   nn.LeakyReLU(),
                   nn.BatchNorm1d(hidden_size)]
         for n in range(1, hidden_layers):
@@ -110,7 +143,9 @@ class MLPClassifier(Model):
         self.time_pool = time_pool
 
     def forward(self, x):
-        h = self.frontend(x)
+        if self.frontend is not None:
+            x = self.frontend(x)
+        h = x
         if self.time_pool:
             h = h.mean(dim=2, keepdim=True)
         if not self.ft_fe:
@@ -121,7 +156,8 @@ class MLPClassifier(Model):
 
 class RNNClassifier(Model):
 
-    def __init__(self, frontend,
+    def __init__(self, num_inputs,
+                 frontend=None,
                  num_spks=None,
                  ft_fe=False,
                  hidden_size=1300,
@@ -132,20 +168,21 @@ class RNNClassifier(Model):
                  name='RNN'):
         # 1300 default size raises 5.25M params
         super().__init__(name=name, max_ckpts=1000)
+        self.num_inputs = num_inputs
         self.frontend = frontend
         self.ft_fe = ft_fe
         if ft_fe:
             print('Training the front-end')
         if z_bnorm:
             # apply z-norm to the input
-            self.z_bnorm = nn.BatchNorm1d(frontend.emb_dim, affine=False)
+            self.z_bnorm = nn.BatchNorm1d(num_inputs, affine=False)
         if num_spks is None:
             raise ValueError('Please specify a number of spks.')
         if uni:
             hsize = hidden_size
         else:
             hsize = hidden_size // 2
-        self.rnn = nn.GRU(frontend.emb_dim, hsize,
+        self.rnn = nn.GRU(num_inputs, hsize,
                           num_layers=hidden_layers,
                           bidirectional=not uni,
                           batch_first=True)
@@ -157,7 +194,9 @@ class RNNClassifier(Model):
         self.uni = uni
 
     def forward(self, x):
-        h = self.frontend(x)
+        if self.frontend is not None:
+            x = self.frontend(x)
+        h = x
         if not self.ft_fe:
             h = h.detach()
         if hasattr(self, 'z_bnorm'):
