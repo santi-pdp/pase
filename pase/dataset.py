@@ -314,11 +314,10 @@ class PairWavDataset(WavDataset):
             return pkg
 
         
-class FbankSpkDataset(Dataset):
+class FeatsSpkDataset(Dataset):
     def __init__(self, data_root, utt2spk, split_list, 
-                 stats=None, max_len=1000, verbose=True, ext='fb.npy'):
+                 stats=None, verbose=True, ext='fb.npy'):
         self.data_root = data_root
-        self.max_len = max_len
         self.ext = ext
         if not isinstance(utt2spk, str):
             raise ValueError('Please specify a path to a utt2spk '
@@ -362,6 +361,54 @@ class FbankSpkDataset(Dataset):
         seq_len = ft.shape[1]
         spk_id = self.utt2spk[item]
         return ft, torch.LongTensor([spk_id])
+
+class WavClassDataset(Dataset):
+    """ Simple Wav -> classID dataset """
+    def __init__(self, data_root, utt2class, split_list, 
+                 chunker=None, 
+                 verbose=True):
+        self.data_root = data_root
+        if not isinstance(utt2class, str):
+            raise ValueError('Please specify a path to a utt2class '
+                             'file for loading data.')
+        if not isinstance(split_list, str) and not isinstance(split_list, list):
+            raise ValueError('Please specify a path to a split_list '
+                             'file for loading data or to the list itself.')
+        utt2class_ext = utt2class.split('.')[1]
+        if utt2class_ext == 'json':
+            with open(utt2class, 'r') as u2s_f:
+                self.utt2class = json.load(u2s_f)
+        else:
+            self.utt2class = np.load(utt2class)
+            self.utt2class = dict(self.utt2class.any())
+        print('Found {} classes'.format(len(set(self.utt2class.values()))))
+        self.chunker = chunker
+        if isinstance(split_list, list):
+            self.split_list = split_list
+        else:
+            with open(split_list, 'r') as sl_f:
+                self.split_list = [l.rstrip() for l in sl_f]
+                print('Found {} wav files'.format(len(self.split_list)))
+
+    def __len__(self):
+        return len(self.split_list)
+
+    def __getitem__(self, index):
+        item = self.split_list[index]
+        bname = os.path.splitext(item)[0]
+        wav_file = os.path.join(self.data_root, bname + '.wav')
+        wav, rate = sf.read(wav_file)
+        wav = torch.FloatTensor(wav)
+        if self.chunker is not None:
+            if len(wav) < self.chunker.chunk_size + 1:
+                P = self.chunker.chunk_size  + 1 - len(wav)
+                wav = torch.cat((wav, 
+                                 torch.zeros(P)),
+                                dim=0)
+            wav = self.chunker(wav)
+            wav = wav['chunk']
+        spk_id = self.utt2class[item]
+        return wav, torch.LongTensor([spk_id])
 
 if __name__ == '__main__':
     """
