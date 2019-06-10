@@ -314,25 +314,25 @@ class PairWavDataset(WavDataset):
             return pkg
 
         
-class FeatsSpkDataset(Dataset):
-    def __init__(self, data_root, utt2spk, split_list, 
+class FeatsClassDataset(Dataset):
+    def __init__(self, data_root, utt2class, split_list, 
                  stats=None, verbose=True, ext='fb.npy'):
         self.data_root = data_root
         self.ext = ext
-        if not isinstance(utt2spk, str):
-            raise ValueError('Please specify a path to a utt2spk '
+        if not isinstance(utt2class, str):
+            raise ValueError('Please specify a path to a utt2class '
                              'file for loading data.')
         if not isinstance(split_list, str):
             raise ValueError('Please specify a path to a split_list '
                              'file for loading data.')
-        utt2spk_ext = utt2spk.split('.')[1]
-        if utt2spk_ext == 'json':
-            with open(utt2spk, 'r') as u2s_f:
-                self.utt2spk = json.load(u2s_f)
+        utt2class_ext = utt2class.split('.')[1]
+        if utt2class_ext == 'json':
+            with open(utt2class, 'r') as u2s_f:
+                self.utt2class = json.load(u2s_f)
         else:
-            self.utt2spk = np.load(utt2spk)
-            self.utt2spk = dict(self.utt2spk.any())
-        print('Found {} speakers'.format(len(set(self.utt2spk.values()))))
+            self.utt2class = np.load(utt2class)
+            self.utt2class = dict(self.utt2class.any())
+        print('Found {} speakers'.format(len(set(self.utt2class.values()))))
         with open(split_list, 'r') as sl_f:
             self.split_list = [l.rstrip() for l in sl_f]
             print('Found {} fbank files'.format(len(self.split_list)))
@@ -359,7 +359,7 @@ class FeatsSpkDataset(Dataset):
         if hasattr(self, 'stats'):
             ft = self.z_norm(ft)
         seq_len = ft.shape[1]
-        spk_id = self.utt2spk[item]
+        spk_id = self.utt2class[item]
         return ft, torch.LongTensor([spk_id])
 
 class WavClassDataset(Dataset):
