@@ -12,8 +12,9 @@ import pase
 from random import shuffle
 from pase.dataset import *
 from pase.models.frontend import wf_builder
-import pase.models.modules as pmods
+import pase.models.classifiers as pmods
 from pase.transforms import SingleChunkWav
+from pase.utils import kfold_data
 from torch.utils.data import DataLoader
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -70,30 +71,6 @@ def retrieve_model_and_datasets(encoder_cfg,
         datasets.append(dataset(**data_cfg))
     return model, datasets
 
-def kfold_data(data_list, folds=10, valid_p=0.1):
-    # returns the K lists of lists, so each k-th component
-    # is composed of 3 sub-lists
-    #idxs = list(range(len(data_list)))
-    # shuffle the idxs first
-    #shuffle(idxs)
-    shuffle(data_list)
-    lists = []
-    TEST_SPLIT = int((1. / folds) * len(data_list))
-    print('Amount of test files: ', TEST_SPLIT)
-    beg_i = 0
-    # now slide a window per fold
-    for fi in range(folds):
-        test_split = data_list[beg_i:beg_i + TEST_SPLIT]
-        train_split = data_list[:beg_i]
-        train_split += data_list[beg_i + TEST_SPLIT:]
-        print('Fold {} split lens: ({}, {})'.format(fi,
-                                                    len(test_split),
-                                                    len(train_split))) 
-        # build valid split within train_split
-        shuffle(train_split)
-        valid_split = train_split[:int(valid_p * len(train_split))]
-        lists.append([train_split, valid_split, test_split])
-    return lists
 
 def accuracy(Y_, Y):
     # Get rid of temporal resolution here,
@@ -146,7 +123,11 @@ def main(opts):
         utt2class = json.load(u2c_f)
         num_classes = len(set(utt2class.values()))
         data_list = list(utt2class.keys())
-    kfolds = kfold_data(data_list, opts.k_fold)
+    if opts.folds is not None:
+        with open(opts.folds, 'r') as ffs:
+            kfolds = json.load(ffs)
+    else:
+        kfolds = kfold_data(data_list, utt2class, opts.k_fold, opts.valid_p)
     for ki, kfold in enumerate(kfolds, start=1):
         train_list, valid_list, test_list = kfold
         model, dset = retrieve_model_and_datasets(opts.encoder_cfg,
@@ -154,10 +135,15 @@ def main(opts):
                                                   opts.data_cfg,
                                                   train_list, valid_list,
                                                   test_list)
+        model.describe_params()
         if opts.ckpt is not None:
             # load ckpt for the model on previous state
             model.load_pretrained(opts.ckpt)
-        model.to(device)
+        if num_devices > 1:
+            model_dp = nn.DataParallel(model)
+        else:
+            model_dp = model
+        model_dp.to(device)
         # Build DataLoaders: train, valid and test
         dloader = DataLoader(dset[0], opts.batch_size,
                              shuffle=True, 
@@ -169,7 +155,10 @@ def main(opts):
             os.makedirs(save_path)
         writer = SummaryWriter(save_path)
         # Build optimizer and scheduler
-        opt = optim.Adam(model.parameters(), opts.lr)
+        if opts.opt == 'adam':
+            opt = optim.Adam(model.parameters(), opts.lr)
+        else:
+            opt = optim.SGD(model.parameters(), opts.lr)
         sched = ReduceLROnPlateau(opt, 'max', factor=0.5, patience=3)
         best_val_acc = 0
         estop_pat = opts.early_stop_patience
@@ -177,21 +166,24 @@ def main(opts):
         for giter in range(1, opts.iters + 1):
             X, Y = next(dloader.__iter__())
             X = X.unsqueeze(1)
-            X = random_slice_X(X)
+            #X = random_slice_X(X)
             X = X.to(device)
             Y = Y.to(device)
-            y = model(X)
+            y = model_dp(X)
             loss = F.nll_loss(y, Y)
             loss.backward()
+            acc = accuracy(y, Y)
             opt.step()
             opt.zero_grad()
             end_t = timeit.default_timer()
             if giter % opts.log_freq == 0:
-                print('Iter {:5d}/{:5d} loss: {:.2f}, '
+                print('Iter {:5d}/{:5d} loss: {:.2f}, acc: {:.2f} '
                       'btime: {:.1f} s'.format(giter, opts.iters,
                                                loss.item(),
+                                               acc,
                                                end_t - beg_t))
                 writer.add_scalar('train/loss', loss.item(), giter)
+                writer.add_scalar('train/acc', acc, giter)
             beg_t = timeit.default_timer()
             if giter % opts.save_freq == 0:
                 val, acc = valid_round(va_dloader, model, writer, giter, device)
@@ -244,7 +236,7 @@ def get_best_ckpt(load_path):
         curr_ckpt = 'weights_{}'.format(ckpts['current'])
         return os.path.join(load_path, curr_ckpt)
 
-def random_slice_X(X, lens=[8000, 32000]):
+def random_slice_X(X, lens=[32000, 96000]):
     sz = random.choice(list(range(lens[0], lens[1])))
     idxs = list(range(X.shape[-1] - sz))
     beg_i = random.choice(idxs)
@@ -259,6 +251,8 @@ if __name__ == '__main__':
     parser.add_argument('--ckpt', type=str, default=None)
     parser.add_argument('--k_fold', type=int, default=10,
                         help='Number of folds (Def: 10).')
+    parser.add_argument('--folds', type=str, default=None,
+                        help='JSON file containing the fold splits')
     parser.add_argument('--valid_split', type=float, default=0.1,
                         help='Validation split inside the training fold' \
                              ' (Def: 0.1).')
@@ -275,7 +269,10 @@ if __name__ == '__main__':
     parser.add_argument('--log_freq', type=int, default=200)
     parser.add_argument('--save_freq', type=int, default=2500)
     parser.add_argument('--early_stop_patience', type=int, default=9)
-    parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--lr', type=float, default=0.1)
+    parser.add_argument('--valid_p', type=float, default=0.1)
+    parser.add_argument('--opt', type=str, default='adam')
+    parser.add_argument('--iter_sched', action='store_true', default=False)
 
     opts = parser.parse_args()
 
