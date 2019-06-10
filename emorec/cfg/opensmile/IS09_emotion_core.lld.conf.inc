@@ -46,7 +46,7 @@ writer.dmLevel=is09_frames
 \{\cm[bufferModeRbConf{shared/BufferModeRb.conf.inc}:path to included config to set the buffer mode for the standard ringbuffer levels]}
 copyInputName = 1
 noPostEOIprocessing = 1
-frameSize = 0.0250
+frameSize = 0.0400
 frameStep = 0.010
 frameMode = fixed
 frameCenterSpecial = left
