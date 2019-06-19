@@ -9,9 +9,17 @@ else:
 
 
 def wf_builder(cfg_path):
-    with open(cfg_path, 'r') as cfg_f:
-        cfg = json.load(cfg_f)
-        return WaveFe(**cfg)
+    if cfg_path is not None:
+        if isinstance(cfg_path, str):
+            with open(cfg_path, 'r') as cfg_f:
+                cfg = json.load(cfg_f)
+                return WaveFe(**cfg)
+        elif isinstance(cfg_path, dict):
+            return WaveFe(**cfg_path)
+        else:
+            TypeError('Unexpected config for WaveFe')
+    else:
+        return WaveFe()
 
 class WaveFe(Model):
     """ Convolutional front-end to process waveforms
@@ -26,11 +34,13 @@ class WaveFe(Model):
                  norm_type='bnorm',
                  pad_mode='reflect', sr=16000,
                  emb_dim=256,
+                 activation=None,
                  rnn_pool=False,
                  vq_K=None,
                  vq_beta=0.25,
                  vq_gamma=0.99,
                  norm_out=False,
+                 tanh_out=False,
                  name='WaveFe'):
         super().__init__(name=name) 
         # apply sincnet at first layer
@@ -52,6 +62,7 @@ class WaveFe(Model):
                 sincnet = False
             self.blocks.append(FeBlock(ninp, fmap, kwidth, stride,
                                        dilation,
+                                       act=activation,
                                        pad_mode=pad_mode,
                                        norm_type=norm_type,
                                        sincnet=sincnet,
@@ -73,7 +84,11 @@ class WaveFe(Model):
             self.quantizer = None
         # ouptut vectors are normalized to norm^2 1
         if norm_out:
-            self.norm_out = nn.BatchNorm1d(self.emb_dim, affine=False)
+            if norm_type == 'bnorm':
+                self.norm_out = nn.BatchNorm1d(self.emb_dim, affine=False)
+            else:
+                self.norm_out = nn.InstanceNorm1d(self.emb_dim)
+        self.tanh_out = tanh_out
 
         
     def forward(self, x):
@@ -88,6 +103,8 @@ class WaveFe(Model):
             y = self.W(h)
         if hasattr(self, 'norm_out'):
             y = self.norm_out(y)
+        if self.tanh_out:
+            y = torch.tanh(y)
 
         if self.quantizer is not None:
             qloss, y, pp, enc = self.quantizer(y)
