@@ -132,6 +132,7 @@ def ft2spk_collater(batch):
         lens.append(seq_len)
     return torch.cat(fts, dim=0), torch.cat(labs, dim=0), lens
 
+
 class WavDataset(Dataset):
 
     def __init__(self, data_root, data_cfg_file, split, 
@@ -225,6 +226,7 @@ class WavDataset(Dataset):
             return rets[0]
         else: 
             return rets
+
 
 class PairWavDataset(WavDataset):
     """ Return paired wavs, one is current wav and the other one is a randomly
