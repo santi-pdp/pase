@@ -1,5 +1,3 @@
-from .modules import *
-from .frontend import *
 from .minions import *
 from ..losses import *
 from tensorboardX import SummaryWriter
@@ -7,7 +5,6 @@ import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 import numpy as np
 import random
-import json
 import timeit
 import os
 
@@ -179,7 +176,6 @@ class Waveminionet(Model):
                                                gamma=cfg['lrdecay'])
                 minscheds[minion.name] = minsched
 
-
         minions_run = self.minions
         if hasattr(self, 'minions_dp'):
             minions_run = self.minions_dp
@@ -196,7 +192,10 @@ class Waveminionet(Model):
 
             iterator = iter(dloader)
             for bidx in range(1, bpe + 1):
-                batch = next(iterator)
+                try:
+                    batch = next(iterator)
+                except StopIteration:
+                    break
                 feopt.zero_grad()
                 fe_h = {}
                 # forward chunk (alone) through frontend
@@ -427,7 +426,10 @@ class Waveminionet(Model):
 
             iterator = iter(dloader)
             for bidx in range(1, bpe + 1):
-                batch = next(iterator)
+                try:
+                    batch = next(iterator)
+                except StopIteration:
+                    break
                 # Build chunk keys to know what to encode
                 chunk_keys = ['chunk']
                 if self.mi_fwd:
@@ -524,35 +526,35 @@ class Waveminionet(Model):
             sdict[k] = v
         return sdict
 
+
 if __name__ == '__main__':
-    import json
     wmodel = Waveminionet(
-                          minions_cfg=[
-                              {'num_outputs':1,
-                               'dropout':0.2,
-                               'name':'chunk',
-                               'type':'decoder',
-                              },
-                              {'num_outputs':257,
-                               'dropout':0.2,
-                               'name':'lps',
-                              },
-                              {'num_outputs':40,
-                               'dropout':0.2,
-                               'name':'mfcc'
-                              },
-                              {'num_outputs':4,
-                               'dropout':0.2,
-                               'name':'prosody'
-                              },
-                              #{'num_outputs':1,
-                              # 'dropout':0.2,
-                              # 'name':'mi',
-                              # 'keys':['chunk',
-                              #         'chunk_ctxt',
-                              #         'chunk_rand']
-                              #},
-                          ]
+        minions_cfg=[
+            {'num_outputs':1,
+             'dropout':0.2,
+             'name':'chunk',
+             'type':'decoder',
+             },
+            {'num_outputs':257,
+             'dropout':0.2,
+             'name':'lps',
+             },
+            {'num_outputs':40,
+             'dropout':0.2,
+             'name':'mfcc'
+             },
+            {'num_outputs':4,
+             'dropout':0.2,
+             'name':'prosody'
+             },
+            #{'num_outputs':1,
+            # 'dropout':0.2,
+            # 'name':'mi',
+            # 'keys':['chunk',
+            #         'chunk_ctxt',
+            #         'chunk_rand']
+            #},
+        ]
                          )
     print(wmodel)
     x = torch.randn(1, 1, 8000)
