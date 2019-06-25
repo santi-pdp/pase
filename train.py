@@ -90,7 +90,7 @@ def train(opts):
                          num_devices=num_devices,
                          pretrained_ckpt=opts.pretrained_ckpt,
                          frontend_cfg=fe_cfg
-                        )
+                         )
     
     print(model)
     if opts.net_ckpt is not None:
@@ -102,8 +102,8 @@ def train(opts):
     print(trans)
     # Build Dataset(s) and DataLoader(s)
     dset = PairWavDataset(opts.data_root, opts.data_cfg, 'train',
-                         transform=trans,
-                         preload_wav=opts.preload_wav)
+                          transform=trans,
+                          preload_wav=opts.preload_wav)
     dloader = DataLoader(dset, batch_size=opts.batch_size,
                          shuffle=True, collate_fn=DictCollater(),
                          num_workers=opts.num_workers,
@@ -128,6 +128,7 @@ def train(opts):
     # fastet lr to MI
     #opts.min_lrs = {'mi':0.001}
     model.train_(dloader, vars(opts), device=device, va_dloader=va_dloader)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -195,7 +196,6 @@ if __name__ == '__main__':
 
     if not os.path.exists(opts.save_path):
         os.makedirs(opts.save_path)
-
 
     with open(os.path.join(opts.save_path, 'train.opts'), 'w') as opts_f:
         opts_f.write(json.dumps(vars(opts), indent=2))
