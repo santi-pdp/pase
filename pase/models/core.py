@@ -194,8 +194,9 @@ class Waveminionet(Model):
             if epoch_ + 1 == warmup_epoch and hasattr(self, 'z_minion'):
                 zweight = zinit_weight
 
+            iterator = iter(dloader)
             for bidx in range(1, bpe + 1):
-                batch = next(dloader.__iter__())
+                batch = next(iterator)
                 feopt.zero_grad()
                 fe_h = {}
                 # forward chunk (alone) through frontend
@@ -411,9 +412,8 @@ class Waveminionet(Model):
                        os.path.join(save_path,
                                     'fullmodel_e{}.ckpt'.format(epoch_)))
 
-
     def eval_(self, dloader, batch_size, bpe, log_freq,
-             epoch_idx=0, writer=None, device='cpu'):
+              epoch_idx=0, writer=None, device='cpu'):
         self.eval()
         with torch.no_grad():
             bsize = batch_size
@@ -424,8 +424,10 @@ class Waveminionet(Model):
             timings = []
             beg_t = timeit.default_timer()
             min_loss = {}
+
+            iterator = iter(dloader)
             for bidx in range(1, bpe + 1):
-                batch = next(dloader.__iter__())
+                batch = next(iterator)
                 # Build chunk keys to know what to encode
                 chunk_keys = ['chunk']
                 if self.mi_fwd:
