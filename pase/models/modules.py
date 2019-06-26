@@ -732,7 +732,7 @@ class FeBlock(NeuralBlock):
     def forward(self, x):
         if self.kwidth > 1 and not self.sincnet:
             # compute pad factor
-            if self.stride > 1:
+            if self.stride > 1 or self.kwidth % 2 == 0:
                 if self.dilation > 1:
                     raise ValueError('Cannot make dilated convolution with '
                                      'stride > 1')
@@ -875,11 +875,12 @@ if __name__ == '__main__':
     #vq = VQEMA(50, 100, 0.25, 0.99)
     #x = torch.randn(10, 100, 160)
     #_, Q, PP , _ = vq(x)
-    conv = SincConv_fast(1, 10,
-                         251, 
-                         sample_rate=16000,
-                         padding='SAME',
-                         stride=160)
+#    conv = SincConv_fast(1, 10,
+#                         251, 
+#                         sample_rate=16000,
+#                         padding='SAME',
+#                         stride=160)
+    conv = GConv1DBlock(1, 10, 21, 1)
     x = torch.randn(1, 1, 16000)
     y = conv(x)
     print(y.size())
