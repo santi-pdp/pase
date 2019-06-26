@@ -1,6 +1,7 @@
 from .minions import *
 from ..losses import *
-from tensorboardX import SummaryWriter
+from ..log import *
+#from tensorboardX import SummaryWriter
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 import numpy as np
@@ -118,7 +119,8 @@ class Waveminionet(Model):
             frontend = self.frontend_dp
         else:
             frontend = self.frontend
-        writer = SummaryWriter(save_path)
+        #writer = SummaryWriter(save_path)
+        writer = LogWriter(save_path, log_types=cfg['log_types'])
         bpe = cfg['bpe'] if 'bpe' in cfg else len(dloader)
         print('=' * 50)
         print('Beginning training...')
