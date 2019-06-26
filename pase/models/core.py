@@ -195,7 +195,8 @@ class Waveminionet(Model):
                 try:
                     batch = next(iterator)
                 except StopIteration:
-                    break
+                    iterator = iter(dloader)
+                    batch = next(iterator)
                 feopt.zero_grad()
                 fe_h = {}
                 # forward chunk (alone) through frontend
@@ -429,7 +430,8 @@ class Waveminionet(Model):
                 try:
                     batch = next(iterator)
                 except StopIteration:
-                    break
+                    iterator = iter(dloader)
+                    batch = next(iterator)
                 # Build chunk keys to know what to encode
                 chunk_keys = ['chunk']
                 if self.mi_fwd:
