@@ -302,7 +302,7 @@ class GConv1DBlock(NeuralBlock):
         self.stride = stride
 
     def forward(self, x):
-        if self.stride > 1 or self.kwidth % 2:
+        if self.stride > 1 or self.kwidth % 2 == 0:
             P = (self.kwidth // 2 - 1,
                  self.kwidth // 2)
         else:
