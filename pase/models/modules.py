@@ -302,7 +302,7 @@ class GConv1DBlock(NeuralBlock):
         self.stride = stride
 
     def forward(self, x):
-        if self.stride > 1:
+        if self.stride > 1 or self.kwidth % 2:
             P = (self.kwidth // 2 - 1,
                  self.kwidth // 2)
         else:
@@ -872,9 +872,17 @@ if __name__ == '__main__':
     #feblock = FeBlock(1, 100, 251, 1)
     #y = feblock(x)
     #print('y size: ', y.size())
-    vq = VQEMA(50, 100, 0.25, 0.99)
-    x = torch.randn(10, 100, 160)
-    _, Q, PP , _ = vq(x)
+    #vq = VQEMA(50, 100, 0.25, 0.99)
+    #x = torch.randn(10, 100, 160)
+    #_, Q, PP , _ = vq(x)
+    conv = SincConv_fast(1, 10,
+                         251, 
+                         sample_rate=16000,
+                         padding='SAME',
+                         stride=160)
+    x = torch.randn(1, 1, 16000)
+    y = conv(x)
+    print(y.size())
 
 
 
