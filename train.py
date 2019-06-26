@@ -189,6 +189,9 @@ if __name__ == '__main__':
                         help='Do VQ quantization of enc output (Def: False).')
     parser.add_argument('--preload_wav', action='store_true', default=False,
                         help='Preload wav files in Dataset (Def: False).')
+    parser.add_argument('--cache_on_load', action='store_true', default=False,
+                        help='Argument to activate cache loading on the fly '
+                             'for the wav files in datasets (Def: False).')
 
     opts = parser.parse_args()
     if opts.net_cfg is None:

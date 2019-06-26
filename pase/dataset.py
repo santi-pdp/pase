@@ -144,11 +144,13 @@ class WavDataset(Dataset):
                  distortion_transforms=None,
                  whisper_folder=None,
                  noise_folder=None,
+                 cache_on_load=False,
                  distortion_probability=0.4,
                  verbose=True):
         # sr: sampling rate, (Def: None, the one in the wav header)
         self.sr = sr
         self.data_root = data_root
+        self.cache_on_load = cache_on_load
         self.data_cfg_file = data_cfg_file
         if not isinstance(data_cfg_file, str):
             raise ValueError('Please specify a path to a cfg '
@@ -162,6 +164,7 @@ class WavDataset(Dataset):
         self.distortion_transforms = distortion_transforms
         self.whisper_folder = whisper_folder
         self.noise_folder = noise_folder
+        self.preload_wav = preload_wav
         self.distortion_probability = distortion_probability
         with open(data_cfg_file, 'r') as data_cfg_f:
             self.data_cfg = json.load(data_cfg_f)
@@ -203,12 +206,13 @@ class WavDataset(Dataset):
         return len(self.wavs)
 
     def retrieve_cache(self, fname, cache):
-        if fname in cache:
+        if (self.cache_on_load or self.preload_wav) and fname in cache:
             return cache[fname]
         else:
             wav, rate = sf.read(fname)
             wav = wav.astype(np.float32)
-            cache[fname] = wav
+            if self.cache_on_load:
+                cache[fname] = wav
             return wav
 
     def __getitem__(self, index):
@@ -239,6 +243,7 @@ class PairWavDataset(WavDataset):
                  distortion_transforms=None,
                  whisper_folder=None,
                  noise_folder=None,
+                 cache_on_load=False,
                  distortion_probability=0.4,
                  preload_wav=False):
         super().__init__(data_root, data_cfg_file, split, transform=transform, 
@@ -248,6 +253,7 @@ class PairWavDataset(WavDataset):
                          distortion_transforms=distortion_transforms,
                          whisper_folder=whisper_folder,
                          noise_folder=noise_folder,
+                         cache_on_load=cache_on_load,
                          distortion_probability=distortion_probability,
                          verbose=verbose)
         self.rwav_cache = {}
