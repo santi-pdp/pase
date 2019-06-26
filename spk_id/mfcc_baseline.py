@@ -255,8 +255,13 @@ def train_epoch(dloader_, model, opt, epoch, log_freq=1, writer=None,
     timings = []
     beg_t = timeit.default_timer()
     #for bidx, batch in enumerate(dloader_, start=1):
+    iterator = iter(dloader)
     for bidx in range(1, bpe + 1):
-        batch = next(dloader_.__iter__())
+        try:
+            batch = next(iterator)
+        except StopIteration:
+            iterator = iter(dloader)
+            batch = next(iterator)
         opt.zero_grad()
         X, Y, slens = batch
         X = X.transpose(1, 2)
@@ -298,8 +303,13 @@ def eval_epoch(dloader_, model, epoch, log_freq=1, writer=None, device='cpu',
         timings = []
         beg_t = timeit.default_timer()
         #for bidx, batch in enumerate(dloader_, start=1):
+        iterator = iter(dloader)
         for bidx in range(1, bpe + 1):
-            batch = next(dloader_.__iter__())
+            try:
+                batch = next(iterator)
+            except StopIteration:
+                iterator = iter(dloader)
+                batch = next(iterator)
             X, Y, slens = batch
             X = X.transpose(1, 2)
             X = X.to(device)
