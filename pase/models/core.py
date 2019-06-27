@@ -298,7 +298,9 @@ class Waveminionet(Model):
                     y_ = min_h[rnd_min]
                     minion = minions_run[self.min2idx[rnd_min]]
                     y_lab = batch[rnd_min].to(device)
-                    loss = self.minions[self.min2idx[rnd_min]].loss(y_, y_lab)
+                    lweight = minion.loss_weight
+                    loss = minion.loss(y_, y_lab)
+                    loss = lweight * loss
                     loss.backward()
                     if rnd_min not in min_loss:
                         min_loss[rnd_min] = []
@@ -315,7 +317,9 @@ class Waveminionet(Model):
                         minion = minions_run[self.min2idx[min_name]]
                         minopts[min_name].zero_grad()
                         y_lab = batch[min_name].to(device)
-                        loss = self.minions[self.min2idx[min_name]].loss(y_, y_lab)
+                        lweight = minion.loss_weight
+                        loss = minion.loss(y_, y_lab)
+                        loss = lweight * loss
                         loss.backward(retain_graph=True)
                         if min_name not in min_loss:
                             min_loss[min_name] = []
@@ -489,7 +493,8 @@ class Waveminionet(Model):
                 # Compute all minion losses
                 for min_name, y_ in min_h.items():
                     y_lab = batch[min_name].to(device)
-                    loss = self.minions[self.min2idx[min_name]].loss(y_, y_lab)
+                    lweight = self.minions[self.min2idx[min_name]].loss_weight
+                    loss = lweight * self.minions[self.min2idx[min_name]].loss(y_, y_lab)
                     if min_name not in min_loss:
                         min_loss[min_name] = []
                     min_loss[min_name].append(loss.item())
