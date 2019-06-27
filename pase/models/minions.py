@@ -46,6 +46,7 @@ class DecoderMinion(Model):
                  norm_type=None,
                  skip=False,
                  loss=None,
+                 loss_weight=1.,
                  keys=None,
                  name='DecoderMinion'):
         super().__init__(name=name)
@@ -60,6 +61,7 @@ class DecoderMinion(Model):
         self.kwidths = kwidths
         self.norm_type = norm_type
         self.loss = loss
+        self.loss_weight = loss_weight
         self.keys = keys
         if keys is None:
             keys = [name]
@@ -97,6 +99,7 @@ class MLPMinion(Model):
                  hidden_layers=2,
                  skip=True,
                  loss=None,
+                 loss_weight=1.,
                  keys=None,
                  name='MLPMinion'):
         super().__init__(name=name)
@@ -110,6 +113,7 @@ class MLPMinion(Model):
         self.hidden_size = hidden_size
         self.hidden_layers = hidden_layers
         self.loss = loss
+        self.loss_weight = loss_weight
         self.keys = keys
         if keys is None:
             keys = [name]
@@ -140,6 +144,7 @@ class GRUMinion(Model):
                  hidden_layers=2,
                  skip=True,
                  loss=None,
+                 loss_weight=1.,
                  keys=None,
                  name='GRUMinion'):
         super().__init__(name=name)
@@ -150,6 +155,7 @@ class GRUMinion(Model):
         self.hidden_size = hidden_size
         self.hidden_layers = hidden_layers
         self.loss = loss
+        self.loss_weight = loss_weight
         self.keys = keys
         if keys is None:
             keys = [name]
@@ -181,6 +187,7 @@ class SPCMinion(MLPMinion):
                  seq_pad=16,
                  skip=True,
                  loss=None,
+                 loss_weight=1.,
                  keys=None,
                  name='SPCMinion'):
         # num_inputs is code dimension in each time-step,
@@ -197,6 +204,7 @@ class SPCMinion(MLPMinion):
                          hidden_layers=hidden_layers,
                          skip=skip,
                          loss=loss,
+                         loss_weight=loss_weight,
                          keys=keys,
                          name=name)
         self.ctxt_frames = ctxt_frames
