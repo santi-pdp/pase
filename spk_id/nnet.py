@@ -283,7 +283,7 @@ def main(opts):
         #cc_vate = WavCollater(max_len=None)
         cc_vate = cc
         dloader = DataLoader(dset, batch_size=opts.batch_size, collate_fn=cc,
-                             shuffle=True)
+                             shuffle=True, num_workers=opts.num_workers)
         if len(va_files) > 0:
             va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
                                     collate_fn=cc_vate,
@@ -541,6 +541,7 @@ if __name__ == '__main__':
                         default=None)
     parser.add_argument('--save_path', type=str, default='ckpt_nnet')
     parser.add_argument('--data_root', type=str, default=None)
+    parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--batch_size', type=int, default=100)
     parser.add_argument('--train_guia', type=str, default=None)
     parser.add_argument('--test_guia', type=str, default=None)
