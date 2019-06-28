@@ -404,7 +404,7 @@ def main(opts):
                                          ''.format(te_files[bidx - 1],
                                                    acc * 100,
                                                    100 - (acc * 100)))
-                    teacc.append(accuracy(Y_, Y))
+                    teacc.append(accuracy(Y_, Y).item())
                     teloss.append(loss.item())
                     end_t = timeit.default_timer()
                     timings.append(end_t - beg_t)

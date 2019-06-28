@@ -3,4 +3,5 @@ python -u nnet.py --spk2idx /export/corpora/mini_voxceleb/lists/utt2spk.npy --da
        --model mlp --opt adam --patience 5 --train --lrdec 0.5 \
        --hidden_size 2048 --epoch 150 --sched_mode plateau \
        --fe_cfg ../cfg/PASE.cfg  \
-       --fe_ckpt /export/fs01/monteijo/PASE.ckpt --seed 2
+       --fe_ckpt /export/fs01/monteijo/PASE.ckpt --seed 2 \
+       --num_workers 3
