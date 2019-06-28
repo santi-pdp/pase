@@ -332,6 +332,9 @@ class Waveminionet(Model):
                 global_step += 1
 
                 t_loss = None
+                if self.vq:
+                    # Backprop VQ related stuff
+                    t_loss = vq_loss
                 # backprop time
                 if rndmin_train:
                     min_names = list(min_h.keys())
@@ -380,9 +383,6 @@ class Waveminionet(Model):
                 end_t = timeit.default_timer()
                 timings.append(end_t - beg_t)
                 beg_t = timeit.default_timer()
-                if self.vq:
-                    # Backprop VQ related stuff
-                    vq_loss.backward()
                 feopt.step()
                 if bidx % log_freq == 0 or bidx >= bpe:
                     print('-' * 50)
