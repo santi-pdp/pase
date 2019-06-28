@@ -148,6 +148,7 @@ if __name__ == '__main__':
     parser.add_argument('--stats', type=str, default='data/librispeech_stats.pkl')
     parser.add_argument('--pretrained_ckpt', type=str, default=None)
     parser.add_argument('--save_path', type=str, default='ckpt')
+    parser.add_argument('--max_ckpts', type=int, default=5)
     parser.add_argument('--trans_cache', type=str,
                         default=None)
     parser.add_argument('--log_types', type=str, nargs='+', 
@@ -157,6 +158,9 @@ if __name__ == '__main__':
                              'and pkl).')
     parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--seed', type=int, default=2)
+    parser.add_argument('--no-continue', action='store_true', default=False,
+                        help='Dump any existing ckpt in the folder and start '
+                             'training from scratch (Def: False)')
     parser.add_argument('--no-cuda', action='store_true', default=False)
     parser.add_argument('--random_scale', action='store_true', default=False)
     parser.add_argument('--chunk_size', type=int, default=16000)
@@ -207,6 +211,7 @@ if __name__ == '__main__':
                              '(Def: LibriSpeechSegTupleWavDataset.')
 
     opts = parser.parse_args()
+    opts.ckpt_continue = not opts.no_continue
     if opts.net_cfg is None:
         raise ValueError('Please specify a net_cfg file')
 

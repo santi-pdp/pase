@@ -111,6 +111,7 @@ class Waveminionet(Model):
         bsize = cfg['batch_size']
         save_path = cfg['save_path']
         log_freq = cfg['log_freq']
+        # Adversarial auto-encoder hyperparams
         warmup_epoch = cfg['warmup']
         zinit_weight = cfg['zinit_weight']
         zinc = cfg['zinc']
@@ -119,7 +120,7 @@ class Waveminionet(Model):
             frontend = self.frontend_dp
         else:
             frontend = self.frontend
-        #writer = SummaryWriter(save_path)
+        # Make the log writer(s)
         writer = LogWriter(save_path, log_types=cfg['log_types'])
         bpe = cfg['bpe'] if 'bpe' in cfg else len(dloader)
         print('=' * 50)
@@ -131,6 +132,11 @@ class Waveminionet(Model):
         print('Randomized minion training: ', rndmin_train)
         feopt = getattr(optim, cfg['fe_opt'])(self.frontend.parameters(), 
                                               lr=cfg['fe_lr'])
+        # Make the saver array. Each one will refer to one model. Init
+        # with frontend model and optimizer
+        savers = [Saver(self.frontend, save_path, 
+                        max_ckpts=cfg['max_ckpts'],
+                        optimizer=feopt, prefix='PASE-')]
         lrdecay = cfg['lrdecay']
         if lrdecay > 0:
             fesched = optim.lr_scheduler.StepLR(feopt,
@@ -145,13 +151,16 @@ class Waveminionet(Model):
             zopt = getattr(optim, cfg['min_opt'])(self.z_minion.parameters(), 
                                                   lr=z_lr)
             if lrdecay > 0:
-                zsched = optim.lr_scheduler.ReduceLROnPlateau(zopt,
-                                                              mode='min',
-                                                              factor=lrdecay,
-                                                              verbose=True)
+                #zsched = optim.lr_scheduler.ReduceLROnPlateau(zopt,
+                #                                              mode='min',
+                #                                              factor=lrdecay,
+                #                                              verbose=True)
                 zsched = optim.lr_scheduler.StepLR(zopt,
                                                    step_size=cfg['lrdec_step'],
                                                    gamma=cfg['lrdecay'])
+            savers.append(Saver(self.z_minion,
+                                save_path, max_ckpts=cfg['max_ckpts'],
+                                optimizer=zopt, prefix='Zminion-'))
 
         if 'min_lrs' in cfg:
             min_lrs = cfg['min_lrs']
@@ -177,14 +186,46 @@ class Waveminionet(Model):
                                                step_size=cfg['lrdec_step'],
                                                gamma=cfg['lrdecay'])
                 minscheds[minion.name] = minsched
+            savers.append(Saver(minion, save_path, max_ckpts=cfg['max_ckpts'],
+                                optimizer=minopts[minion.name],
+                                prefix='M-{}-'.format(minion.name)))
 
         minions_run = self.minions
         if hasattr(self, 'minions_dp'):
             minions_run = self.minions_dp
 
         min_global_steps = {}
-        global_step = 0
-        for epoch_ in range(epoch):
+        if cfg['ckpt_continue']:
+            giters = 0
+            for saver in savers:
+                # try loading all savers last state if not forbidden is active
+                try:
+                    state = saver.read_latest_checkpoint()
+                    giter_ = saver.load_ckpt_step(state)
+                    print('giter_ found: ', giter_)
+                    # assert all ckpts happened at last same step
+                    if giters == 0:
+                        giters = giter_
+                    else:
+                        assert giters == giter_, giter_
+                    saver.load_pretrained_ckpt(os.path.join(save_path,
+                                                            'weights_' + state), 
+                                               load_last=True)
+                except TypeError:
+                    break
+
+            global_step = giters
+            # redefine num epochs depending on where we left it
+            epoch_beg = int(global_step / bpe)
+            epoch = epoch - epoch_beg
+        else:
+            epoch_beg = 0
+            global_step = 0
+
+        print('Beginning step of training: ', global_step)
+        print('Looping for {} epochs: '.format(epoch))
+
+        for epoch_ in range(epoch_beg, epoch_beg + epoch):
             self.train()
             timings = []
             beg_t = timeit.default_timer()
@@ -419,12 +460,16 @@ class Waveminionet(Model):
                 for mi, minion in enumerate(self.minions, start=1):
                     minscheds[minion.name].step()
 
+            # Save plain frontend weights 
             torch.save(self.frontend.state_dict(),
                        os.path.join(save_path,
                                     'FE_e{}.ckpt'.format(epoch_)))
-            torch.save(self.state_dict(),
-                       os.path.join(save_path,
-                                    'fullmodel_e{}.ckpt'.format(epoch_)))
+            # Run through each saver to save model and optimizer
+            for saver in savers:
+                saver.save(saver.prefix[:-1], global_step)
+            #torch.save(self.state_dict(),
+            #           os.path.join(save_path,
+            #                        'fullmodel_e{}.ckpt'.format(epoch_)))
 
     def eval_(self, dloader, batch_size, bpe, log_freq,
               epoch_idx=0, writer=None, device='cpu'):
