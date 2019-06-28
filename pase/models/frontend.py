@@ -39,6 +39,7 @@ class WaveFe(Model):
                  vq_K=None,
                  vq_beta=0.25,
                  vq_gamma=0.99,
+                 vq_loss_weight=1.,
                  norm_out=False,
                  tanh_out=False,
                  resblocks=False,
@@ -95,6 +96,7 @@ class WaveFe(Model):
                                    vq_beta, vq_gamma)
         else:
             self.quantizer = None
+        self.vq_loss_weight = vq_loss_weight
         # ouptut vectors are normalized to norm^2 1
         if norm_out:
             if norm_type == 'bnorm':

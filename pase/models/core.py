@@ -252,6 +252,7 @@ class Waveminionet(Model):
                     if self.vq:
                         vq_loss, fe_Q, \
                         vq_pp, vq_idx = frontend(triplet.to(device))
+                        vq_loss = frontend.vq_loss_weight * vq_loss
                         fe_h['triplet'] = fe_Q
                     else:
                         fe_h['triplet'] = frontend(triplet.to(device))
