@@ -3,6 +3,7 @@ import numpy as np
 import random
 import pysptk
 import os
+import torch.nn.functional as F
 import librosa
 import pickle
 from torchvision.transforms import Compose
@@ -115,9 +116,15 @@ class SingleChunkWav(object):
     def select_chunk(self, wav, ret_bounds=False):
         # select random index
         chksz = self.chunk_size
-        idxs = list(range(wav.size(0) - chksz))
-        idx = random.choice(idxs)
-        chk = wav[idx:idx + chksz]
+        if len(wav) <= chksz:
+            # padding time
+            P = chksz - len(wav)
+            chk = F.pad(wav.view(1, 1, -1), (0, P), mode='reflect').view(-1)
+            idx = 0
+        else:
+            idxs = list(range(wav.size(0) - chksz))
+            idx = random.choice(idxs)
+            chk = wav[idx:idx + chksz]
         if ret_bounds:
             return chk, idx, idx + chksz
         else:
@@ -141,15 +148,15 @@ class SingleChunkWav(object):
 
 class MIChunkWav(SingleChunkWav):
 
-    """ Max-Information chunker expects 2 input wavs,
+    """ Max-Information chunker expects 3 input wavs,
         and extract 3 chunks: (chunk, chunk_ctxt,
         and chunk_rand). The first two correspond to same
-        waveform, the third one is sampled from the second wav
+        context, the third one is sampled from the second wav
     """
     def __call__(self, pkg):
         pkg = format_package(pkg)
         if 'raw_rand' not in pkg:
-            raise ValueError('Need an input pair of wavs to do '
+            raise ValueError('Need at least a pair of wavs to do '
                              'MI chunking! Just got single raw wav?')
         raw = pkg['raw']
         raw_rand = pkg['raw_rand']
@@ -159,7 +166,14 @@ class MIChunkWav(SingleChunkWav):
         pkg['chunk'] = chunk
         pkg['chunk_beg_i'] = beg_i
         pkg['chunk_end_i'] = end_i
-        pkg['chunk_ctxt'] = self.select_chunk(raw)
+        if 'raw_ctxt' in pkg and pkg['raw_ctxt'] is not None:
+            raw_ctxt = pkg['raw_ctxt']
+        else:
+            # if no additional chunk is given as raw_ctxt
+            # the same as current raw context is taken
+            # and a random window is selected within
+            raw_ctxt = raw[:]
+        pkg['chunk_ctxt'] = self.select_chunk(raw_ctxt)
         pkg['chunk_rand'] = self.select_chunk(raw_rand)
         if self.random_scale:
             pkg['chunk'] = norm_and_scale(pkg['chunk'])
