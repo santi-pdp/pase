@@ -261,14 +261,18 @@ def main(opts):
         # compute total samples dur
         beg_t = timeit.default_timer()
         tr_durs, sr = compute_utterances_durs(tr_files_, opts.data_root)
+        train_dur = np.sum(tr_durs)
+        end_t = timeit.default_timer()
         if len(va_files) > 0:
             va_durs, _ = compute_utterances_durs(va_files, opts.data_root)
-        train_dur = np.sum(tr_durs)
-        valid_dur = np.sum(va_durs)
-        end_t = timeit.default_timer()
-        print('Read tr/va {:.1f} s/{:.1f} s in {} s'.format(train_dur / sr,
-                                                            valid_dur / sr,
-                                                            end_t - beg_t))
+            valid_dur = np.sum(va_durs)
+            print('Read tr/va {:.1f} s/{:.1f} s in {} s'.format(train_dur / sr,
+                                                                valid_dur / sr,
+                                                                end_t - beg_t))
+        else:
+            print('Read tr {:.1f} s in {} s'.format(train_dur / sr,
+                                                    end_t - beg_t))
+            opts.sched_mode='step'
         # Build Datasets
         dset = LibriSpkIDDataset(opts.data_root,
                                  tr_files_, spk2idx)
@@ -284,8 +288,8 @@ def main(opts):
             va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
                                     collate_fn=cc_vate,
                                     shuffle=False)
+            va_bpe = (valid_dur // opts.max_len) // opts.batch_size
         tr_bpe = (train_dur // opts.max_len) // opts.batch_size
-        va_bpe = (valid_dur // opts.max_len) // opts.batch_size
         if opts.test_guia is not None:
             te_dset = LibriSpkIDDataset(opts.data_root,
                                         te_files, spk2idx)
@@ -441,12 +445,12 @@ def train_epoch(dloader_, model, opt, epoch, log_freq=1, writer=None,
     timings = []
     beg_t = timeit.default_timer()
     #for bidx, batch in enumerate(dloader_, start=1):
-    iterator = iter(dloader)
+    iterator = iter(dloader_)
     for bidx in range(1, bpe + 1):
         try:
             batch = next(iterator)
         except StopIteration:
-            iterator = iter(dloader)
+            iterator = iter(dloader_)
             batch = next(iterator)
         opt.zero_grad()
         X, Y, slens = batch
@@ -489,12 +493,12 @@ def eval_epoch(dloader_, model, epoch, log_freq=1, writer=None, device='cpu',
         timings = []
         beg_t = timeit.default_timer()
         #for bidx, batch in enumerate(dloader_, start=1):
-        iterator = iter(dloader)
+        iterator = iter(dloader_)
         for bidx in range(1, bpe + 1):
             try:
                 batch = next(iterator)
             except StopIteration:
-                iterator = iter(dloader)
+                iterator = iter(dloader_)
                 batch = next(iterator)
             X, Y, slens = batch
             #X = X.transpose(1, 2)
