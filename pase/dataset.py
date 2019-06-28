@@ -1,5 +1,7 @@
 import torch
 import torch.nn.functional as F
+import re
+import glob
 from torch.utils.data import Dataset
 import math
 import soundfile as sf
@@ -268,8 +270,130 @@ class PairWavDataset(WavDataset):
         indices.remove(index)
         rindex = random.choice(indices)
         rwname = os.path.join(self.data_root, self.wavs[rindex]['filename'])
-        rwav = self.retrieve_cache(rwname, self.rwav_cache)
+        rwav = self.retrieve_cache(rwname, self.wav_cache)
         pkg = {'raw': wav, 'raw_rand': rwav,
+               'uttname':uttname, 'split':self.split}
+        # Apply the set of 'target' transforms on the clean data
+        if self.transform is not None:
+            pkg = self.transform(pkg)
+        do_addnoise = False
+        do_whisper = False
+        # Then select possibly a distorted version of the 'current' chunk
+        if hasattr(self, 'whisper_cache'):
+            do_whisper = random.random() <= self.distortion_probability
+            if do_whisper:
+                dwname = os.path.join(self.whisper_folder, uttname)
+                #print('getting whisper file: ', dwname)
+                dwav = self.retrieve_cache(dwname, 
+                                           self.whisper_cache)
+                pkg['raw'] = torch.tensor(dwav)
+        # Check if additive noise to be added
+        if hasattr(self, 'noise_cache'):
+            do_addnoise = random.random() <= self.distortion_probability
+            if do_addnoise:
+                nwname = os.path.join(self.noise_folder, uttname)
+                #print('getting noise file: ', nwname)
+                noise = self.retrieve_cache(nwname,
+                                            self.noise_cache)
+                if noise.shape[0] < pkg['raw'].size(0):
+                    P_ = pkg['raw'].size(0) - noise.shape[0]
+                    noise_piece = noise[-P_:][::-1]
+                    noise = np.concatenate((noise, noise_piece), axis=0)
+                noise = torch.FloatTensor(noise)
+                pkg['raw'] = pkg['raw'] + noise
+
+        pkg['cchunk'] = pkg['chunk'].squeeze(0)
+
+        if do_addnoise or do_whisper:
+            # re-chunk raw into chunk if boundaries available in pkg
+            if 'chunk_beg_i' in pkg and 'chunk_end_i' in pkg:
+                beg_i = pkg['chunk_beg_i']
+                end_i = pkg['chunk_end_i']
+                # separate clean chunk version
+                # make distorted chunk
+                pkg['chunk'] = pkg['raw'][beg_i:end_i]
+
+        if self.distortion_transforms:
+            pkg = self.distortion_transforms(pkg)
+
+        if self.transform is None:
+            # if no transforms happened do not send a package
+            return pkg['chunk'], pkg['raw_rand']
+        else:
+            # otherwise return the full package
+            return pkg
+
+class LibriSpeechSegTupleWavDataset(PairWavDataset):
+    """ Return three wavs, one is current wav, another one is
+        the continuation of a pre-chunked utterance following the name
+        pattern <prefix>-<utt_id>.wav. So for example for file 
+        1001-134707-0001-2.wav we have to get its paired wav as
+        1001-134707-0001-0.wav for instance, which is a neighbor within
+        utterance level. Finally, another random and different utterance 
+        following the filename is returned too as random context.
+    """
+    def __init__(self, data_root, data_cfg_file, split, 
+                 transform=None, sr=None, verbose=True,
+                 return_uttname=False,
+                 transforms_cache=None,
+                 distortion_transforms=None,
+                 whisper_folder=None,
+                 noise_folder=None,
+                 cache_on_load=False,
+                 distortion_probability=0.4,
+                 preload_wav=False):
+        super().__init__(data_root, data_cfg_file, split, transform=transform, 
+                         sr=sr, preload_wav=preload_wav,
+                         return_uttname=return_uttname,
+                         transforms_cache=transforms_cache,
+                         distortion_transforms=distortion_transforms,
+                         whisper_folder=whisper_folder,
+                         noise_folder=noise_folder,
+                         cache_on_load=cache_on_load,
+                         distortion_probability=distortion_probability,
+                         verbose=verbose)
+        self.rec = re.compile(r'(\d+).wav')
+        # pre-cache prefixes to load from dictionary quicker
+        self.neighbor_prefixes = {}
+        for wav in self.wavs:
+            fname = wav['filename']
+            prefix = self.rec.sub('', fname)
+            if prefix not in self.neighbor_prefixes:
+                self.neighbor_prefixes[prefix] = []
+            self.neighbor_prefixes[prefix].append(fname) 
+        print('Found {} prefixes in '
+              'utterances'.format(len(self.neighbor_prefixes)))
+            
+
+    def __getitem__(self, index):
+        uttname = self.wavs[index]['filename']
+        # Here we select the three wavs.
+        # (1) Current wav selection
+        wname = os.path.join(self.data_root, uttname)
+        wav = self.retrieve_cache(wname, self.wav_cache)
+        # (2) Context wav selection by utterance name pattern. If
+        # no other sub-index is found, the same as current wav is returned
+        prefix = self.rec.sub('', uttname)
+        neighbors = self.neighbor_prefixes[prefix]
+        #print('Wname: ', wname)
+        # delete current file
+        #print('Found nehg: ', neighbors)
+        neighbors.remove(uttname)
+        #print('Found nehg: ', neighbors)
+        # pick random one if possible, otherwise it will be empty
+        if len(neighbors) > 0:
+            cwname = os.path.join(self.data_root, random.choice(neighbors))
+            cwav = self.retrieve_cache(cwname, self.wav_cache)
+        else:
+            cwav = wav
+        # (2) Random wav selection for out of context sample
+        # create candidate indices without current index
+        indices = list(range(len(self.wavs)))
+        indices.remove(index)
+        rindex = random.choice(indices)
+        rwname = os.path.join(self.data_root, self.wavs[rindex]['filename'])
+        rwav = self.retrieve_cache(rwname, self.wav_cache)
+        pkg = {'raw': wav, 'raw_rand': rwav, 'raw_ctxt': cwav,
                'uttname':uttname, 'split':self.split}
         # Apply the set of 'target' transforms on the clean data
         if self.transform is not None:
@@ -434,16 +558,21 @@ if __name__ == '__main__':
     print('({}, {})'.format(wav.shape, rwav.shape))
     print('=' * 30)
     """
-    from torch.utils.data import DataLoader
-    dset = FbankSpkDataset('../data/LibriSpeech/Fbanks24', 
-                           '../data/LibriSpeech/libri_dict.npy',
-                           '../data/LibriSpeech/libri_tr.scp')
-    x, y = dset[0]
-    print(x.shape)
-    print(y.shape)
-    dloader = DataLoader(dset, batch_size=10, shuffle=True,
-                         collate_fn=ft2spk_collater)
-    x = next(dloader.__iter__())
-    print(x[0].shape)
-    print(x[1].shape)
-    print(x[2])
+#    from torch.utils.data import DataLoader
+#    dset = FbankSpkDataset('../data/LibriSpeech/Fbanks24', 
+#                           '../data/LibriSpeech/libri_dict.npy',
+#                           '../data/LibriSpeech/libri_tr.scp')
+#    x, y = dset[0]
+#    print(x.shape)
+#    print(y.shape)
+#    dloader = DataLoader(dset, batch_size=10, shuffle=True,
+#                         collate_fn=ft2spk_collater)
+#    x = next(dloader.__iter__())
+#    print(x[0].shape)
+#    print(x[1].shape)
+#    print(x[2])
+    dset = \
+    LibriSpeechSegTupleWavDataset('../data/LibriSpeech_50h/all',
+                                  '../data/librispeech_data_50h.cfg',
+                                  'train')
+    dset[0]

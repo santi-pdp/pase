@@ -41,6 +41,8 @@ class WaveFe(Model):
                  vq_gamma=0.99,
                  norm_out=False,
                  tanh_out=False,
+                 resblocks=False,
+                 denseskips=False,
                  name='WaveFe'):
         super().__init__(name=name) 
         # apply sincnet at first layer
@@ -48,6 +50,8 @@ class WaveFe(Model):
         self.kwidths = kwidths
         self.strides = strides
         self.fmaps = fmaps
+        if denseskips:
+            self.denseskips = nn.ModuleList()
         self.blocks = nn.ModuleList()
         assert len(kwidths) == len(strides)
         assert len(strides) == len(fmaps)
@@ -60,13 +64,22 @@ class WaveFe(Model):
             if n > 1:
                 # make sure sincnet is deactivated after first layer
                 sincnet = False
-            self.blocks.append(FeBlock(ninp, fmap, kwidth, stride,
-                                       dilation,
-                                       act=activation,
-                                       pad_mode=pad_mode,
-                                       norm_type=norm_type,
-                                       sincnet=sincnet,
-                                       sr=sr))
+            if resblocks and not sincnet:
+                feblock = FeResBlock(ninp, fmap, kwidth, 
+                                     dilation, act=activation,
+                                     pad_mode=pad_mode, norm_type=norm_type)
+            else:
+                feblock = FeBlock(ninp, fmap, kwidth, stride,
+                                  dilation,
+                                  act=activation,
+                                  pad_mode=pad_mode,
+                                  norm_type=norm_type,
+                                  sincnet=sincnet,
+                                  sr=sr)
+            self.blocks.append(feblock)
+            if denseskips and n < len(kwidths):
+                # add projection adapter 
+                self.denseskips.append(nn.Conv1d(fmap, emb_dim, 1, bias=False))
             ninp = fmap
         # last projection
         if rnn_pool:
@@ -93,14 +106,28 @@ class WaveFe(Model):
         
     def forward(self, x):
         h = x
+        denseskips = hasattr(self, 'denseskips')
+        if denseskips:
+            dskips = None
         for n, block in enumerate(self.blocks):
             h = block(h)
+            if denseskips and (n + 1) < len(self.blocks):
+                # denseskips happen til the last but one layer
+                # til the embedding one
+                proj = self.denseskips[n]
+                if dskips is None:
+                    dskips = proj(h)
+                else:
+                    dskips = dskips + proj(h)
         if self.rnn_pool:
             ht, _ = self.rnn(h.transpose(1, 2))
             y = self.W(ht) 
             y = y.transpose(1, 2)
         else:
             y = self.W(h)
+        if denseskips:
+            # sum all dskips contributions in the embedding
+            y = y + dskips
         if hasattr(self, 'norm_out'):
             y = self.norm_out(y)
         if self.tanh_out:

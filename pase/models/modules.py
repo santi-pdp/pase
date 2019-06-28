@@ -683,6 +683,75 @@ class SincConv_fast(nn.Module):
                         padding=0, dilation=self.dilation,
                         bias=None, groups=1) 
 
+class FeResBlock(NeuralBlock):
+
+    def __init__(self, num_inputs,
+                 fmaps, kwidth, 
+                 dilation,
+                 pad_mode='reflect',
+                 act=None,
+                 norm_type='bnorm',
+                 name='FeResBlock'):
+        super().__init__(name=name)
+        if act is not None and act == 'glu':
+            Wfmaps = 2 * fmaps
+        else:
+            Wfmaps = fmaps
+        self.num_inputs = num_inputs
+        self.fmaps = fmaps
+        self.kwidth = kwidth
+        # stride is ignored for no downsampling is
+        # possible in FeResBlock
+        self.stride = 1
+        self.dilation = dilation
+        self.pad_mode = pad_mode
+        self.conv1 = nn.Conv1d(num_inputs,
+                               Wfmaps, kwidth,
+                               stride=1,
+                               dilation=dilation)
+        self.norm1 = build_norm_layer(norm_type,
+                                      self.conv1,
+                                      fmaps)
+        assert self.norm1 is not None
+        self.act1 = build_activation(act, fmaps)
+        self.conv2 = nn.Conv1d(fmaps, Wfmaps,
+                               kwidth, stride=1,
+                               dilation=dilation)
+        self.norm2 = build_norm_layer(norm_type,
+                                      self.conv2,
+                                      fmaps)
+        assert self.norm2 is not None
+        self.act2 = build_activation(act, fmaps)
+        if self.num_inputs != self.fmaps:
+            # build projection layer
+            self.resproj = nn.Conv1d(self.num_inputs,
+                                     self.fmaps, 1,
+                                     bias=False)
+
+    def forward(self, x):
+        # compute pad factor
+        if self.kwidth % 2 == 0:
+            if self.dilation > 1:
+                raise ValueError('Not supported dilation with even kwdith')
+            P = (self.kwidth // 2 - 1,
+                 self.kwidth // 2)
+        else:
+            pad = (self.kwidth // 2) * (self.dilation - 1) + \
+                    (self.kwidth // 2)
+            P = (pad, pad)
+        identity = x
+        x = F.pad(x, P, mode=self.pad_mode)
+        h = self.conv1(x)
+        h = forward_activation(self.act1, h)
+        h = forward_norm(h, self.norm1)
+        h = F.pad(h, P, mode=self.pad_mode)
+        h = self.conv2(h)
+        h = forward_activation(self.act2, h)
+        if hasattr(self, 'resproj'):
+            identity = self.resproj(identity)
+        h = h + identity
+        h = forward_norm(h, self.norm2)
+        return h
 
 class FeBlock(NeuralBlock):
 
@@ -880,8 +949,10 @@ if __name__ == '__main__':
 #                         sample_rate=16000,
 #                         padding='SAME',
 #                         stride=160)
-    conv = GConv1DBlock(1, 10, 21, 1)
-    x = torch.randn(1, 1, 16000)
+    #conv = GConv1DBlock(1, 10, 21, 1)
+    conv = FeResBlock(1, 10, 3, 1, 1)
+    x = torch.randn(1, 1, 10)
+    print(conv)
     y = conv(x)
     print(y.size())
 
