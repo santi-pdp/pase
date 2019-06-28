@@ -1,6 +1,7 @@
 from pase.models.core import Waveminionet
 from pase.models.modules import VQEMA
-from pase.dataset import PairWavDataset, DictCollater
+import pase
+from pase.dataset import PairWavDataset, LibriSpeechSegTupleWavDataset, DictCollater
 #from torchvision.transforms import Compose
 from pase.transforms import *
 from pase.losses import *
@@ -101,9 +102,10 @@ def train(opts):
     trans = make_transforms(opts, minions_cfg)
     print(trans)
     # Build Dataset(s) and DataLoader(s)
-    dset = PairWavDataset(opts.data_root, opts.data_cfg, 'train',
-                          transform=trans,
-                          preload_wav=opts.preload_wav)
+    dataset = getattr(pase.dataset, opts.dataset)
+    dset = dataset(opts.data_root, opts.data_cfg, 'train',
+                   transform=trans,
+                   preload_wav=opts.preload_wav)
     dloader = DataLoader(dset, batch_size=opts.batch_size,
                          shuffle=True, collate_fn=DictCollater(),
                          num_workers=opts.num_workers,
@@ -114,9 +116,9 @@ def train(opts):
     bpe = (dset.total_wav_dur // opts.chunk_size) // opts.batch_size
     opts.bpe = bpe
     if opts.do_eval:
-        va_dset = PairWavDataset(opts.data_root, opts.data_cfg,
-                                 'valid', transform=trans,
-                                 preload_wav=opts.preload_wav)
+        va_dset = dataset(opts.data_root, opts.data_cfg,
+                          'valid', transform=trans,
+                          preload_wav=opts.preload_wav)
         va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
                                 shuffle=False, collate_fn=DictCollater(),
                                 num_workers=opts.num_workers,
@@ -197,6 +199,12 @@ if __name__ == '__main__':
     parser.add_argument('--cache_on_load', action='store_true', default=False,
                         help='Argument to activate cache loading on the fly '
                              'for the wav files in datasets (Def: False).')
+    parser.add_argument('--dataset', type=str,
+                        default='LibriSpeechSegTupleWavDataset',
+                        help='Dataset to be used: '
+                             '(1) PairWavDataset, (2) '
+                             'LibriSpeechSegTupleWavDataset. '
+                             '(Def: LibriSpeechSegTupleWavDataset.')
 
     opts = parser.parse_args()
     if opts.net_cfg is None:
