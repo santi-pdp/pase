@@ -13,23 +13,26 @@ import librosa
 
 
 def build_valid_list(tr_list, spk2idx, va_split=0.2):
-	# apply a split of x% to each speaker in the tr_list
-	spk2utts = {}
-	for tr_file in tr_list:
-		spk = spk2idx[tr_file]
-		if spk not in spk2utts:
-			spk2utts[spk] = []
-		spk2utts[spk].append(tr_file)
-	va_files = []
-	tr_files = []
-	# Now select a split amount per speaker and rebuild train and valid lists
-	for spk, files in spk2utts.items():
-		spk_N = len(files)
-		shuffle(files)
-		spk_vaN = int(np.floor(spk_N * va_split))
-		va_files += files[:spk_vaN]
-		tr_files += files[spk_vaN:]
-	return tr_files, va_files
+    if va_split > 0:
+        # apply a split of x% to each speaker in the tr_list
+        spk2utts = {}
+        for tr_file in tr_list:
+            spk = spk2idx[tr_file]
+            if spk not in spk2utts:
+                spk2utts[spk] = []
+            spk2utts[spk].append(tr_file)
+        va_files = []
+        tr_files = []
+        # Now select a split amount per speaker and rebuild train and valid lists
+        for spk, files in spk2utts.items():
+            spk_N = len(files)
+            shuffle(files)
+            spk_vaN = int(np.floor(spk_N * va_split))
+            va_files += files[:spk_vaN]
+            tr_files += files[spk_vaN:]
+        return tr_files, va_files
+    else:
+        return tr_files, []
 
 def compute_utterances_durs(files, data_root):
     durs = []

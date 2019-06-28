@@ -261,7 +261,8 @@ def main(opts):
         # compute total samples dur
         beg_t = timeit.default_timer()
         tr_durs, sr = compute_utterances_durs(tr_files_, opts.data_root)
-        va_durs, _ = compute_utterances_durs(va_files, opts.data_root)
+        if len(va_files) > 0:
+            va_durs, _ = compute_utterances_durs(va_files, opts.data_root)
         train_dur = np.sum(tr_durs)
         valid_dur = np.sum(va_durs)
         end_t = timeit.default_timer()
@@ -271,16 +272,18 @@ def main(opts):
         # Build Datasets
         dset = LibriSpkIDDataset(opts.data_root,
                                  tr_files_, spk2idx)
-        va_dset = LibriSpkIDDataset(opts.data_root,
-                                    va_files, spk2idx)
+        if len(va_files) > 0:
+            va_dset = LibriSpkIDDataset(opts.data_root,
+                                        va_files, spk2idx)
         cc = WavCollater(max_len=opts.max_len)
         #cc_vate = WavCollater(max_len=None)
         cc_vate = cc
         dloader = DataLoader(dset, batch_size=opts.batch_size, collate_fn=cc,
                              shuffle=True)
-        va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
-                                collate_fn=cc_vate,
-                                shuffle=False)
+        if len(va_files) > 0:
+            va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
+                                    collate_fn=cc_vate,
+                                    shuffle=False)
         tr_bpe = (train_dur // opts.max_len) // opts.batch_size
         va_bpe = (valid_dur // opts.max_len) // opts.batch_size
         if opts.test_guia is not None:
@@ -312,20 +315,22 @@ def main(opts):
         for epoch in range(1, opts.epoch + 1):
             train_epoch(dloader, model, opt, epoch, opts.log_freq, writer=writer,
                         device=device, bpe=tr_bpe)
-            eloss, eacc = eval_epoch(va_dloader, model, epoch, opts.log_freq,
-                                     writer=writer, device=device, bpe=va_bpe,
-                                     key='valid')
-            if opts.sched_mode == 'step':
+            if len(va_files) > 0:
+                eloss, eacc = eval_epoch(va_dloader, model, epoch, opts.log_freq,
+                                         writer=writer, device=device, bpe=va_bpe,
+                                         key='valid')
+            if opts.sched_mode == 'step' or len(va_files) == 0:
                 sched.step()
             else:
                 sched.step(eacc)
-            if eacc > best_val_acc:
-                print('*' * 40)
-                print('New best val acc: {:.3f} => {:.3f}.'
-                      ''.format(best_val_acc, eacc))
-                print('*' * 40)
-                best_val_acc = eacc
-                best_val = True
+            if len(va_files) > 0:
+                if eacc > best_val_acc:
+                    print('*' * 40)
+                    print('New best val acc: {:.3f} => {:.3f}.'
+                          ''.format(best_val_acc, eacc))
+                    print('*' * 40)
+                    best_val_acc = eacc
+                    best_val = True
             model.save(opts.save_path, epoch - 1, best_val=best_val)
             best_val = False
             if opts.test_guia is not None:
