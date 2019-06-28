@@ -290,6 +290,7 @@ class Waveminionet(Model):
                     greal_loss = torch.zeros(1)
                 global_step += 1
 
+                t_loss = None
                 # backprop time
                 if rndmin_train:
                     min_names = list(min_h.keys())
@@ -320,13 +321,20 @@ class Waveminionet(Model):
                         lweight = minion.loss_weight
                         loss = minion.loss(y_, y_lab)
                         loss = lweight * loss
-                        loss.backward(retain_graph=True)
+                        try:
+                            t_loss += loss
+                        except TypeError:
+                            t_loss = loss
+                        #loss.backward(retain_graph=True)
                         if min_name not in min_loss:
                             min_loss[min_name] = []
                         if min_name not in min_global_steps:
                             min_global_steps[min_name] = 0
                         min_loss[min_name].append(loss.item())
                         min_global_steps[min_name] += 1
+                        #minopts[min_name].step()
+                    t_loss.backward()
+                    for min_name, y_ in min_h.items():
                         minopts[min_name].step()
                 end_t = timeit.default_timer()
                 timings.append(end_t - beg_t)
