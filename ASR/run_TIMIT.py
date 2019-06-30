@@ -7,7 +7,7 @@
 # The results are printed in standard output and within a text file in $output_folder/res.res
 
 # To run it:
-# python run_TIMIT.py ../cfg/PASE.cfg ../PASE.ckpt /home/mirco/Dataset/TIMIT  exp/TIMIT_PASE
+# python run_TIMIT.py ../cfg/PASE.cfg ../PASE.ckpt /home/mirco/Dataset/TIMIT  TIMIT_asr_exp.res
 #
 # To run the experiment with the noisy and reverberated version of TIMIT, just change the data folder with the one containing TIMIT_rev_noise.
 
@@ -27,7 +27,7 @@ import soundfile as sf
 pase_cfg=sys.argv[1] # e.g, '../cfg/PASE.cfg'
 pase_model=sys.argv[2] # e.g, '../PASE.ckpt'
 data_folder=sys.argv[3] # e.g., '/home/mirco/Dataset/TIMIT'
-output_file=sys.argv[4] # e.g., 'exp/TIMIT_exp'
+output_file=sys.argv[4] # e.g., 'TIMIT_asr_exp.res'
 
 
 # Label files for TIMIT

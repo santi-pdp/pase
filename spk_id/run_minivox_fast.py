@@ -25,7 +25,7 @@ import soundfile as sf
 pase_cfg=sys.argv[1] # e.g, '../cfg/PASE.cfg'
 pase_model=sys.argv[2] # e.g, '../PASE.ckpt'
 data_folder=sys.argv[3] # eg. '/home/mirco/Dataset/mini_voxceleb minivox'
-output_file=sys.argv[4] # e.g., 'exp/TIMIT_exp'
+output_file=sys.argv[4] # e.g., 'minivox_exp.res'
 
 
 # Label files for TIMIT
