@@ -794,9 +794,8 @@ class FeBlock(NeuralBlock):
         if not (norm_type == 'snorm' and sincnet):
             self.norm = build_norm_layer(norm_type,
                                          self.conv,
-                                         fmaps)
+                                         Wfmaps)
         self.act = build_activation(act, fmaps)
-        #self.act = nn.PReLU(fmaps)
 
     def forward(self, x):
         if self.kwidth > 1 and not self.sincnet:
@@ -813,9 +812,9 @@ class FeBlock(NeuralBlock):
                 P = (pad, pad)
             x = F.pad(x, P, mode=self.pad_mode)
         h = self.conv(x)
-        h = forward_activation(self.act, h)
         if hasattr(self, 'norm'):
             h = forward_norm(h, self.norm)
+        h = forward_activation(self.act, h)
         #h = self.act(h)
         return h
 
