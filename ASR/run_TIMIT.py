@@ -47,8 +47,8 @@ seed=1234
 batch_size=128
 halving_factor=0.5
 lr=0.12
-left=1
-right=1
+left=0
+right=0
 
 # Neural network parameters
 options={}
@@ -307,8 +307,10 @@ for ep in range(N_epochs):
             optimizer.param_groups[0]['lr']=lr
 
 
-print('BEST=%f' %(min(err_batch_history)))
-text_file.write('BEST=%f\n' %(min(err_batch_history)))
+print('BEST ERR=%f' %(min(err_batch_history)))
+print('BEST ACC=%f' %(1-min(err_batch_history)))
+text_file.write('BEST_ERR=%f\n' %(min(err_batch_history)))
+text_file.write('BEST_ACC=%f\n' %(1-min(err_batch_history)))
 text_file.close()
     
     

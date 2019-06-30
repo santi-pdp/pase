@@ -1,0 +1,56 @@
+TIMIT (clean)
+python run_TIMIT.py ../cfg/PASE.cfg ../PASE.ckpt /network/data1/TIMIT exp/TIMIT_PASE
+epoch=0 loss_tr=1.416865 err_tr=0.435424 loss_te=1.264637 err_te=0.399794 lr=0.120000
+epoch=1 loss_tr=1.217130 err_tr=0.381480 loss_te=1.194283 err_te=0.379004 lr=0.120000
+epoch=2 loss_tr=1.149004 err_tr=0.362285 loss_te=1.162288 err_te=0.369541 lr=0.120000
+epoch=3 loss_tr=1.106727 err_tr=0.350134 loss_te=1.142020 err_te=0.363853 lr=0.120000
+epoch=4 loss_tr=1.076340 err_tr=0.340971 loss_te=1.128811 err_te=0.359310 lr=0.120000
+epoch=5 loss_tr=1.052458 err_tr=0.334905 loss_te=1.121567 err_te=0.357741 lr=0.120000
+epoch=6 loss_tr=1.033396 err_tr=0.329158 loss_te=1.115523 err_te=0.356221 lr=0.120000
+epoch=7 loss_tr=1.016380 err_tr=0.324375 loss_te=1.107921 err_te=0.354390 lr=0.120000
+epoch=8 loss_tr=1.001768 err_tr=0.320299 loss_te=1.105539 err_te=0.352396 lr=0.120000
+epoch=9 loss_tr=0.989583 err_tr=0.316983 loss_te=1.101152 err_te=0.351015 lr=0.120000
+epoch=10 loss_tr=0.978393 err_tr=0.313454 loss_te=1.101261 err_te=0.350827 lr=0.120000
+epoch=11 loss_tr=0.937151 err_tr=0.301266 loss_te=1.080153 err_te=0.345074 lr=0.060000
+epoch=12 loss_tr=0.928861 err_tr=0.298755 loss_te=1.079026 err_te=0.344175 lr=0.060000
+epoch=13 loss_tr=0.922875 err_tr=0.297061 loss_te=1.079455 err_te=0.344265 lr=0.060000
+epoch=14 loss_tr=0.899873 err_tr=0.290147 loss_te=1.067551 err_te=0.340587 lr=0.030000
+epoch=15 loss_tr=0.895300 err_tr=0.288986 loss_te=1.067663 err_te=0.340277 lr=0.030000
+epoch=16 loss_tr=0.880992 err_tr=0.284640 loss_te=1.062164 err_te=0.338332 lr=0.015000
+epoch=17 loss_tr=0.877545 err_tr=0.283590 loss_te=1.061735 err_te=0.337801 lr=0.015000
+epoch=18 loss_tr=0.870794 err_tr=0.282048 loss_te=1.059273 err_te=0.337335 lr=0.007500
+epoch=19 loss_tr=0.866272 err_tr=0.280444 loss_te=1.057353 err_te=0.337294 lr=0.003750
+epoch=20 loss_tr=0.863194 err_tr=0.279734 loss_te=1.056110 err_te=0.336975 lr=0.001875
+epoch=21 loss_tr=0.862461 err_tr=0.279410 loss_te=1.055458 err_te=0.336812 lr=0.000937
+epoch=22 loss_tr=0.861487 err_tr=0.278910 loss_te=1.055121 err_te=0.336681 lr=0.000469
+epoch=23 loss_tr=0.860902 err_tr=0.279253 loss_te=1.054987 err_te=0.336624 lr=0.000234
+BEST=0.336624
+
+TIMIT (rev+noise)
+python run_TIMIT.py ../cfg/PASE.cfg ../PASE.ckpt /network/tmp1/ravanelm/TIMIT_rev_noise exp/TIMIT_PASE
+epoch=0 loss_tr=2.192326 err_tr=0.629971 loss_te=2.090464 err_te=0.606678 lr=0.120000
+epoch=1 loss_tr=1.992204 err_tr=0.582672 loss_te=2.026765 err_te=0.590931 lr=0.120000
+epoch=2 loss_tr=1.917525 err_tr=0.564067 loss_te=1.999766 err_te=0.585635 lr=0.120000
+epoch=3 loss_tr=1.870765 err_tr=0.552284 loss_te=1.983746 err_te=0.580054 lr=0.120000
+epoch=4 loss_tr=1.835428 err_tr=0.543559 loss_te=1.976652 err_te=0.578623 lr=0.120000
+epoch=5 loss_tr=1.772340 err_tr=0.526876 loss_te=1.954621 err_te=0.572225 lr=0.060000
+epoch=6 loss_tr=1.754314 err_tr=0.522115 loss_te=1.958473 err_te=0.573165 lr=0.060000
+epoch=7 loss_tr=1.719649 err_tr=0.512948 loss_te=1.945946 err_te=0.570165 lr=0.030000
+epoch=8 loss_tr=1.709415 err_tr=0.509955 loss_te=1.947194 err_te=0.570476 lr=0.030000
+epoch=9 loss_tr=1.689441 err_tr=0.504223 loss_te=1.942114 err_te=0.568613 lr=0.015000
+epoch=10 loss_tr=1.683746 err_tr=0.503091 loss_te=1.942452 err_te=0.569021 lr=0.015000
+epoch=11 loss_tr=1.672243 err_tr=0.499877 loss_te=1.939654 err_te=0.567648 lr=0.007500
+epoch=12 loss_tr=1.664974 err_tr=0.498184 loss_te=1.937519 err_te=0.567706 lr=0.003750
+epoch=13 loss_tr=1.662146 err_tr=0.497422 loss_te=1.936882 err_te=0.567297 lr=0.001875
+epoch=14 loss_tr=1.659488 err_tr=0.496260 loss_te=1.936546 err_te=0.566799 lr=0.000937
+epoch=15 loss_tr=1.658045 err_tr=0.496216 loss_te=1.936467 err_te=0.566635 lr=0.000469
+epoch=16 loss_tr=1.657279 err_tr=0.496172 loss_te=1.936601 err_te=0.566611 lr=0.000234
+epoch=17 loss_tr=1.657897 err_tr=0.496139 loss_te=1.936679 err_te=0.566594 lr=0.000117
+epoch=18 loss_tr=1.657182 err_tr=0.496097 loss_te=1.936705 err_te=0.566660 lr=0.000059
+epoch=19 loss_tr=1.657130 err_tr=0.495927 loss_te=1.936716 err_te=0.566619 lr=0.000029
+epoch=20 loss_tr=1.657036 err_tr=0.495609 loss_te=1.936723 err_te=0.566602 lr=0.000015
+epoch=21 loss_tr=1.657153 err_tr=0.496010 loss_te=1.936728 err_te=0.566602 lr=0.000007
+epoch=22 loss_tr=1.656864 err_tr=0.495936 loss_te=1.936727 err_te=0.566602 lr=0.000004
+epoch=23 loss_tr=1.656922 err_tr=0.495715 loss_te=1.936724 err_te=0.566619 lr=0.000002
+BEST_ERR=0.566594
+BEST_ACC=0.433406
