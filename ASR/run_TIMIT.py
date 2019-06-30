@@ -4,7 +4,7 @@
 # This script runs a simple speech recognition experiment on the top of PASE features. 
 # The results are reported in terms of Frame Error Rate over phonemes (context-independent). 
 # This system is not designed for an extensive evaluation of PASE features, but mainly for quickly monitoring the performance of PASE during the self-supervised training phase.
-# The results are printed in standard output and within a text file in $output_folder/res.res
+# The results are printed in standard output and within the text file specified in the last argument.
 
 # To run it:
 # python run_TIMIT.py ../cfg/PASE.cfg ../PASE.ckpt /home/mirco/Dataset/TIMIT  TIMIT_asr_exp.res
