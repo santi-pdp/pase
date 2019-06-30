@@ -19,8 +19,8 @@ import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 import pickle
-# from pase.models.frontend import wf_builder
-from waveminionet.models.frontend import wf_builder #old models
+from pase.models.frontend import wf_builder
+# from waveminionet.models.frontend import wf_builder #old models
 import soundfile as sf
 
 
