@@ -133,7 +133,7 @@ class Saver(object):
         print('Reading latest checkpoint from {}...'.format(ckpt_path))
         if not os.path.exists(ckpt_path):
             print('[!] No checkpoint found in {}'.format(self.save_path))
-            return False
+            return None
         else:
             with open(ckpt_path, 'r') as ckpt_f:
                 ckpts = json.load(ckpt_f)
@@ -175,6 +175,14 @@ class Saver(object):
                 self.model.load_state_dict(st_dict)
             print('[*] Loaded weights')
             return True
+
+    def load_ckpt_step(self, curr_ckpt):
+        ckpt = torch.load(os.path.join(self.save_path,
+                                       'weights_' + \
+                                       curr_ckpt),
+                          map_location='cpu')
+        step = ckpt['step']
+        return step
 
     def load_pretrained_ckpt(self, ckpt_file, load_last=False, load_opt=True,
                              verbose=True):
