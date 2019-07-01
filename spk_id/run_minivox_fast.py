@@ -6,9 +6,11 @@
 # This system is not designed for an extensive evaluation of PASE features, but mainly for quickly monitoring the performance of PASE during the self-supervised training phase.
 # The results are printed in standard output and within the text file specified in the last argument.
 
-# To run it:
+# To run the speaker recognition exp on minivox celeb:
 # python run_minivox_fast.py ../cfg/PASE.cfg ../PASE.ckpt /scratch/ravanelm/datasets/mini_voxceleb minivox_tr_list.txt minvox_test_list.txt  utt2spk.npy minivox_exp.res
 
+# To run the language id experiment on minivoxforge:
+# python run_minivox_fast.py ../cfg/PASE.cfg ../PASE.ckpt /scratch/ravanelm/datasets/mini_voxforge/ minivoxforge_tr_list.txt minivoxforge_test_list.txt  utt2lang.npy  minivoxforge.res
 
 import sys
 from neural_networks import MLP,context_window
@@ -39,18 +41,10 @@ output_file=sys.argv[7] # e.g.,
 
 lab=np.load(lab_file, allow_pickle=True).item()
 
-<<<<<<< HEAD
-=======
-lab=np.load(lab_file).item()
-
 # get number of speakers
 
 nspk=get_nspk(lab)
 
-# File list for TIMIT
-tr_lst_file='minivox_tr_list.txt'
-dev_lst_file='minvox_test_list.txt'
->>>>>>> 6327d999bb6c1b954a7f4250ed94d74f8a815291
 
 tr_lst = [line.rstrip('\n') for line in open(tr_lst_file)]
 dev_lst = [line.rstrip('\n') for line in open(dev_lst_file)]
