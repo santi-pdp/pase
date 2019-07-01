@@ -7,7 +7,7 @@
 # The results are printed in standard output and within the text file specified in the last argument.
 
 # To run it:
-# python run_minivox_fast.py ../cfg/PASE.cfg ../PASE.ckpt /home/mirco/Dataset/minivox  minivox_exp.res
+# python run_minivox_fast.py ../cfg/PASE.cfg ../PASE.ckpt /scratch/ravanelm/datasets/mini_voxceleb minivox_tr_list.txt minvox_test_list.txt  utt2spk.npy minivox_exp.res
 
 
 import sys
@@ -31,12 +31,16 @@ def get_nspk(utt2spk):
 pase_cfg=sys.argv[1] # e.g, '../cfg/PASE.cfg'
 pase_model=sys.argv[2] # e.g, '../PASE.ckpt'
 data_folder=sys.argv[3] # eg. '/home/mirco/Dataset/mini_voxceleb minivox'
-output_file=sys.argv[4] # e.g., 'minivox_exp.res'
+tr_lst_file=sys.argv[4] # e.g., 'minivox_tr_list.txt'
+dev_lst_file=sys.argv[5] # e.g., 'minvox_test_list.txt'
+lab_file=sys.argv[6] # e.g., 'minvox_test_list.txt'
+output_file=sys.argv[7] # e.g., 
 
 
-# Label files for TIMIT
-lab_file='utt2spk.npy'
+lab=np.load(lab_file, allow_pickle=True).item()
 
+<<<<<<< HEAD
+=======
 lab=np.load(lab_file).item()
 
 # get number of speakers
@@ -46,6 +50,7 @@ nspk=get_nspk(lab)
 # File list for TIMIT
 tr_lst_file='minivox_tr_list.txt'
 dev_lst_file='minvox_test_list.txt'
+>>>>>>> 6327d999bb6c1b954a7f4250ed94d74f8a815291
 
 tr_lst = [line.rstrip('\n') for line in open(tr_lst_file)]
 dev_lst = [line.rstrip('\n') for line in open(dev_lst_file)]
@@ -85,7 +90,7 @@ pase.eval()
 print("Waveform reading...")
 fea={}
 for wav_file in tr_lst:
-    [signal, fs] = sf.read(data_folder+'/'+wav_file)
+    [signal, fs] = sf.read(data_folder+'/train/'+wav_file)
     signal=signal/np.max(np.abs(signal))
     signal = signal.astype(np.float32)
     
@@ -96,7 +101,7 @@ for wav_file in tr_lst:
 # reading the dev signals
 fea_dev={}
 for wav_file in dev_lst:
-    [signal, fs] = sf.read(data_folder+'/'+wav_file)
+    [signal, fs] = sf.read(data_folder+'/test/'+wav_file)
     signal=signal/np.max(np.abs(signal))
     fea_id=wav_file.split('/')[-1]
     fea_dev[fea_id]=torch.from_numpy(signal).float().to(device).view(1,1,-1)
