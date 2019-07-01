@@ -20,6 +20,13 @@ from pase.models.frontend import wf_builder
 # from waveminionet.models.frontend import wf_builder #old models
 import soundfile as sf
 
+def get_nspk(utt2spk):
+    lab_list = []
+    for utt, spk in utt2spk.items():
+        lab_list.append(int(spk))
+
+    return max(lab_list)+1
+
 
 pase_cfg=sys.argv[1] # e.g, '../cfg/PASE.cfg'
 pase_model=sys.argv[2] # e.g, '../PASE.ckpt'
@@ -32,6 +39,10 @@ lab_file='utt2spk.npy'
 
 lab=np.load(lab_file).item()
 
+# get number of speakers
+
+nspk=get_nspk(lab)
+
 # File list for TIMIT
 tr_lst_file='minivox_tr_list.txt'
 dev_lst_file='minvox_test_list.txt'
@@ -43,14 +54,14 @@ dev_lst = [line.rstrip('\n') for line in open(dev_lst_file)]
 N_epochs=24
 seed=1234
 batch_size=128
-halving_factor=0.5
+halving_factor=1.0
 lr=0.12
 left=0
 right=0
 
 # Neural network parameters
 options={}
-options['dnn_lay']='1024,40'
+options['dnn_lay']='1024,'+str(nspk)
 options['dnn_drop']='0.15,0.0'
 options['dnn_use_batchnorm']='False,False'
 options['dnn_use_laynorm']='True,False'
@@ -271,10 +282,10 @@ for ep in range(N_epochs):
             optimizer.param_groups[0]['lr']=lr
 
 
-print('BEST ERR=%f' %(min(err_dev_snt_history)))
-print('BEST ACC=%f' %(1-min(err_dev_snt_history)))
-text_file.write('BEST_ERR=%f\n' %(min(err_dev_snt_history)))
-text_file.write('BEST_ACC=%f\n' %(1-min(err_dev_snt_history)))
+print('BEST ERR=%f' %(min(err_dev_fr_history)))
+print('BEST ACC=%f' %(1-min(err_dev_fr_history)))
+text_file.write('BEST_ERR=%f\n' %(min(err_dev_fr_history)))
+text_file.write('BEST_ACC=%f\n' %(1-min(err_dev_fr_history)))
 text_file.close()
     
     
