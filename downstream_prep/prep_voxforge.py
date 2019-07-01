@@ -92,12 +92,12 @@ if __name__ == '__main__':
 		for rec in train_rec:
 			prep_rec(args.path_to_data+rec, args.out_path+'train/'+lang+'_-_'+rec, sr=args.out_sr, out_length_seconds=args.out_length)
 			train_list.append(lang+'_-_'+rec)
-			utt2lang[lang]=train_list[-1]
+			utt2lang[lang+'_-_'+rec]=train_list[-1]
 
 		for rec in test_rec:
 			prep_rec(args.path_to_data+rec, args.out_path+'test/'+lang+'_-_'+rec, sr=args.out_sr, out_length_seconds=args.out_length)
 			test_list.append(lang+'_-_'+rec)
-			utt2lang[lang]=test_list[-1]
+			utt2lang[lang+'_-_'+rec]=test_list[-1]
 
 	if not os.path.isdir(args.out_path+'lists'):
 		os.mkdir(args.out_path+'lists')
