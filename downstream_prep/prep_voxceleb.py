@@ -92,7 +92,12 @@ if __name__ == '__main__':
 
 			train_rec, test_rec = np.random.choice(rec_list, 2, replace=False)
 
-			success = prep_rec(train_rec, args.out_path+'train/'+spk+'_-_'+train_rec.split('/')[-1], sr=args.out_sr, out_length_seconds=args.out_length) and prep_rec(test_rec, args.out_path+'test/'+spk+'_-_'+test_rec.split('/')[-1], sr=args.out_sr, out_length_seconds=args.out_length)
+			train_utt = train_rec.split('/')[-1]
+			train_folder = train_rec.split('/')[-2]
+			test_utt = test_rec.split('/')[-1]
+			test_folder = test_rec.split('/')[-2]
+
+			success = prep_rec(train_rec, args.out_path+'train/'+spk+'_-_'+train_folder+'_-_'+train_utt, sr=args.out_sr, out_length_seconds=args.out_length) and prep_rec(test_rec, args.out_path+'test/'+spk+'_-_'+test_folder+'_-_'+test_utt, sr=args.out_sr, out_length_seconds=args.out_length)
 
 			trials+=1
 
@@ -100,8 +105,8 @@ if __name__ == '__main__':
 			print('Failed!!')
 			exit(1)
 
-		train_list.append(spk+'_-_'+train_rec.split('/')[-1])
-		test_list.append(spk+'_-_'+test_rec.split('/')[-1])
+		train_list.append(spk+'_-_'+train_folder+'_-_'+train_utt)
+		test_list.append(spk+'_-_'+test_folder+'_-_'+test_utt)
 		utt2spk[train_list[-1]] = i
 		utt2spk[test_list[-1]] = i
 
