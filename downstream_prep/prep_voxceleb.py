@@ -54,6 +54,7 @@ if __name__ == '__main__':
 	parser.add_argument('--out-sr', type=int, default=16000)
 	parser.add_argument('--out-length', type=int, default=10)
 	parser.add_argument('--nspk', type=int, default=100)
+	parser.add_argument('--ntrials', type=int, default=10)
 	args = parser.parse_args()
 
 	if not os.path.isdir(args.out_path+'train'):
@@ -106,6 +107,8 @@ if __name__ == '__main__':
 
 	if not os.path.isdir(args.out_path+'lists'):
 		os.mkdir(args.out_path+'lists')
+
+	print('Any overlap between train and test lists: {}'.format(bool(set(train_list) & set(test_list))))
 
 	dump_list(train_list, args.out_path+'lists/train_list')
 	dump_list(test_list, args.out_path+'lists/test_list')
