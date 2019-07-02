@@ -13,6 +13,7 @@
 # python run_minivox_fast.py ../cfg/PASE.cfg ../PASE.ckpt /scratch/ravanelm/datasets/mini_voxforge/ minivoxforge_tr_list.txt minivoxforge_test_list.txt  utt2lang.npy  minivoxforge.res
 
 import sys
+import os
 from neural_networks import MLP,context_window
 import torch
 import numpy as np
