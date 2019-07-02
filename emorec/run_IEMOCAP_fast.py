@@ -67,6 +67,8 @@ options['dnn_act']='relu,softmax'
 device='cuda'
 
 dname=os.path.dirname(output_file)
+if dname == '':
+    dname = '.'
 if not os.path.exists(dname):
     os.makedirs(dname)
 
