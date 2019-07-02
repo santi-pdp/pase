@@ -16,6 +16,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
+import os
 from pase.models.frontend import wf_builder
 # from waveminionet.models.frontend import wf_builder #old models
 import soundfile as sf
@@ -65,6 +66,9 @@ options['dnn_act']='relu,softmax'
 
 device='cuda'
 
+dname=os.path.dirname(output_file)
+if not os.path.exists(dname):
+    os.makedirs(dname)
 
 # output file creation
 text_file=open(output_file, "w")

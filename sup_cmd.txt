@@ -1,0 +1,1 @@
+qsub -pe smp 2 -l mem_free=5G,ram_free=5G,gpu=1 python -u run_IEMOCAP_fast.py /export/corpora/pase_data/IEMOCAP_ahsn_leave-two-speaker-out/ $model iemocap_aux/$iteration
