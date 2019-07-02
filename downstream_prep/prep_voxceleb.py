@@ -107,6 +107,8 @@ if __name__ == '__main__':
 	if not os.path.isdir(args.out_path+'lists'):
 		os.mkdir(args.out_path+'lists')
 
+	print('Any overlap between train and test lists: {}'.format(bool(set(train_list) & set(test_list))))
+
 	dump_list(train_list, args.out_path+'lists/train_list')
 	dump_list(test_list, args.out_path+'lists/test_list')
 	np.save(args.out_path+'lists/utt2spk', utt2spk)
