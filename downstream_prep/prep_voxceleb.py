@@ -92,7 +92,7 @@ if __name__ == '__main__':
 
 			train_rec, test_rec = np.random.choice(rec_list, 2, replace=False)
 
-			success = prep_rec(test_rec, args.out_path+'train/'+spk+'_-_'+train_rec.split('/')[-1], sr=args.out_sr, out_length_seconds=args.out_length) and prep_rec(test_rec, args.out_path+'test/'+spk+'_-_'+test_rec.split('/')[-1], sr=args.out_sr, out_length_seconds=args.out_length)
+			success = prep_rec(train_rec, args.out_path+'train/'+spk+'_-_'+train_rec.split('/')[-1], sr=args.out_sr, out_length_seconds=args.out_length) and prep_rec(test_rec, args.out_path+'test/'+spk+'_-_'+test_rec.split('/')[-1], sr=args.out_sr, out_length_seconds=args.out_length)
 
 			trials+=1
 
