@@ -138,7 +138,10 @@ lab_lst=[]
 print("Data Preparation...")
 for snt in fea_pase.keys():
     if fea_pase[snt].shape[0]-lab[snt].shape[0]!=2:
-        if fea_pase[snt].shape[0]-lab[snt].shape[0]==1:
+        if fea_pase[snt].shape[0]-lab[snt].shape[0]==3:
+            fea_lst.append(fea_pase[snt][:-3])
+            lab_lst.append(lab[snt])
+        elif fea_pase[snt].shape[0]-lab[snt].shape[0]==1:
             fea_lst.append(fea_pase[snt][:-1])
             lab_lst.append(lab[snt])
         else:
@@ -153,7 +156,10 @@ fea_lst_dev=[]
 lab_lst_dev=[]
 for snt in fea_pase_dev.keys():
     if fea_pase_dev[snt].shape[0]-lab_dev[snt].shape[0]!=2:
-        if fea_pase_dev[snt].shape[0]-lab_dev[snt].shape[0]==1:
+        if fea_pase_dev[snt].shape[0]-lab_dev[snt].shape[0]==3:
+            fea_lst_dev.append(fea_pase_dev[snt][:-3])
+            lab_lst_dev.append(lab_dev[snt])
+        elif fea_pase_dev[snt].shape[0]-lab_dev[snt].shape[0]==1:
             fea_lst_dev.append(fea_pase_dev[snt][:-1])
             lab_lst_dev.append(lab_dev[snt])
         else:
