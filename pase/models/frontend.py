@@ -39,7 +39,6 @@ class WaveFe(Model):
                  vq_K=None,
                  vq_beta=0.25,
                  vq_gamma=0.99,
-                 vq_loss_weight=1.,
                  norm_out=False,
                  tanh_out=False,
                  resblocks=False,
@@ -96,7 +95,6 @@ class WaveFe(Model):
                                    vq_beta, vq_gamma)
         else:
             self.quantizer = None
-        self.vq_loss_weight = vq_loss_weight
         # ouptut vectors are normalized to norm^2 1
         if norm_out:
             if norm_type == 'bnorm':
@@ -105,6 +103,12 @@ class WaveFe(Model):
                 self.norm_out = nn.InstanceNorm1d(self.emb_dim)
         self.tanh_out = tanh_out
 
+    def fuse_skip(self, input_, skip):
+        dfactor = skip.shape[2] // input_.shape[2]
+        if dfactor > 1:
+            # downsample skips
+            skip = F.adaptive_avg_pool1d(skip, input_.shape[2])
+        return input_ + skip
         
     def forward(self, x):
         h = x
@@ -120,7 +124,8 @@ class WaveFe(Model):
                 if dskips is None:
                     dskips = proj(h)
                 else:
-                    dskips = dskips + proj(h)
+                    h_proj = proj(h)
+                    dskips = self.fuse_skip(h_proj, dskips)
         if self.rnn_pool:
             ht, _ = self.rnn(h.transpose(1, 2))
             y = self.W(ht) 
@@ -129,7 +134,7 @@ class WaveFe(Model):
             y = self.W(h)
         if denseskips:
             # sum all dskips contributions in the embedding
-            y = y + dskips
+            y = self.fuse_skip(y, dskips)
         if hasattr(self, 'norm_out'):
             y = self.norm_out(y)
         if self.tanh_out:
