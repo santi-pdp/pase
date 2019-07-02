@@ -80,7 +80,7 @@ print("Waveform reading...")
 fea={}
 for wav_file in tr_lst:
     [signal, fs] = sf.read(data_folder+'/'+wav_file)
-    signal=signal/np.max(np.abs(signal))
+    #signal=signal/np.max(np.abs(signal))
     signal = signal.astype(np.float32)
     fea_id=wav_file.split('/')[-2]+'_'+wav_file.split('/')[-1]
     fea[fea_id]=torch.from_numpy(signal).float().to(device).view(1,1,-1)
@@ -90,7 +90,7 @@ for wav_file in tr_lst:
 fea_dev={}
 for wav_file in dev_lst:
     [signal, fs] = sf.read(data_folder+'/'+wav_file)
-    signal=signal/np.max(np.abs(signal))
+    #signal=signal/np.max(np.abs(signal))
     fea_id=wav_file.split('/')[-2]+'_'+wav_file.split('/')[-1]
     fea_dev[fea_id]=torch.from_numpy(signal).float().to(device).view(1,1,-1)
 
