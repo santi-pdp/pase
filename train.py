@@ -63,7 +63,8 @@ def make_transforms(opts, minions_cfg):
 def config_distortions(reverb_irfile=None, resample_factors=[],
                        clip_factors=[], 
                        chop_factors=[(0.05, 0.025), (0.1, 0.05)], 
-                       max_chops=5):
+                       max_chops=5,
+                       trans_p=0.4):
     trans = []
     if reverb_irfile is not None:
         assert os.path.exists(reverb_irfile)
@@ -76,7 +77,7 @@ def config_distortions(reverb_irfile=None, resample_factors=[],
         trans.append(Chopper(max_chops=max_chops,
                              chop_factors=chop_factors))
     if len(trans) > 0:
-        return PCompose(trans)
+        return PCompose(trans, probs=trans_p)
     else:
         return None
 
