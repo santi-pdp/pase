@@ -7,7 +7,6 @@ import math
 import soundfile as sf
 import json
 import tqdm
-import librosa
 import pickle
 import os
 import random
