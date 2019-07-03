@@ -346,7 +346,8 @@ class Prosody(object):
                 
 class Reverb(object):
 
-    def __init__(self, ir_files, report=False, ir_fmt='mat'):
+    def __init__(self, ir_files, report=False, ir_fmt='mat',
+                 data_root='.'):
         self.ir_files = ir_files
         assert isinstance(ir_files, list), type(ir_files)
         assert len(ir_files) > 0, len(ir_files)
@@ -354,13 +355,15 @@ class Reverb(object):
         #self.IR, self.p_max = self.load_IR(ir_file, ir_fmt)
         self.ir_fmt = ir_fmt
         self.report = report
+        self.data_root = data_root
 
     def load_IR(self, ir_file, ir_fmt):
-        print('loading ir_file: ', ir_file)
+        ir_file = os.path.join(self.data_root, ir_file)
+        #print('loading ir_file: ', ir_file)
         if ir_fmt == 'mat':
             IR = loadmat(ir_file, squeeze_me=True, struct_as_record=False)
             IR = IR['risp_imp']
-        elif ir_fmt == 'txt':
+        elif ir_fmt == 'imp' or ir_fmt == 'txt':
             IR = np.loadtxt(ir_file)
         else:
             raise TypeError('Unrecognized IR format: ', ir_fmt)

@@ -1,5 +1,6 @@
 from pase.models.core import Waveminionet
 from pase.models.modules import VQEMA
+from pase.models.frontend import wf_builder
 import pase
 from pase.dataset import PairWavDataset, LibriSpeechSegTupleWavDataset, DictCollater
 #from torchvision.transforms import Compose
@@ -60,15 +61,18 @@ def make_transforms(opts, minions_cfg):
         trans = CachedCompose(trans, keys, opts.trans_cache)
     return trans
 
-def config_distortions(reverb_irfile=None, resample_factors=[],
+def config_distortions(reverb_irfiles=[], 
+                       reverb_fmt='imp',
+                       reverb_data_root='.',
+                       resample_factors=[],
                        clip_factors=[], 
                        chop_factors=[(0.05, 0.025), (0.1, 0.05)], 
                        max_chops=5,
                        trans_p=0.4):
     trans = []
-    if reverb_irfile is not None:
-        assert os.path.exists(reverb_irfile)
-        trans.append(Reverb(reverb_irfile))
+    if len(reverb_irfiles) > 0:
+        trans.append(Reverb(reverb_irfiles, ir_fmt=reverb_fmt,
+                            data_root=reverb_data_root))
     if len(resample_factors) > 0:
         trans.append(Resample(resample_factors))
     if len(clip_factors) > 0:
@@ -100,9 +104,8 @@ def train(opts):
     # ---------------------
     # Build Model
     frontend = wf_builder(opts.fe_cfg)
-    minions_cfg = pase_parser(opts.net_cfg, batch_acum=opts.batch_acum,
-                              device=device,
-                              encoder=frontend)
+    minions_cfg = pase_parser(opts.net_cfg, #batch_acum=opts.batch_acum,
+                              device=device)
     model = Waveminionet(minions_cfg=minions_cfg,
                          adv_loss=opts.adv_loss,
                          num_devices=num_devices,
@@ -117,6 +120,7 @@ def train(opts):
     if opts.dtrans_cfg is not None:
         with open(opts.dtrans_cfg, 'r') as dtr_cfg:
             dtr = json.load(dtr_cfg)
+            dtr['trans_p'] = opts.distortion_p
             dist_trans = config_distortions(**dtr)
     else:
         dist_trans = None
