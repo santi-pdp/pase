@@ -1,5 +1,6 @@
 from .minions import *
 from ..losses import *
+from ..utils import AuxiliarSuperviser
 from ..log import *
 #from tensorboardX import SummaryWriter
 import torch.optim as optim
@@ -111,6 +112,13 @@ class Waveminionet(Model):
         bsize = cfg['batch_size']
         save_path = cfg['save_path']
         log_freq = cfg['log_freq']
+        sup_freq = cfg['sup_freq']
+        if cfg['sup_exec'] is not None:
+            aux_save_path = os.path.join(cfg['save_path'],
+                                         'sup_aux')
+            if not os.path.exists(aux_save_path):
+                os.makedirs(aux_save_path)
+            self.aux_sup = AuxiliarSuperviser(cfg['sup_exec'], aux_save_path)
         # Adversarial auto-encoder hyperparams
         warmup_epoch = cfg['warmup']
         zinit_weight = cfg['zinit_weight']
@@ -433,12 +441,14 @@ class Waveminionet(Model):
 
 
                     print('Mean batch time: {:.3f} s'.format(np.mean(timings)))
+                break
             # epoch end
             if va_dloader is not None:
                 va_bpe = cfg['va_bpe']
                 eloss = self.eval_(va_dloader, bsize, va_bpe, log_freq=log_freq,
                                    epoch_idx=epoch_,
                                    writer=writer, device=device)
+
                 """
                 if lrdecay > 0:
                     # update frontend lr
@@ -462,15 +472,21 @@ class Waveminionet(Model):
                     minscheds[minion.name].step()
 
             # Save plain frontend weights 
-            torch.save(self.frontend.state_dict(),
-                       os.path.join(save_path,
-                                    'FE_e{}.ckpt'.format(epoch_)))
+            fe_path = os.path.join(save_path, 
+                                   'FE_e{}.ckpt'.format(epoch_))
+            torch.save(self.frontend.state_dict(), fe_path)
             # Run through each saver to save model and optimizer
             for saver in savers:
                 saver.save(saver.prefix[:-1], global_step)
             #torch.save(self.state_dict(),
             #           os.path.join(save_path,
             #                        'fullmodel_e{}.ckpt'.format(epoch_)))
+            # TODO: sup. aux losses
+            if (epoch_ + 1 ) % sup_freq == 0 or \
+               (epoch_ + 1) >= (epoch_beg + epoch):
+                if hasattr(self, 'aux_sup'):
+                    self.aux_sup(epoch_, fe_path, cfg['fe_cfg'])
+                    raise NotImplementedError
 
     def eval_(self, dloader, batch_size, bpe, log_freq,
               epoch_idx=0, writer=None, device='cpu'):
