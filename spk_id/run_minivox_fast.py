@@ -7,7 +7,7 @@
 # The results are printed in standard output and within the text file specified in the last argument.
 
 # To run the speaker recognition exp on minivox celeb:
-# python run_minivox_fast.py ../cfg/PASE.cfg ../PASE.ckpt /scratch/ravanelm/datasets/mini_voxceleb minivox_tr_list.txt minvox_test_list.txt  utt2spk.npy minivox_exp.res
+# python run_minivox_fast.py ../cfg/PASE.cfg ../PASE.ckpt /scratch/ravanelm/datasets/minivoxceleb_40spk/ minivoxceleb_40spk/minivox_tr_list.txt minivoxceleb_40spk/minivox_test_list.txt  minivoxceleb_40spk/utt2spk.npy  minivox_fina.res
 
 # To run the language id experiment on minivoxforge:
 # python run_minivox_fast.py ../cfg/PASE.cfg ../PASE.ckpt /scratch/ravanelm/datasets/mini_voxforge/ minivoxforge_tr_list.txt minivoxforge_test_list.txt  utt2lang.npy  minivoxforge.res
