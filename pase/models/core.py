@@ -252,7 +252,6 @@ class Waveminionet(Model):
                     if self.vq:
                         vq_loss, fe_Q, \
                         vq_pp, vq_idx = frontend(triplet.to(device))
-                        vq_loss = frontend.vq_loss_weight * vq_loss
                         fe_h['triplet'] = fe_Q
                     else:
                         fe_h['triplet'] = frontend(triplet.to(device))
@@ -332,10 +331,10 @@ class Waveminionet(Model):
                     greal_loss = torch.zeros(1)
                 global_step += 1
 
-                t_loss = None
+                t_loss = torch.zeros(1).to(device)
                 if self.vq:
                     # Backprop VQ related stuff
-                    t_loss = vq_loss
+                    t_loss += vq_loss
                 # backprop time
                 if rndmin_train:
                     min_names = list(min_h.keys())
@@ -366,10 +365,7 @@ class Waveminionet(Model):
                         lweight = minion.loss_weight
                         loss = minion.loss(y_, y_lab)
                         loss = lweight * loss
-                        try:
-                            t_loss += loss
-                        except TypeError:
-                            t_loss = loss
+                        t_loss += loss
                         #loss.backward(retain_graph=True)
                         if min_name not in min_loss:
                             min_loss[min_name] = []
@@ -424,12 +420,13 @@ class Waveminionet(Model):
                                              bins='sturges',
                                              global_step=global_step)
                     if self.vq:
-                        print('VQLoss: {:.2f}, VQPP: '
-                              '{:.2f}'.format(vq_loss.item(), vq_pp.item()))
+                        print('VQLoss: {:.3f}, VQPP: '
+                              '{:.3f}'.format(vq_loss.item(), vq_pp.item()))
                         writer.add_scalar('train/vq_loss', vq_loss.item(),
                                           global_step=global_step)
                         writer.add_scalar('train/vq_pp', vq_pp.item(),
                                           global_step=global_step)
+                    print('Total summed loss: {:.3f}'.format(t_loss.item()))
 
 
                     print('Mean batch time: {:.3f} s'.format(np.mean(timings)))
