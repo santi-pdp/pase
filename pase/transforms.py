@@ -408,7 +408,6 @@ class Reverb(object):
             if 'report' not in pkg:
                 pkg['report'] = {}
             pkg['report']['ir_file'] = ir_file
-        pkg['cchunk'] = pkg['chunk']
         pkg['chunk'] = rev
         return pkg
     
