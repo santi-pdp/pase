@@ -1,1 +1,3 @@
-qsub -pe smp 2 -l mem_free=5G,ram_free=5G,gpu=1 python -u run_IEMOCAP_fast.py /export/corpora/pase_data/IEMOCAP_ahsn_leave-two-speaker-out/ $model iemocap_aux/$iteration
+qsub -v PATH -pe smp 2 -l gpu=1 -wd `pwd`/emorec/ -v cfg=../$cfg -v model=../$model -v iteration=$iteration -v save_path=$save_path run_iemocap_aux.sh
+qsub -v PATH -pe smp 2 -l gpu=1 -wd `pwd`/ASR/ -v cfg=../$cfg -v model=../$model -v iteration=$iteration -v save_path=$save_path run_timit_aux.sh
+qsub -v PATH -pe smp 2 -l gpu=1 -wd `pwd`/spk_id/ -v cfg=../$cfg -v model=../$model -v iteration=$iteration -v save_path=$save_path run_voxceleb_aux.sh

@@ -1,4 +1,6 @@
 import json
+import shlex
+import subprocess
 import random
 import torch
 import torch.nn as nn
@@ -111,3 +113,27 @@ def kfold_data(data_list, utt2class, folds=10, valid_p=0.1):
         # build valid split within train_split
         lists.append([train_split, valid_split, test_split])
     return lists
+
+class AuxiliarSuperviser(object):
+
+    def __init__(self, cmd_file, save_path='.'):
+        self.cmd_file = cmd_file
+        with open(cmd_file, 'r') as cmd_f:
+            self.cmd = [l.rstrip() for l in cmd_f]
+        self.save_path = save_path
+
+    def __call__(self, iteration, ckpt_path, cfg_path):
+        assert isinstance(iteration, int)
+        assert isinstance(ckpt_path, str)
+        assert isinstance(cfg_path, str)
+        for cmd in self.cmd:
+            sub_cmd = cmd.replace('$model', ckpt_path)
+            sub_cmd = sub_cmd.replace('$iteration', str(iteration))
+            sub_cmd = sub_cmd.replace('$cfg', cfg_path)
+            sub_cmd = sub_cmd.replace('$save_path', self.save_path)
+            print('Executing async command: ', sub_cmd)
+            #shsub = shlex.split(sub_cmd)
+            #print(shsub)
+            p = subprocess.Popen(sub_cmd,
+                                shell=True)
+
