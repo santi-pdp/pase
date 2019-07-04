@@ -438,7 +438,6 @@ class Waveminionet(Model):
 
 
                     print('Mean batch time: {:.3f} s'.format(np.mean(timings)))
-                break
             # epoch end
             if va_dloader is not None:
                 va_bpe = cfg['va_bpe']
