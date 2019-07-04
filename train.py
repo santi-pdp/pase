@@ -64,15 +64,20 @@ def make_transforms(opts, minions_cfg):
 def config_distortions(reverb_irfiles=[], 
                        reverb_fmt='imp',
                        reverb_data_root='.',
+                       noises_dir=None,
+                       noises_snrs=[-5, 0, 5, 10],
                        resample_factors=[],
                        clip_factors=[], 
-                       chop_factors=[(0.05, 0.025), (0.1, 0.05)], 
+                       chop_factors=[],
+                       #chop_factors=[(0.05, 0.025), (0.1, 0.05)], 
                        max_chops=5,
                        trans_p=0.4):
     trans = []
     if len(reverb_irfiles) > 0:
         trans.append(Reverb(reverb_irfiles, ir_fmt=reverb_fmt,
                             data_root=reverb_data_root))
+    if noises_dir is not None:
+        trans.append(SimpleAdditive(noises_dir, noises_snrs))
     if len(resample_factors) > 0:
         trans.append(Resample(resample_factors))
     if len(clip_factors) > 0:
@@ -122,6 +127,7 @@ def train(opts):
             dtr = json.load(dtr_cfg)
             dtr['trans_p'] = opts.distortion_p
             dist_trans = config_distortions(**dtr)
+            print(dist_trans)
     else:
         dist_trans = None
     # Build Dataset(s) and DataLoader(s)

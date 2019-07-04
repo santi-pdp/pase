@@ -8,6 +8,7 @@ import librosa
 import struct
 import glob
 import pickle
+import soundfile as sf
 from scipy import interpolate
 from scipy import signal
 from scipy.signal import decimate
@@ -90,6 +91,13 @@ class PCompose(object):
             return x, reports
         else:
             return x
+    def __repr__(self):
+        format_string = self.__class__.__name__ + '('
+        for t in self.transforms:
+            format_string += '\n'
+            format_string += '    {0}'.format(t)
+        format_string += '\n)'
+        return format_string
 
 class CachedCompose(Compose):
 
@@ -394,16 +402,20 @@ class Reverb(object):
         # sample an ir_file
         ir_file = self.sample_IR()
         IR, p_max = self.load_IR(ir_file, self.ir_fmt)
-        wav = wav.data.numpy()
+        wav = wav.data.numpy().reshape(-1)
+        Ex = np.dot(wav, wav)
         wav = wav.astype(np.float64).reshape(-1)
-        wav = wav / np.max(np.abs(wav))
+        #wav = wav / np.max(np.abs(wav))
         #rev = signal.fftconvolve(wav, IR, mode='full')
-        rev = signal.convolve(wav, IR, mode='full')
-        rev = rev / np.max(np.abs(rev))
+        rev = signal.convolve(wav, IR, mode='full').reshape(-1)
+        Er = np.dot(rev, rev)
+        #rev = rev / np.max(np.abs(rev))
         # IR delay compensation
         rev = self.shift(rev, -p_max)
+        Eratio = np.sqrt(Ex) / Er
         # Trim rev signal to match clean length
         rev = rev[:wav.shape[0]]
+        rev = Eratio * rev
         rev = torch.FloatTensor(rev)
         if self.report:
             if 'report' not in pkg:
@@ -651,7 +663,7 @@ class SimpleAdditive(object):
         noise = sel_noise['data']
         # randomly sample the SNR level
         snr = np.random.choice(self.snr_levels, 1)
-        print('Applying SNR: {} dB'.format(snr[0]))
+        #print('Applying SNR: {} dB'.format(snr[0]))
         if wav.ndim > 1:
             wav = wav.reshape((-1,))
         Ex = np.dot(wav, wav)
@@ -670,11 +682,11 @@ class SimpleAdditive(object):
             while np.max(noisy) >= 1 or np.min(noisy) < -1:
                 noisy = noisy / (1. + small)
                 small = small + 0.1
-        x_ = noisy
+        x_ = torch.FloatTensor(noisy)
         if self.report:
             if 'report' not in pkg:
                 pkg['report'] = {}
-            pkg['report']['resample_factor'] = factor
+            pkg['report']['snr'] = snr
         pkg['chunk'] = x_
         return pkg
 
