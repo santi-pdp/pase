@@ -77,6 +77,7 @@ class PCompose(object):
         self.probs = probs
         self.report = report
 
+    @profile
     def __call__(self, tensor):
         x = tensor
         reports = []
@@ -91,6 +92,7 @@ class PCompose(object):
             return x, reports
         else:
             return x
+
     def __repr__(self):
         format_string = self.__class__.__name__ + '('
         for t in self.transforms:
@@ -355,6 +357,7 @@ class Prosody(object):
 class Reverb(object):
 
     def __init__(self, ir_files, report=False, ir_fmt='mat',
+                 max_reverb_len=24000,
                  data_root='.'):
         self.ir_files = ir_files
         assert isinstance(ir_files, list), type(ir_files)
@@ -364,6 +367,7 @@ class Reverb(object):
         self.ir_fmt = ir_fmt
         self.report = report
         self.data_root = data_root
+        self.max_reverb_len = max_reverb_len
 
     def load_IR(self, ir_file, ir_fmt):
         ir_file = os.path.join(self.data_root, ir_file)
@@ -375,6 +379,7 @@ class Reverb(object):
             IR = np.loadtxt(ir_file)
         else:
             raise TypeError('Unrecognized IR format: ', ir_fmt)
+        IR = IR[:self.max_reverb_len]
         IR = IR / np.abs(np.max(IR))
         p_max = np.argmax(np.abs(IR))
         return IR, p_max
