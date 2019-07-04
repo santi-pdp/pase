@@ -53,6 +53,7 @@ class ZNorm(object):
         with open(stats, 'rb') as stats_f:
             self.stats = pickle.load(stats_f)
 
+    #@profile
     def __call__(self, pkg, ignore_keys=[]):
         pkg = format_package(pkg)
         for k, st in self.stats.items():
@@ -77,7 +78,7 @@ class PCompose(object):
         self.probs = probs
         self.report = report
 
-    @profile
+    #@profile
     def __call__(self, tensor):
         x = tensor
         reports = []
