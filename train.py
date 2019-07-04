@@ -1,5 +1,6 @@
 from pase.models.core import Waveminionet
 from pase.models.modules import VQEMA
+from pase.models.frontend import wf_builder
 import pase
 from pase.dataset import PairWavDataset, LibriSpeechSegTupleWavDataset, DictCollater
 #from torchvision.transforms import Compose
@@ -60,6 +61,30 @@ def make_transforms(opts, minions_cfg):
         trans = CachedCompose(trans, keys, opts.trans_cache)
     return trans
 
+def config_distortions(reverb_irfiles=[], 
+                       reverb_fmt='imp',
+                       reverb_data_root='.',
+                       resample_factors=[],
+                       clip_factors=[], 
+                       chop_factors=[(0.05, 0.025), (0.1, 0.05)], 
+                       max_chops=5,
+                       trans_p=0.4):
+    trans = []
+    if len(reverb_irfiles) > 0:
+        trans.append(Reverb(reverb_irfiles, ir_fmt=reverb_fmt,
+                            data_root=reverb_data_root))
+    if len(resample_factors) > 0:
+        trans.append(Resample(resample_factors))
+    if len(clip_factors) > 0:
+        trans.append(Clipping(clip_factors))
+    if len(chop_factors) > 0:
+        trans.append(Chopper(max_chops=max_chops,
+                             chop_factors=chop_factors))
+    if len(trans) > 0:
+        return PCompose(trans, probs=trans_p)
+    else:
+        return None
+
 
 def train(opts):
     CUDA = True if torch.cuda.is_available() and not opts.no_cuda else False
@@ -78,33 +103,35 @@ def train(opts):
 
     # ---------------------
     # Build Model
-    if opts.fe_cfg is not None:
-        with open(opts.fe_cfg, 'r') as fe_cfg_f:
-            fe_cfg = json.load(fe_cfg_f)
-            print(fe_cfg)
-    else:
-        fe_cfg = None
-    minions_cfg = pase_parser(opts.net_cfg)
-    make_transforms(opts, minions_cfg)
+    frontend = wf_builder(opts.fe_cfg)
+    minions_cfg = pase_parser(opts.net_cfg, #batch_acum=opts.batch_acum,
+                              device=device)
     model = Waveminionet(minions_cfg=minions_cfg,
                          adv_loss=opts.adv_loss,
                          num_devices=num_devices,
                          pretrained_ckpt=opts.pretrained_ckpt,
-                         frontend_cfg=fe_cfg
-                         )
+                         frontend=frontend)
     
     print(model)
-    if opts.net_ckpt is not None:
-        model.load_pretrained(opts.net_ckpt, load_last=True,
-                              verbose=True)
     print('Frontend params: ', model.frontend.describe_params())
     model.to(device)
     trans = make_transforms(opts, minions_cfg)
     print(trans)
+    if opts.dtrans_cfg is not None:
+        with open(opts.dtrans_cfg, 'r') as dtr_cfg:
+            dtr = json.load(dtr_cfg)
+            dtr['trans_p'] = opts.distortion_p
+            dist_trans = config_distortions(**dtr)
+    else:
+        dist_trans = None
     # Build Dataset(s) and DataLoader(s)
     dataset = getattr(pase.dataset, opts.dataset)
     dset = dataset(opts.data_root, opts.data_cfg, 'train',
                    transform=trans,
+                   noise_folder=opts.noise_folder,
+                   whisper_folder=opts.whisper_folder,
+                   distortion_probability=opts.distortion_p,
+                   distortion_transforms=dist_trans,
                    preload_wav=opts.preload_wav)
     dloader = DataLoader(dset, batch_size=opts.batch_size,
                          shuffle=True, collate_fn=DictCollater(),
@@ -118,6 +145,10 @@ def train(opts):
     if opts.do_eval:
         va_dset = dataset(opts.data_root, opts.data_cfg,
                           'valid', transform=trans,
+                          noise_folder=opts.noise_folder,
+                          whisper_folder=opts.whisper_folder,
+                          distortion_probability=opts.distortion_p,
+                          distortion_transforms=dist_trans,
                           preload_wav=opts.preload_wav)
         va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
                                 shuffle=False, collate_fn=DictCollater(),
@@ -138,6 +169,10 @@ if __name__ == '__main__':
                         default='data/LibriSpeech/Librispeech_spkid_sel')
     parser.add_argument('--data_cfg', type=str, 
                         default='data/librispeech_data.cfg')
+    parser.add_argument('--noise_folder', type=str, default=None)
+    parser.add_argument('--whisper_folder', type=str, default=None)
+    parser.add_argument('--distortion_p', type=float, default=0.4)
+    parser.add_argument('--dtrans_cfg', type=str, default=None)
     parser.add_argument('--net_ckpt', type=str, default=None,
                         help='Ckpt to initialize the full network '
                              '(Def: None).')
