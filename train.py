@@ -179,6 +179,8 @@ if __name__ == '__main__':
     parser.add_argument('--net_cfg', type=str,
                         default=None)
     parser.add_argument('--fe_cfg', type=str, default=None)
+    parser.add_argument('--sup_exec', type=str, default=None)
+    parser.add_argument('--sup_freq', type=int, default=1)
     parser.add_argument('--do_eval', action='store_true', default=False)
     parser.add_argument('--stats', type=str, default='data/librispeech_stats.pkl')
     parser.add_argument('--pretrained_ckpt', type=str, default=None)
