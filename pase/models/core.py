@@ -482,7 +482,6 @@ class Waveminionet(Model):
                (epoch_ + 1) >= (epoch_beg + epoch):
                 if hasattr(self, 'aux_sup'):
                     self.aux_sup(epoch_, fe_path, cfg['fe_cfg'])
-                    raise NotImplementedError
 
     def eval_(self, dloader, batch_size, bpe, log_freq,
               epoch_idx=0, writer=None, device='cpu'):
