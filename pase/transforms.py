@@ -397,7 +397,8 @@ class Reverb(object):
         wav = wav.data.numpy()
         wav = wav.astype(np.float64).reshape(-1)
         wav = wav / np.max(np.abs(wav))
-        rev = signal.fftconvolve(wav, IR, mode='full')
+        #rev = signal.fftconvolve(wav, IR, mode='full')
+        rev = signal.convolve(wav, IR, mode='full')
         rev = rev / np.max(np.abs(rev))
         # IR delay compensation
         rev = self.shift(rev, -p_max)
@@ -613,6 +614,76 @@ class Resample(object):
             self.factors
         )
         return self.__class__.__name__ + attrs
+
+class SimpleAdditive(object):
+    
+    def __init__(self, noises_dir, snr_levels=[0, 5, 10], report=False):
+        self.noises_dir = noises_dir
+        self.snr_levels = snr_levels
+        self.report = report
+        # read noises in dir
+        noises = glob.glob(os.path.join(noises_dir, '*.wav'))
+        if len(noises) == 0:
+            raise ValueError('[!] No noises found in {}'.format(noises_dir))
+        else:
+            print('[*] Found {} noise files'.format(len(noises)))
+            self.noises = []
+            for n_i, npath in enumerate(noises, start=1):
+                #nwav = wavfile.read(npath)[1]
+                #nwav = librosa.load(npath, sr=None)[0]
+                nwav, rate = sf.read(npath)
+                self.noises.append({'file':npath, 
+                                    'data':nwav.astype(np.float32)})
+                log_noise_load = 'Loaded noise {:3d}/{:3d}: ' \
+                                 '{}'.format(n_i, len(noises),
+                                             npath)
+                print(log_noise_load)
+        self.eps = 1e-22
+
+    def __call__(self, pkg):
+        """ Add noise to clean wav """
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        wav = wav.data.numpy()
+        noise_idx = np.random.choice(list(range(len(self.noises))), 1)
+        # TODO: not pre-loading noises from files?
+        sel_noise = self.noises[np.asscalar(noise_idx)]
+        noise = sel_noise['data']
+        # randomly sample the SNR level
+        snr = np.random.choice(self.snr_levels, 1)
+        print('Applying SNR: {} dB'.format(snr[0]))
+        if wav.ndim > 1:
+            wav = wav.reshape((-1,))
+        Ex = np.dot(wav, wav)
+        K = np.sqrt(Ex / (10 ** (snr / 10)))
+        if 'chunk_beg_i' in pkg:
+            beg_i = pkg['chunk_beg_i']
+            end_i = pkg['chunk_end_i']
+        else:
+            beg_i = 0
+            end_i = wav.shape[0]
+        scaled_noise = K * noise[beg_i:end_i]
+        noisy = wav + scaled_noise
+        # normalize to avoid clipping
+        if np.max(noisy) >= 1 or np.min(noisy) < -1:
+            small = 0.1
+            while np.max(noisy) >= 1 or np.min(noisy) < -1:
+                noisy = noisy / (1. + small)
+                small = small + 0.1
+        x_ = noisy
+        if self.report:
+            if 'report' not in pkg:
+                pkg['report'] = {}
+            pkg['report']['resample_factor'] = factor
+        pkg['chunk'] = x_
+        return pkg
+
+    def __repr__(self):
+        attrs = '(noises_dir={})'.format(
+            self.noises_dir
+        )
+        return self.__class__.__name__ + attrs
+
 
 class Additive(object):
 
@@ -880,9 +951,10 @@ if __name__ == '__main__':
     trans = Compose([
         ToTensor(),
         MIChunkWav(16000),
-        Reverb(['/tmp/IR_223971.imp',
-                '/tmp/IR_225824.imp',
-                '/tmp/IR_225825.imp'], report=False, ir_fmt='txt')
+        SimpleAdditive('../data/noises/train')
+        #Reverb(['/tmp/IR_223971.imp',
+        #        '/tmp/IR_225824.imp',
+        #        '/tmp/IR_225825.imp'], report=False, ir_fmt='txt')
         #LPS(),
         #MFCC(),
         #Prosody()
@@ -890,6 +962,7 @@ if __name__ == '__main__':
     print(trans)
     x = trans({'raw':wav, 'raw_rand':wav})
     print(list(x.keys()))
-    sf.write('/tmp/IR_223971.wav', x['chunk'], 16000)
-    sf.write('/tmp/chunk_IR_223971.wav', x['cchunk'], 16000)
+    sf.write('/tmp/noisy.wav', x['chunk'], 16000)
+    sf.write('/tmp/clean.wav', wav, 16000)
+    #sf.write('/tmp/chunk_IR_223971.wav', x['cchunk'], 16000)
 
