@@ -53,7 +53,6 @@ class ZNorm(object):
         with open(stats, 'rb') as stats_f:
             self.stats = pickle.load(stats_f)
 
-    #@profile
     def __call__(self, pkg, ignore_keys=[]):
         pkg = format_package(pkg)
         for k, st in self.stats.items():
@@ -369,20 +368,26 @@ class Reverb(object):
         self.report = report
         self.data_root = data_root
         self.max_reverb_len = max_reverb_len
+        self.ir_cache = {}
+        for ir_file in self.ir_files:
+            self.ir_cache[ir_file] = self.load_IR(ir_file, ir_fmt)
 
     def load_IR(self, ir_file, ir_fmt):
-        ir_file = os.path.join(self.data_root, ir_file)
-        #print('loading ir_file: ', ir_file)
-        if ir_fmt == 'mat':
-            IR = loadmat(ir_file, squeeze_me=True, struct_as_record=False)
-            IR = IR['risp_imp']
-        elif ir_fmt == 'imp' or ir_fmt == 'txt':
-            IR = np.loadtxt(ir_file)
+        if ir_file in self.ir_cache:
+            IR, p_max = self.ir_cache[ir_file]
         else:
-            raise TypeError('Unrecognized IR format: ', ir_fmt)
-        IR = IR[:self.max_reverb_len]
-        IR = IR / np.abs(np.max(IR))
-        p_max = np.argmax(np.abs(IR))
+            ir_file = os.path.join(self.data_root, ir_file)
+            #print('loading ir_file: ', ir_file)
+            if ir_fmt == 'mat':
+                IR = loadmat(ir_file, squeeze_me=True, struct_as_record=False)
+                IR = IR['risp_imp']
+            elif ir_fmt == 'imp' or ir_fmt == 'txt':
+                IR = np.loadtxt(ir_file)
+            else:
+                raise TypeError('Unrecognized IR format: ', ir_fmt)
+            IR = IR[:self.max_reverb_len]
+            IR = IR / np.abs(np.max(IR))
+            p_max = np.argmax(np.abs(IR))
         return IR, p_max
 
     def shift(self, xs, n):
@@ -418,7 +423,7 @@ class Reverb(object):
         #rev = rev / np.max(np.abs(rev))
         # IR delay compensation
         rev = self.shift(rev, -p_max)
-        Eratio = np.sqrt(Ex) / Er
+        Eratio = np.sqrt(Ex / Er)
         # Trim rev signal to match clean length
         rev = rev[:wav.shape[0]]
         rev = Eratio * rev
