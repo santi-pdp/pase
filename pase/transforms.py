@@ -614,7 +614,8 @@ class Clipping(object):
         pkg = format_package(pkg)
         wav = pkg['chunk']
         wav = wav.data.numpy()
-        cf = np.random.choice(self.clip_factors, 1)
+        #cf = np.random.choice(self.clip_factors, 1)
+        cf = random.choice(self.clip_factors)
         clip = np.maximum(wav, cf * np.min(wav))
         clip = np.minimum(clip, cf * np.max(wav))
         clipT = torch.FloatTensor(clip)
