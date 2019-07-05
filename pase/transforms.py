@@ -78,13 +78,21 @@ class PCompose(object):
         self.transforms = transforms
         self.probs = probs
         self.report = report
+        if isinstance(probs, list):
+            assert len(transforms) == len(probs), \
+                    '{} != {}'.format(len(transforms),
+                                      len(probs))
 
     ##@profile
     def __call__(self, tensor):
         x = tensor
         reports = []
-        for transf in self.transforms:
-            if random.random() <= self.probs:
+        for ti, transf in enumerate(self.transforms):
+            if isinstance(list, self.probs):
+                prob = self.probs[ti]
+            else:
+                prob = self.probs
+            if random.random() <= prob:
                 x = transf(x)
                 if len(x) == 2:
                     # get the report
@@ -746,13 +754,14 @@ class SimpleAdditive(object):
 
 class SimpleAdditiveShift(SimpleAdditive):
     
-    def __init__(self, noises_dir, snr_levels=[0, 5, 10], 
+    def __init__(self, noises_dir, snr_levels=[5, 10], 
                  noise_transform=None,
                  report=False):
         super().__init__(noises_dir, snr_levels, report)
         # additional out_transform to include potential distortions
         self.noise_transform = noise_transform
 
+    #@profile
     def __call__(self, pkg):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -766,7 +775,7 @@ class SimpleAdditiveShift(SimpleAdditive):
             P = T - len(sel_noise)
             sel_noise = F.pad(torch.tensor(sel_noise).view(1, 1, -1), 
                               (0, P),
-                              mode='zero').view(-1).data.numpy()
+                              mode='constant').view(-1).data.numpy()
             n_beg_i = 0
         elif len(sel_noise) > T:
             n_beg_i = np.random.randint(0, len(sel_noise) - T)
@@ -782,8 +791,6 @@ class SimpleAdditiveShift(SimpleAdditive):
         snr = random.choice(self.snr_levels)
         K, Ex, En = self.compute_SNR_K(wav, noise, snr)
         scaled_noise = K * noise
-        print('shift: ', shift)
-        print('snr: ', snr)
         noisy = wav + scaled_noise
         noisy = self.norm_energy(noisy, Ex)
         x_ = torch.FloatTensor(noisy)
@@ -793,6 +800,18 @@ class SimpleAdditiveShift(SimpleAdditive):
             pkg['report']['snr'] = snr
         pkg['chunk'] = x_
         return pkg
+
+    def __repr__(self):
+        if self.noise_transform is None:
+            attrs = '(noises_dir={})'.format(
+                self.noises_dir
+            )
+        else:
+            attrs = '(noises_dir={}, noise_transform={})'.format(
+                self.noises_dir,
+                self.noise_transform.__repr__()
+            )
+        return self.__class__.__name__ + attrs
 
 class Additive(object):
 
@@ -1058,6 +1077,7 @@ class SpeedChange(object):
         self.factor_range = factor_range
         self.report = report
 
+    #@profile
     def __call__(self, pkg):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -1065,7 +1085,6 @@ class SpeedChange(object):
         warp_factor = random.random() * (self.factor_range[1] - \
                                          self.factor_range[0]) + \
                       self.factor_range[0]
-        print('factor: ', warp_factor)
         samp_warp=wav.shape[0] + int(warp_factor*wav.shape[0])
         rwav = signal.resample(wav, samp_warp)
         if len(rwav) > len(wav):
@@ -1092,8 +1111,8 @@ class SpeedChange(object):
         return pkg
 
     def __repr__(self):
-        attrs = '(factor={})'.format(
-            self.factors
+        attrs = '(factor_range={})'.format(
+            self.factor_range
         )
         return self.__class__.__name__ + attrs
 
