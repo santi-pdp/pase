@@ -4,7 +4,6 @@ import tqdm
 import numpy as np
 import random
 import pysptk
-import parselmouth as pm
 import os
 import librosa
 import struct
@@ -330,13 +329,13 @@ class Prosody(object):
             #                 fs=self.sr, hopsize=self.hop,
             #                 min=self.f0_min, max=self.f0_max,
             #                 otype='f0')
-            #f0 = pysptk.swipe(wav.astype(np.float64),
-            #                  fs=self.sr, hopsize=self.hop,
-            #                  min=self.f0_min,
-            #                  max=self.f0_max,
-            #                  otype='f0')
-            sound = pm.Sound(wav.astype(np.float32), self.sr)
-            f0 = sound.to_pitch(self.hop / 16000).selected_array['frequency']
+            f0 = pysptk.swipe(wav.astype(np.float64),
+                              fs=self.sr, hopsize=self.hop,
+                              min=self.f0_min,
+                              max=self.f0_max,
+                              otype='f0')
+            #sound = pm.Sound(wav.astype(np.float32), self.sr)
+            #f0 = sound.to_pitch(self.hop / 16000).selected_array['frequency']
             if len(f0) < max_frames:
                 pad = max_frames - len(f0)
                 f0 = np.concatenate((f0, f0[-pad:]), axis=0)
@@ -654,6 +653,8 @@ class Resample(object):
         )
         return self.__class__.__name__ + attrs
 
+
+
 class SimpleAdditive(object):
     
     def __init__(self, noises_dir, snr_levels=[0, 5, 10], 
@@ -673,19 +674,6 @@ class SimpleAdditive(object):
             raise ValueError('[!] No noises found in {}'.format(noises_dir))
         else:
             print('[*] Found {} noise files'.format(len(self.noises)))
-            """
-            self.noises = []
-            for n_i, npath in enumerate(noises, start=1):
-                #nwav = wavfile.read(npath)[1]
-                #nwav = librosa.load(npath, sr=None)[0]
-                nwav, rate = sf.read(npath)
-                self.noises.append({'file':npath, 
-                                    'data':nwav.astype(np.float32)})
-                log_noise_load = 'Loaded noise {:3d}/{:3d}: ' \
-                                 '{}'.format(n_i, len(noises),
-                                             npath)
-                print(log_noise_load)
-            """
         self.eps = 1e-22
 
     def sample_noise(self):
@@ -699,6 +687,16 @@ class SimpleAdditive(object):
     def load_noise(self, filename):
         nwav, rate = sf.read(filename)
         return nwav
+
+    def compute_SNR_K(self, signal, noise, snr):
+        Ex = np.dot(signal, signal)
+        En = np.dot(noise, noise)
+        K = np.sqrt(Ex / ((10 ** (snr / 10.)) * En))
+        return K, Ex, En
+
+    def norm_energy(self, osignal, ienergy):
+        oenergy = np.dot(osignal, osignal)
+        return np.sqrt(oenergy / ienergy) * osignal
 
     ##@profile
     def __call__(self, pkg):
@@ -725,20 +723,13 @@ class SimpleAdditive(object):
             n_beg_i = np.random.randint(0, len(sel_noise) - T)
         else:
             n_beg_i = 0
-        #assert len(wav) > 1, wav.shape
         noise = sel_noise[n_beg_i:n_beg_i + T].astype(np.float32)
         # randomly sample the SNR level
         snr = random.choice(self.snr_levels)
-        #print('Applying SNR: {} dB'.format(snr[0]))
-        if wav.ndim > 1:
-            wav = wav.reshape((-1,))
-        Ex = np.dot(wav, wav)
-        En = np.dot(noise, noise)
-        K = np.sqrt(Ex / ((10 ** (snr / 10.)) * En))
+        K, Ex, En = self.compute_SNR_K(wav, noise, snr)
         scaled_noise = K * noise
         noisy = wav + scaled_noise
-        En = np.dot(noisy, noisy)
-        noisy = np.sqrt(Ex / En) * noisy
+        noisy = self.norm_energy(noisy, Ex)
         x_ = torch.FloatTensor(noisy)
         if self.report:
             if 'report' not in pkg:
@@ -753,6 +744,55 @@ class SimpleAdditive(object):
         )
         return self.__class__.__name__ + attrs
 
+class SimpleAdditiveShift(SimpleAdditive):
+    
+    def __init__(self, noises_dir, snr_levels=[0, 5, 10], 
+                 noise_transform=None,
+                 report=False):
+        super().__init__(noises_dir, snr_levels, report)
+        # additional out_transform to include potential distortions
+        self.noise_transform = noise_transform
+
+    def __call__(self, pkg):
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        wav = wav.data.numpy().reshape(-1)
+        # compute shifts of signal
+        shift = np.random.randint(0, int(0.75 * len(wav)))
+        sel_noise = self.load_noise(self.sample_noise())
+        T = len(wav) - shift
+        if len(sel_noise) < T:
+            # pad noise
+            P = T - len(sel_noise)
+            sel_noise = F.pad(torch.tensor(sel_noise).view(1, 1, -1), 
+                              (0, P),
+                              mode='zero').view(-1).data.numpy()
+            n_beg_i = 0
+        elif len(sel_noise) > T:
+            n_beg_i = np.random.randint(0, len(sel_noise) - T)
+        noise = sel_noise[n_beg_i:n_beg_i + T].astype(np.float32)
+        if self.noise_transform is not None:
+            noise = self.noise_transform({'chunk':torch.FloatTensor(noise)})['chunk']
+            noise = noise.data.numpy()
+        # apply padding to equal length now
+        noise = F.pad(torch.tensor(noise).view(1, 1, -1),
+                      (len(wav) - len(noise), 0),
+                      mode='constant').view(-1).data.numpy()
+        # randomly sample the SNR level
+        snr = random.choice(self.snr_levels)
+        K, Ex, En = self.compute_SNR_K(wav, noise, snr)
+        scaled_noise = K * noise
+        print('shift: ', shift)
+        print('snr: ', snr)
+        noisy = wav + scaled_noise
+        noisy = self.norm_energy(noisy, Ex)
+        x_ = torch.FloatTensor(noisy)
+        if self.report:
+            if 'report' not in pkg:
+                pkg['report'] = {}
+            pkg['report']['snr'] = snr
+        pkg['chunk'] = x_
+        return pkg
 
 class Additive(object):
 
@@ -1012,6 +1052,53 @@ class Additive(object):
         )
         return self.__class__.__name__ + attrs
 
+class SpeedChange(object):
+
+    def __init__(self, factor_range=(-0.15, 0.15), report=False):
+        self.factor_range = factor_range
+        self.report = report
+
+    def __call__(self, pkg):
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        wav = wav.data.numpy().reshape(-1).astype(np.float32)
+        warp_factor = random.random() * (self.factor_range[1] - \
+                                         self.factor_range[0]) + \
+                      self.factor_range[0]
+        print('factor: ', warp_factor)
+        samp_warp=wav.shape[0] + int(warp_factor*wav.shape[0])
+        rwav = signal.resample(wav, samp_warp)
+        if len(rwav) > len(wav):
+            mid_i = (len(rwav) // 2) - len(wav) // 2
+            rwav = rwav[mid_i:mid_i +  len(wav)]
+        if len(rwav) < len(wav):
+            diff = len(wav) - len(rwav)
+            P = (len(wav) - len(rwav)) // 2
+            if diff % 2 == 0:
+                rwav = np.concatenate((np.zeros(P,),
+                                       wav,
+                                       np.zeros(P,)),
+                                      axis=0)
+            else:
+                rwav = np.concatenate((np.zeros(P,),
+                                       wav,
+                                       np.zeros(P + 1,)),
+                                      axis=0)
+        if self.report:
+            if 'report' not in pkg:
+                pkg['report'] = {}
+            pkg['report']['warp_factor'] = warp_factor
+        pkg['chunk'] = torch.FloatTensor(rwav)
+        return pkg
+
+    def __repr__(self):
+        attrs = '(factor={})'.format(
+            self.factors
+        )
+        return self.__class__.__name__ + attrs
+
+
+
 if __name__ == '__main__':
     import librosa
     from torchvision.transforms import Compose
@@ -1019,20 +1106,28 @@ if __name__ == '__main__':
     wav, rate = librosa.load('test.wav', sr=None)
     trans = Compose([
         ToTensor(),
-        MIChunkWav(16000),
+        MIChunkWav(32000),
+        Reverb(['/tmp/IR_223971.imp',
+                '/tmp/IR_225824.imp',
+                '/tmp/IR_225825.imp'], report=False, ir_fmt='txt'),
+        SimpleAdditiveShift('../data/LibriSpeech_50h/wav_sel_train',
+                            noise_transform=Reverb(['/tmp/IR_223971.imp',
+                                                    '/tmp/IR_225824.imp'],
+                                                   ir_fmt='txt'))
         #SimpleAdditive(['../data/noise_non_stationary/wavs/',
         #                '../data/noise_non_stationary/wavs_bg/'], [0])
-        #Reverb(['/tmp/IR_223971.imp',
-        #        '/tmp/IR_225824.imp',
-        #        '/tmp/IR_225825.imp'], report=False, ir_fmt='txt')
         #LPS(),
         #MFCC(),
-        Prosody(hop=160)
+        #Prosody(hop=160)
     ])
     print(trans)
     x = trans({'raw':wav, 'raw_rand':wav})
     print(list(x.keys()))
-    #sf.write('/tmp/noisy.wav', x['chunk'], 16000)
+    sf.write('/tmp/noisy.wav', x['chunk'], 16000)
+    beg_i = x['chunk_beg_i']
+    end_i = x['chunk_end_i']
+    sf.write('/tmp/clean.wav', wav[beg_i:end_i], 16000)
+    """
     beg_i = x['chunk_beg_i']
     end_i = x['chunk_end_i']
     print(x['prosody'].shape)
@@ -1048,6 +1143,9 @@ if __name__ == '__main__':
     plt.subplot(3,1,3)
     plt.plot(x['chunk'].data.numpy())
     plt.savefig('/tmp/lf0.png', dpi=200)
-    #sf.write('/tmp/clean.wav', wav[beg_i:end_i], 16000)
+    """
+    #x = trans({'raw':wav, 'raw_rand':wav})
+    #print(x['chunk'].shape)
+    #sf.write('/tmp/speed.wav', x['chunk'].data.numpy(), 16000)
     #sf.write('/tmp/chunk_IR_223971.wav', x['cchunk'], 16000)
 
