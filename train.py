@@ -65,29 +65,56 @@ def make_transforms(opts, minions_cfg):
 def config_distortions(reverb_irfiles=[], 
                        reverb_fmt='imp',
                        reverb_data_root='.',
+                       reverb_p=0.5,
+                       overlap_dir=None,
+                       overlap_snrs=[0, 5, 10],
+                       overlap_reverb=False,
+                       overlap_p=0.5,
                        noises_dir=None,
-                       noises_snrs=[-5, 0, 5, 10],
+                       noises_snrs=[0, 5, 10],
+                       noises_p=0.5,
+                       speed_range=None,
+                       speed_p=0.5,
                        resample_factors=[],
+                       resample_p=0.5,
                        clip_factors=[], 
+                       clip_p=0.5,
                        chop_factors=[],
                        #chop_factors=[(0.05, 0.025), (0.1, 0.05)], 
                        max_chops=5,
-                       trans_p=0.4):
+                       chop_p=0.5):
     trans = []
+    probs = []
+    # this can be shared in two different stages of the pipeline
+    reverb = Reverb(reverb_irfiles, ir_fmt=reverb_fmt,
+                    data_root=reverb_data_root)
     if len(reverb_irfiles) > 0:
-        trans.append(Reverb(reverb_irfiles, ir_fmt=reverb_fmt,
-                            data_root=reverb_data_root))
+        trans.append(reverb)
+        probs.append(reverb_p)
+    if overlap_dir is not None:
+        noise_trans = reverb if overlap_reverb else None
+        trans.append(SimpleAdditiveShift(overlap_dir, overlap_snrs,
+                                         noise_transform=noise_trans))
+        probs.append(overlap_p)
     if noises_dir is not None:
         trans.append(SimpleAdditive(noises_dir, noises_snrs))
+        probs.append(noises_p)
+    if speed_range is not None:
+        # speed changer
+        trans.append(SpeedChange(speed_range))
+        probs.append(speed_p)
     if len(resample_factors) > 0:
         trans.append(Resample(resample_factors))
+        probs.append(resample_p)
     if len(clip_factors) > 0:
         trans.append(Clipping(clip_factors))
+        probs.append(clip_p)
     if len(chop_factors) > 0:
         trans.append(Chopper(max_chops=max_chops,
                              chop_factors=chop_factors))
+        probs.append(chop_p)
     if len(trans) > 0:
-        return PCompose(trans, probs=trans_p)
+        return PCompose(trans, probs=probs)
     else:
         return None
 
