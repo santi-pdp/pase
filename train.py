@@ -1,3 +1,4 @@
+import torch
 from pase.models.core import Waveminionet
 from pase.models.modules import VQEMA
 from pase.models.frontend import wf_builder
@@ -8,7 +9,6 @@ from pase.transforms import *
 from pase.losses import *
 from pase.utils import pase_parser
 from torch.utils.data import DataLoader
-import torch
 import pickle
 import torch.nn as nn
 import numpy as np
@@ -16,6 +16,7 @@ import argparse
 import os
 import json
 import random
+torch.backends.cudnn.benchmark = True
 
 
 def make_transforms(opts, minions_cfg):
@@ -114,7 +115,6 @@ def train(opts):
     model = Waveminionet(minions_cfg=minions_cfg,
                          adv_loss=opts.adv_loss,
                          num_devices=num_devices,
-                         pretrained_ckpt=opts.pretrained_ckpt,
                          frontend=frontend)
     
     print(model)

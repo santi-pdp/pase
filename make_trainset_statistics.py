@@ -11,9 +11,9 @@ def extract_stats(opts):
     trans = Compose([
         ToTensor(),
         MIChunkWav(opts.chunk_size),
-        LPS(),
-        MFCC(),
-        Prosody()
+        LPS(hop=opts.hop_size),
+        MFCC(hop=opts.hop_size),
+        Prosody(hop=opts.hop_size)
     ])
     dset = PairWavDataset(opts.data_root, opts.data_cfg, 'train',
                          transform=trans)
@@ -51,10 +51,13 @@ if __name__ == '__main__':
                         default='data/LibriSpeech/Librispeech_spkid_sel')
     parser.add_argument('--data_cfg', type=str, 
                         default='data/librispeech_data.cfg')
+    parser.add_argument('--exclude_keys', type=str, nargs='+', 
+                        default=['chunk', 'chunk_rand', 'chunk_ctxt'])
     parser.add_argument('--num_workers', type=int, default=1)
     parser.add_argument('--chunk_size', type=int, default=16000)
     parser.add_argument('--max_batches', type=int, default=20)
     parser.add_argument('--out_file', type=str, default='data/librispeech_stats.pkl')
+    parser.add_argument('--hop_size', type=int, default=160)
 
     opts = parser.parse_args()
     extract_stats(opts)

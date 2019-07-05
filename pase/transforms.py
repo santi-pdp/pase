@@ -1,8 +1,10 @@
 import torch
 import torch.nn.functional as F
+import tqdm
 import numpy as np
 import random
 import pysptk
+import parselmouth as pm
 import os
 import librosa
 import struct
@@ -53,6 +55,7 @@ class ZNorm(object):
         with open(stats, 'rb') as stats_f:
             self.stats = pickle.load(stats_f)
 
+    #@profile
     def __call__(self, pkg, ignore_keys=[]):
         pkg = format_package(pkg)
         for k, st in self.stats.items():
@@ -77,7 +80,7 @@ class PCompose(object):
         self.probs = probs
         self.report = report
 
-    #@profile
+    ##@profile
     def __call__(self, tensor):
         x = tensor
         reports = []
@@ -154,6 +157,7 @@ class SingleChunkWav(object):
         assert isinstance(x, torch.Tensor), type(x)
         #assert x.dim() == 1, x.size()
 
+    ##@profile
     def select_chunk(self, wav, ret_bounds=False):
         # select random index
         chksz = self.chunk_size
@@ -163,8 +167,9 @@ class SingleChunkWav(object):
             chk = F.pad(wav.view(1, 1, -1), (0, P), mode='reflect').view(-1)
             idx = 0
         else:
-            idxs = list(range(wav.size(0) - chksz))
-            idx = random.choice(idxs)
+            #idxs = list(range(wav.size(0) - chksz))
+            #idx = random.choice(idxs)
+            idx = np.random.randint(0, wav.size(0) - chksz)
             chk = wav[idx:idx + chksz]
         if ret_bounds:
             return chk, idx, idx + chksz
@@ -232,6 +237,7 @@ class LPS(object):
         self.win = win
         self.device = device
 
+    #@profile
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -267,6 +273,7 @@ class MFCC(object):
         self.order = order
         self.sr = 16000
 
+    #@profile
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -280,6 +287,7 @@ class MFCC(object):
             mfcc = mfcc[:, beg_i:end_i]
             pkg['mfcc'] = mfcc
         else:
+            #print(y.dtype)
             mfcc = librosa.feature.mfcc(y, sr=self.sr,
                                         n_mfcc=self.order,
                                         n_fft=self.n_fft,
@@ -303,6 +311,7 @@ class Prosody(object):
         self.f0_max = f0_max
         self.sr = sr
 
+    #@profile
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -317,11 +326,20 @@ class Prosody(object):
             pkg['prosody'] = proso
         else:
             # first compute logF0 and voiced/unvoiced flag
-            f0 = pysptk.swipe(wav.astype(np.float64),
-                              fs=self.sr, hopsize=self.hop,
-                              min=self.f0_min,
-                              max=self.f0_max,
-                              otype='f0')
+            #f0 = pysptk.rapt(wav.astype(np.float32),
+            #                 fs=self.sr, hopsize=self.hop,
+            #                 min=self.f0_min, max=self.f0_max,
+            #                 otype='f0')
+            #f0 = pysptk.swipe(wav.astype(np.float64),
+            #                  fs=self.sr, hopsize=self.hop,
+            #                  min=self.f0_min,
+            #                  max=self.f0_max,
+            #                  otype='f0')
+            sound = pm.Sound(wav.astype(np.float32), self.sr)
+            f0 = sound.to_pitch(self.hop / 16000).selected_array['frequency']
+            if len(f0) < max_frames:
+                pad = max_frames - len(f0)
+                f0 = np.concatenate((f0, f0[-pad:]), axis=0)
             lf0 = np.log(f0 + 1e-10)
             lf0, uv = interpolation(lf0, -1)
             lf0 = torch.tensor(lf0.astype(np.float32)).unsqueeze(0)[:, :max_frames]
@@ -329,7 +347,7 @@ class Prosody(object):
             if torch.sum(uv) == 0:
                 # if frame is completely unvoiced, make lf0 min val
                 lf0 = torch.ones(uv.size()) * np.log(self.f0_min)
-            assert lf0.min() > 0, lf0.data.numpy()
+            #assert lf0.min() > 0, lf0.data.numpy()
             # secondly obtain zcr
             zcr = librosa.feature.zero_crossing_rate(y=wav,
                                                      frame_length=self.win,
@@ -403,15 +421,17 @@ class Reverb(object):
             idx = random.choice(self.ir_idxs)
             return self.ir_files[idx]
 
+    ##@profile
     def __call__(self, pkg):
         pkg = format_package(pkg)
         wav = pkg['chunk']
         # sample an ir_file
         ir_file = self.sample_IR()
         IR, p_max = self.load_IR(ir_file, self.ir_fmt)
+        IR = IR.astype(np.float32)
         wav = wav.data.numpy().reshape(-1)
         Ex = np.dot(wav, wav)
-        wav = wav.astype(np.float64).reshape(-1)
+        wav = wav.astype(np.float32).reshape(-1)
         #wav = wav / np.max(np.abs(wav))
         #rev = signal.fftconvolve(wav, IR, mode='full')
         rev = signal.convolve(wav, IR, mode='full').reshape(-1)
@@ -636,7 +656,8 @@ class Resample(object):
 
 class SimpleAdditive(object):
     
-    def __init__(self, noises_dir, snr_levels=[0, 5, 10], report=False):
+    def __init__(self, noises_dir, snr_levels=[0, 5, 10], 
+                 report=False):
         self.noises_dir = noises_dir
         self.snr_levels = snr_levels
         self.report = report
@@ -671,31 +692,43 @@ class SimpleAdditive(object):
         if len(self.noises) == 1:
             return self.noises[0]
         else:
-            idx = random.choice(self.nidxs)
+            idx = np.random.randint(0, len(self.noises))
+            #idx = random.choice(self.nidxs)
             return self.noises[idx]
 
     def load_noise(self, filename):
         nwav, rate = sf.read(filename)
         return nwav
 
+    ##@profile
     def __call__(self, pkg):
         """ Add noise to clean wav """
         pkg = format_package(pkg)
         wav = pkg['chunk']
-        wav = wav.data.numpy()
-        noise_idx = np.random.choice(list(range(len(self.noises))), 1)
+        wav = wav.data.numpy().reshape(-1)
         if 'chunk_beg_i' in pkg:
             beg_i = pkg['chunk_beg_i']
             end_i = pkg['chunk_end_i']
         else:
             beg_i = 0
             end_i = wav.shape[0]
-        # TODO: not pre-loading noises from files?
-        #sel_noise = self.noises[np.asscalar(noise_idx)]
         sel_noise = self.load_noise(self.sample_noise())
-        noise = sel_noise[beg_i:end_i]
+        if len(sel_noise) < len(wav):
+            # pad noise
+            P = len(wav) - len(sel_noise)
+            sel_noise = F.pad(torch.tensor(sel_noise).view(1, 1, -1), 
+                              (0, P),
+                              mode='reflect').view(-1).data.numpy()
+        T = end_i - beg_i
+        # TODO: not pre-loading noises from files?
+        if len(sel_noise) > T:
+            n_beg_i = np.random.randint(0, len(sel_noise) - T)
+        else:
+            n_beg_i = 0
+        #assert len(wav) > 1, wav.shape
+        noise = sel_noise[n_beg_i:n_beg_i + T].astype(np.float32)
         # randomly sample the SNR level
-        snr = np.random.choice(self.snr_levels, 1)
+        snr = random.choice(self.snr_levels)
         #print('Applying SNR: {} dB'.format(snr[0]))
         if wav.ndim > 1:
             wav = wav.reshape((-1,))
@@ -987,21 +1020,34 @@ if __name__ == '__main__':
     trans = Compose([
         ToTensor(),
         MIChunkWav(16000),
-        SimpleAdditive(['../data/noise_non_stationary/wavs/',
-                        '../data/noise_non_stationary/wavs_bg/'], [0])
+        #SimpleAdditive(['../data/noise_non_stationary/wavs/',
+        #                '../data/noise_non_stationary/wavs_bg/'], [0])
         #Reverb(['/tmp/IR_223971.imp',
         #        '/tmp/IR_225824.imp',
         #        '/tmp/IR_225825.imp'], report=False, ir_fmt='txt')
         #LPS(),
         #MFCC(),
-        #Prosody()
+        Prosody(hop=160)
     ])
     print(trans)
     x = trans({'raw':wav, 'raw_rand':wav})
     print(list(x.keys()))
-    sf.write('/tmp/noisy.wav', x['chunk'], 16000)
+    #sf.write('/tmp/noisy.wav', x['chunk'], 16000)
     beg_i = x['chunk_beg_i']
     end_i = x['chunk_end_i']
-    sf.write('/tmp/clean.wav', wav[beg_i:end_i], 16000)
+    print(x['prosody'].shape)
+    lf0 = np.exp(x['prosody'][0, :].data.numpy())
+    uv = x['prosody'][1, :].data.numpy()
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    plt.subplot(3,1,1)
+    plt.plot(lf0)
+    plt.subplot(3,1,2)
+    plt.plot(uv)
+    plt.subplot(3,1,3)
+    plt.plot(x['chunk'].data.numpy())
+    plt.savefig('/tmp/lf0.png', dpi=200)
+    #sf.write('/tmp/clean.wav', wav[beg_i:end_i], 16000)
     #sf.write('/tmp/chunk_IR_223971.wav', x['cchunk'], 16000)
 
