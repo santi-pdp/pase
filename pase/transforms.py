@@ -88,7 +88,7 @@ class PCompose(object):
         x = tensor
         reports = []
         for ti, transf in enumerate(self.transforms):
-            if isinstance(list, self.probs):
+            if isinstance(self.probs, list):
                 prob = self.probs[ti]
             else:
                 prob = self.probs

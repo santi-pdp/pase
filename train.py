@@ -152,7 +152,7 @@ def train(opts):
     if opts.dtrans_cfg is not None:
         with open(opts.dtrans_cfg, 'r') as dtr_cfg:
             dtr = json.load(dtr_cfg)
-            dtr['trans_p'] = opts.distortion_p
+            #dtr['trans_p'] = opts.distortion_p
             dist_trans = config_distortions(**dtr)
             print(dist_trans)
     else:
