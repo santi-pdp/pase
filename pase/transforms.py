@@ -641,11 +641,18 @@ class SimpleAdditive(object):
         self.snr_levels = snr_levels
         self.report = report
         # read noises in dir
-        noises = glob.glob(os.path.join(noises_dir, '*.wav'))
-        if len(noises) == 0:
+        if isinstance(noises_dir, list):
+            self.noises = []
+            for ndir in noises_dir:
+                self.noises += glob.glob(os.path.join(ndir, '*.wav'))
+        else:
+            self.noises = glob.glob(os.path.join(noises_dir, '*.wav'))
+        self.nidxs = list(range(len(self.noises)))
+        if len(self.noises) == 0:
             raise ValueError('[!] No noises found in {}'.format(noises_dir))
         else:
-            print('[*] Found {} noise files'.format(len(noises)))
+            print('[*] Found {} noise files'.format(len(self.noises)))
+            """
             self.noises = []
             for n_i, npath in enumerate(noises, start=1):
                 #nwav = wavfile.read(npath)[1]
@@ -657,9 +664,19 @@ class SimpleAdditive(object):
                                  '{}'.format(n_i, len(noises),
                                              npath)
                 print(log_noise_load)
-                if n_i >= 5:
-                    break
+            """
         self.eps = 1e-22
+
+    def sample_noise(self):
+        if len(self.noises) == 1:
+            return self.noises[0]
+        else:
+            idx = random.choice(self.nidxs)
+            return self.noises[idx]
+
+    def load_noise(self, filename):
+        nwav, rate = sf.read(filename)
+        return nwav
 
     def __call__(self, pkg):
         """ Add noise to clean wav """
@@ -674,8 +691,9 @@ class SimpleAdditive(object):
             beg_i = 0
             end_i = wav.shape[0]
         # TODO: not pre-loading noises from files?
-        sel_noise = self.noises[np.asscalar(noise_idx)]
-        noise = sel_noise['data'][beg_i:end_i]
+        #sel_noise = self.noises[np.asscalar(noise_idx)]
+        sel_noise = self.load_noise(self.sample_noise())
+        noise = sel_noise[beg_i:end_i]
         # randomly sample the SNR level
         snr = np.random.choice(self.snr_levels, 1)
         #print('Applying SNR: {} dB'.format(snr[0]))
@@ -969,7 +987,8 @@ if __name__ == '__main__':
     trans = Compose([
         ToTensor(),
         MIChunkWav(16000),
-        SimpleAdditive('../data/noise_non_stationary/wavs/', [0])
+        SimpleAdditive(['../data/noise_non_stationary/wavs/',
+                        '../data/noise_non_stationary/wavs_bg/'], [0])
         #Reverb(['/tmp/IR_223971.imp',
         #        '/tmp/IR_225824.imp',
         #        '/tmp/IR_225825.imp'], report=False, ir_fmt='txt')
