@@ -657,6 +657,8 @@ class SimpleAdditive(object):
                                  '{}'.format(n_i, len(noises),
                                              npath)
                 print(log_noise_load)
+                if n_i >= 5:
+                    break
         self.eps = 1e-22
 
     def __call__(self, pkg):
@@ -665,30 +667,27 @@ class SimpleAdditive(object):
         wav = pkg['chunk']
         wav = wav.data.numpy()
         noise_idx = np.random.choice(list(range(len(self.noises))), 1)
-        # TODO: not pre-loading noises from files?
-        sel_noise = self.noises[np.asscalar(noise_idx)]
-        noise = sel_noise['data']
-        # randomly sample the SNR level
-        snr = np.random.choice(self.snr_levels, 1)
-        #print('Applying SNR: {} dB'.format(snr[0]))
-        if wav.ndim > 1:
-            wav = wav.reshape((-1,))
-        Ex = np.dot(wav, wav)
-        K = np.sqrt(Ex / (10 ** (snr / 10)))
         if 'chunk_beg_i' in pkg:
             beg_i = pkg['chunk_beg_i']
             end_i = pkg['chunk_end_i']
         else:
             beg_i = 0
             end_i = wav.shape[0]
-        scaled_noise = K * noise[beg_i:end_i]
+        # TODO: not pre-loading noises from files?
+        sel_noise = self.noises[np.asscalar(noise_idx)]
+        noise = sel_noise['data'][beg_i:end_i]
+        # randomly sample the SNR level
+        snr = np.random.choice(self.snr_levels, 1)
+        #print('Applying SNR: {} dB'.format(snr[0]))
+        if wav.ndim > 1:
+            wav = wav.reshape((-1,))
+        Ex = np.dot(wav, wav)
+        En = np.dot(noise, noise)
+        K = np.sqrt(Ex / ((10 ** (snr / 10.)) * En))
+        scaled_noise = K * noise
         noisy = wav + scaled_noise
-        # normalize to avoid clipping
-        if np.max(noisy) >= 1 or np.min(noisy) < -1:
-            small = 0.1
-            while np.max(noisy) >= 1 or np.min(noisy) < -1:
-                noisy = noisy / (1. + small)
-                small = small + 0.1
+        En = np.dot(noisy, noisy)
+        noisy = np.sqrt(Ex / En) * noisy
         x_ = torch.FloatTensor(noisy)
         if self.report:
             if 'report' not in pkg:
@@ -970,7 +969,7 @@ if __name__ == '__main__':
     trans = Compose([
         ToTensor(),
         MIChunkWav(16000),
-        SimpleAdditive('../data/noises/train')
+        SimpleAdditive('../data/noise_non_stationary/wavs/', [0])
         #Reverb(['/tmp/IR_223971.imp',
         #        '/tmp/IR_225824.imp',
         #        '/tmp/IR_225825.imp'], report=False, ir_fmt='txt')
@@ -982,6 +981,8 @@ if __name__ == '__main__':
     x = trans({'raw':wav, 'raw_rand':wav})
     print(list(x.keys()))
     sf.write('/tmp/noisy.wav', x['chunk'], 16000)
-    sf.write('/tmp/clean.wav', wav, 16000)
+    beg_i = x['chunk_beg_i']
+    end_i = x['chunk_end_i']
+    sf.write('/tmp/clean.wav', wav[beg_i:end_i], 16000)
     #sf.write('/tmp/chunk_IR_223971.wav', x['cchunk'], 16000)
 
