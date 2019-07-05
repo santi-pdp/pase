@@ -17,7 +17,7 @@ class Waveminionet(Model):
     def __init__(self, frontend=None, frontend_cfg=None,
                  minions_cfg=None, z_minion=True,
                  z_cfg=None, adv_loss='BCE',
-                 num_devices=1, pretrained_ckpt=None,
+                 num_devices=1, pretrained_ckpts=None,
                  name='Waveminionet'):
         super().__init__(name=name)
         # augmented wav processing net
@@ -79,8 +79,8 @@ class Waveminionet(Model):
                 }
             self.z_minion = minion_maker(z_cfg)
             self.z_minion.loss.register_DNet(self.z_minion)
-        if pretrained_ckpt is not None:
-            self.load_pretrained(pretrained_ckpt, load_last=True)
+        if pretrained_ckpts is not None:
+            self.load_checkpoints(pretrained_ckpts)
         if num_devices > 1:
             self.frontend_dp = nn.DataParallel(self.frontend)
             self.minions_dp = nn.ModuleList([nn.DataParallel(m) for m in \
@@ -107,6 +107,36 @@ class Waveminionet(Model):
             return x
         else:
             return torch.cat((x, skip), dim=1)
+
+    def load_checkpoints(self, load_path):
+        # create each savers first for all net components
+        savers = [Saver(self.frontend, load_path, 
+                        prefix='PASE-')]
+        if hasattr(self, 'z_minion'):
+            savers.append(Saver(self.z_minion, load_path,
+                           prefix='Zminion-'))
+        for mi, minion in enumerate(self.minions, start=1):
+            savers.append(Saver(minion, load_path, 
+                                prefix='M-{}-'.format(minion.name)))
+        # now load each ckpt found
+        giters = 0
+        for saver in savers:
+            # try loading all savers last state if not forbidden is active
+            try:
+                state = saver.read_latest_checkpoint()
+                giter_ = saver.load_ckpt_step(state)
+                print('giter_ found: ', giter_)
+                # assert all ckpts happened at last same step
+                if giters == 0:
+                    giters = giter_
+                else:
+                    assert giters == giter_, giter_
+                saver.load_pretrained_ckpt(os.path.join(load_path,
+                                                        'weights_' + state), 
+                                           load_last=True)
+            except TypeError:
+                break
+
 
     def train_(self, dloader, cfg, device='cpu', va_dloader=None):
         epoch = cfg['epoch']
