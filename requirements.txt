@@ -12,4 +12,4 @@ tensorboardX==1.6
 torch==1.0.1.post2
 torchvision==0.2.2.post3
 webrtcvad==2.0.10
-parselmouth==0.3.3
+praat-parselmouth==0.3.3
