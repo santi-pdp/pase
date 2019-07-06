@@ -757,8 +757,28 @@ class SimpleAdditiveShift(SimpleAdditive):
     
     def __init__(self, noises_dir, snr_levels=[5, 10], 
                  noise_transform=None,
+                 noises_list=None,
                  report=False):
-        super().__init__(noises_dir, snr_levels, report)
+        if noises_list is None:
+            super().__init__(noises_dir, snr_levels, report)
+        else:
+            if isinstance(noises_dir, list):
+                assert len(noises_dir) == 1, len(noises_dir)
+                noises_dir = noises_dir[0]
+            with open(noises_list, 'r') as nf:
+                self.noises = []
+                for nel in nf:
+                    nel = nel.rstrip()
+                    self.noises.append(os.path.join(noises_dir, nel))
+        self.noises_dir = noises_dir
+        self.noises_list = noises_list
+        self.snr_levels = snr_levels
+        self.report = report
+        self.nidxs = list(range(len(self.noises)))
+        if len(self.noises) == 0:
+            raise ValueError('[!] No noises found in {}'.format(noises_dir))
+        else:
+            print('[*] Found {} noise files'.format(len(self.noises)))
         # additional out_transform to include potential distortions
         self.noise_transform = noise_transform
 
@@ -808,9 +828,11 @@ class SimpleAdditiveShift(SimpleAdditive):
                 self.noises_dir
             )
         else:
-            attrs = '(noises_dir={}, noise_transform={})'.format(
-                self.noises_dir,
-                self.noise_transform.__repr__()
+            attrs = '(noises_dir={}, noises_list={}, ' \
+                    'noise_transform={})'.format(
+                                self.noises_dir,
+                                self.noises_list,
+                                self.noise_transform.__repr__()
             )
         return self.__class__.__name__ + attrs
 

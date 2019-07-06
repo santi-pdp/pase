@@ -67,6 +67,7 @@ def config_distortions(reverb_irfiles=[],
                        reverb_data_root='.',
                        reverb_p=0.5,
                        overlap_dir=None,
+                       overlap_list=None,
                        overlap_snrs=[0, 5, 10],
                        overlap_reverb=False,
                        overlap_p=0.5,
@@ -94,6 +95,7 @@ def config_distortions(reverb_irfiles=[],
     if overlap_dir is not None:
         noise_trans = reverb if overlap_reverb else None
         trans.append(SimpleAdditiveShift(overlap_dir, overlap_snrs,
+                                         noises_list=overlap_list,
                                          noise_transform=noise_trans))
         probs.append(overlap_p)
     if noises_dir is not None:
