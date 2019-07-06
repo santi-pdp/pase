@@ -106,8 +106,12 @@ class PCompose(object):
     def __repr__(self):
         format_string = self.__class__.__name__ + '('
         for t in self.transforms:
+            if isinstance(self, self.probs, list):
+                prob = self.probs[t]
+            else:
+                prob = self.probs
             format_string += '\n'
-            format_string += '    {0}'.format(t)
+            format_string += '    p={:.1}>>{0}'.format(prob, t)
         format_string += '\n)'
         return format_string
 
@@ -613,7 +617,7 @@ class Clipping(object):
     def __call__(self, pkg):
         pkg = format_package(pkg)
         wav = pkg['chunk']
-        wav = wav.data.numpy()
+        wav = wav.data.numpy().astype(np.float32)
         #cf = np.random.choice(self.clip_factors, 1)
         cf = random.choice(self.clip_factors)
         clip = np.maximum(wav, cf * np.min(wav))
@@ -1149,13 +1153,14 @@ if __name__ == '__main__':
     trans = Compose([
         ToTensor(),
         MIChunkWav(32000),
-        Reverb(['/tmp/IR_223971.imp',
-                '/tmp/IR_225824.imp',
-                '/tmp/IR_225825.imp'], report=False, ir_fmt='txt'),
-        SimpleAdditiveShift('../data/LibriSpeech_50h/wav_sel_train',
-                            noise_transform=Reverb(['/tmp/IR_223971.imp',
-                                                    '/tmp/IR_225824.imp'],
-                                                   ir_fmt='txt'))
+        Clipping()
+        #Reverb(['/tmp/IR_223971.imp',
+        #        '/tmp/IR_225824.imp',
+        #        '/tmp/IR_225825.imp'], report=False, ir_fmt='txt'),
+        #SimpleAdditiveShift('../data/LibriSpeech_50h/wav_sel_train',
+        #                    noise_transform=Reverb(['/tmp/IR_223971.imp',
+        #                                            '/tmp/IR_225824.imp'],
+        #                                           ir_fmt='txt'))
         #SimpleAdditive(['../data/noise_non_stationary/wavs/',
         #                '../data/noise_non_stationary/wavs_bg/'], [0])
         #LPS(),
