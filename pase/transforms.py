@@ -493,7 +493,71 @@ class Scale(object):
 
         return tensor / self.factor
 
-                
+class SimpleChopper(object):
+    """ Do not use VAD to specify speech regions, just
+        cut randomly some number of regions randomly 
+    """
+    def __init__(self, chop_factors=[(0.05, 0.025), (0.1, 0.05)],
+                 max_chops=5, report=False):
+        self.chop_factors = chop_factors
+        self.max_chops = max_chops
+        self.report = report
+
+    def chop_wav(self, wav):
+        chop_factors = self.chop_factors
+        # get num of chops to make
+        chops = np.random.randint(1, self.max_chops + 1)
+        # build random indexes to randomly pick regions, not ordered
+        if chops == 1:
+            chop_idxs = [0]
+        else:
+            chop_idxs = np.random.choice(list(range(chops)), chops, 
+                                         replace=False)
+        chopped_wav = np.copy(wav)
+        # make a chop per chosen region
+        for chop_i in chop_idxs:
+            region = speech_regions[chop_i]
+            # decompose the region
+            reg_beg, reg_center, reg_dur = region
+            # pick random chop_factor
+            chop_factor_idx = np.random.choice(range(len(chop_factors)), 1)[0]
+            chop_factor = chop_factors[chop_factor_idx]
+            # compute duration from: std * N(0, 1) + mean
+            mean, std = chop_factor
+            chop_dur = mean + np.random.randn(1) * std
+            # convert dur to samples
+            chop_s_dur = int(chop_dur * srate)
+            chop_beg = max(int(reg_center - (chop_s_dur / 2)), reg_beg)
+            chop_end = min(int(reg_center + (chop_s_dur / 2)), reg_beg +
+                           reg_dur)
+            #print('chop_beg: ', chop_beg)
+            #print('chop_end: ', chop_end)
+            # chop the selected region with computed dur
+            chopped_wav[chop_beg:chop_end] = 0
+        return chopped_wav
+
+    #@profile
+    def __call__(self, pkg, srate=16000):
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        # unorm to 16-bit scale for VAD in chopper
+        wav = wav.data.numpy().astype(np.float32)
+        # get speech regions for proper chopping
+        chopped = self.chop_wav(wav)
+        chopped = self.normalizer(torch.FloatTensor(chopped))
+        if self.report:
+            if 'report' not in pkg:
+                pkg['report'] = {}
+            pkg['report']['speech_regions'] = speech_regions
+        pkg['chunk'] = chopped
+        return pkg
+
+    def __repr__(self):
+        attrs = '(chop_factors={}, max_chops={})'.format(
+            self.chop_factors,
+            self.max_chops
+        )
+
 class Chopper(object):
     def __init__(self, chop_factors=[(0.05, 0.025), (0.1, 0.05)],
                  max_chops=2, report=False):
@@ -508,6 +572,7 @@ class Chopper(object):
         self.normalizer = Scale((2 ** 15) - 1)
         self.report = report
 
+    #@profile
     def vad_wav(self, wav, srate):
         """ Detect the voice activity in the 16-bit mono PCM wav and return
             a list of tuples: (speech_region_i_beg_sample, center_sample, 
@@ -541,6 +606,7 @@ class Chopper(object):
                 curr_region_counter = 0
         return regions
 
+    #@profile
     def chop_wav(self, wav, srate, speech_regions):
         if len(speech_regions) == 0:
             #print('Skipping no speech regions')
@@ -580,6 +646,7 @@ class Chopper(object):
             chopped_wav[chop_beg:chop_end] = 0
         return chopped_wav
 
+    #@profile
     def __call__(self, pkg, srate=16000):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -708,11 +775,11 @@ class SimpleAdditive(object):
         K = np.sqrt(Ex / ((10 ** (snr / 10.)) * En))
         return K, Ex, En
 
-    def norm_energy(self, osignal, ienergy):
+    def norm_energy(self, osignal, ienergy, eps=1e-10):
         oenergy = np.dot(osignal, osignal)
-        return np.sqrt(oenergy / ienergy) * osignal
+        return np.sqrt(ienergy / (oenergy + eps)) * osignal
 
-    ##@profile
+    #@profile
     def __call__(self, pkg):
         """ Add noise to clean wav """
         pkg = format_package(pkg)
@@ -1154,7 +1221,7 @@ if __name__ == '__main__':
     trans = Compose([
         ToTensor(),
         MIChunkWav(32000),
-        Clipping()
+        #Clipping()
         #Reverb(['/tmp/IR_223971.imp',
         #        '/tmp/IR_225824.imp',
         #        '/tmp/IR_225825.imp'], report=False, ir_fmt='txt'),
@@ -1162,8 +1229,8 @@ if __name__ == '__main__':
         #                    noise_transform=Reverb(['/tmp/IR_223971.imp',
         #                                            '/tmp/IR_225824.imp'],
         #                                           ir_fmt='txt'))
-        #SimpleAdditive(['../data/noise_non_stationary/wavs/',
-        #                '../data/noise_non_stationary/wavs_bg/'], [0])
+        SimpleAdditive(['../data/noise_non_stationary/wavs/',
+                        '../data/noise_non_stationary/wavs_bg/'], [0])
         #LPS(),
         #MFCC(),
         #Prosody(hop=160)
