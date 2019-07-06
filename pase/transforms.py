@@ -504,6 +504,8 @@ class SimpleChopper(object):
         self.report = report
 
     def chop_wav(self, wav):
+        # TODO: finish this 
+        raise NotImplementedError('Need to be finished')
         chop_factors = self.chop_factors
         # get num of chops to make
         chops = np.random.randint(1, self.max_chops + 1)
@@ -514,27 +516,7 @@ class SimpleChopper(object):
             chop_idxs = np.random.choice(list(range(chops)), chops, 
                                          replace=False)
         chopped_wav = np.copy(wav)
-        # make a chop per chosen region
-        for chop_i in chop_idxs:
-            region = speech_regions[chop_i]
-            # decompose the region
-            reg_beg, reg_center, reg_dur = region
-            # pick random chop_factor
-            chop_factor_idx = np.random.choice(range(len(chop_factors)), 1)[0]
-            chop_factor = chop_factors[chop_factor_idx]
-            # compute duration from: std * N(0, 1) + mean
-            mean, std = chop_factor
-            chop_dur = mean + np.random.randn(1) * std
-            # convert dur to samples
-            chop_s_dur = int(chop_dur * srate)
-            chop_beg = max(int(reg_center - (chop_s_dur / 2)), reg_beg)
-            chop_end = min(int(reg_center + (chop_s_dur / 2)), reg_beg +
-                           reg_dur)
-            #print('chop_beg: ', chop_beg)
-            #print('chop_end: ', chop_end)
-            # chop the selected region with computed dur
-            chopped_wav[chop_beg:chop_end] = 0
-        return chopped_wav
+        return None
 
     #@profile
     def __call__(self, pkg, srate=16000):
@@ -1229,8 +1211,9 @@ if __name__ == '__main__':
         #                    noise_transform=Reverb(['/tmp/IR_223971.imp',
         #                                            '/tmp/IR_225824.imp'],
         #                                           ir_fmt='txt'))
-        SimpleAdditive(['../data/noise_non_stationary/wavs/',
-                        '../data/noise_non_stationary/wavs_bg/'], [0])
+        #SimpleAdditive(['../data/noise_non_stationary/wavs/',
+        #                '../data/noise_non_stationary/wavs_bg/'], [0])
+        Chopper()
         #LPS(),
         #MFCC(),
         #Prosody(hop=160)
