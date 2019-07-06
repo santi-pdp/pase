@@ -139,8 +139,9 @@ def train(opts):
     # ---------------------
     # Build Model
     frontend = wf_builder(opts.fe_cfg)
-    minions_cfg = pase_parser(opts.net_cfg, #batch_acum=opts.batch_acum,
-                              device=device)
+    minions_cfg = pase_parser(opts.net_cfg, batch_acum=opts.batch_acum,
+                              device=device,
+                              frontend=frontend)
     model = Waveminionet(minions_cfg=minions_cfg,
                          adv_loss=opts.adv_loss,
                          num_devices=num_devices,
@@ -240,6 +241,7 @@ if __name__ == '__main__':
     parser.add_argument('--epoch', type=int, default=1000)
     parser.add_argument('--nfft', type=int, default=2048)
     parser.add_argument('--batch_size', type=int, default=100)
+    parser.add_argument('--batch_acum', type=int, default=1)
     parser.add_argument('--hidden_size', type=int, default=256)
     parser.add_argument('--hidden_layers', type=int, default=2)
     parser.add_argument('--fe_opt', type=str, default='Adam')
