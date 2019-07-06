@@ -105,9 +105,9 @@ class PCompose(object):
 
     def __repr__(self):
         format_string = self.__class__.__name__ + '('
-        for t in self.transforms:
+        for ti, t in enumerate(self.transforms):
             if isinstance(self.probs, list):
-                prob = self.probs[t]
+                prob = self.probs[ti]
             else:
                 prob = self.probs
             format_string += '\n'
