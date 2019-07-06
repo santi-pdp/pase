@@ -1,3 +1,4 @@
+import librosa
 import torch
 from pase.models.core import Waveminionet
 from pase.models.modules import VQEMA
