@@ -775,7 +775,7 @@ class SimpleAdditive(object):
         K = np.sqrt(Ex / ((10 ** (snr / 10.)) * En))
         return K, Ex, En
 
-    def norm_energy(self, osignal, ienergy, eps=1e-10):
+    def norm_energy(self, osignal, ienergy, eps=1e-14):
         oenergy = np.dot(osignal, osignal)
         return np.sqrt(ienergy / (oenergy + eps)) * osignal
 
