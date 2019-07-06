@@ -111,7 +111,8 @@ class PCompose(object):
             else:
                 prob = self.probs
             format_string += '\n'
-            format_string += '    p={:.1}>>{0}'.format(prob, t)
+            format_string += '    {0}'.format(t)
+            format_string += ' >> p={}'.format(prob)
         format_string += '\n)'
         return format_string
 
