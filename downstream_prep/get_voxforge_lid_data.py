@@ -15,7 +15,7 @@ import requests
 
 def make_args():
 	parser = argparse.ArgumentParser(description="VoxForge dataset downloader.")
-	parser.add_argument('--per-user', default=3, type=int, help="Limit the number of recordings per user")
+	parser.add_argument('--per-user', default=1, type=int, help="Limit the number of recordings per user")
 	parser.add_argument('--per-user-archives', default=1, type=int, help="Limit the number of archives per user")
 	parser.add_argument('-d', '--output-dir', default='voxforge_samples', help="Directory to output wave files to")
 	parser.add_argument('-l', '--output-log', default='voxforge_samples.csv', help="Metadata about downloaded files")
@@ -31,6 +31,10 @@ if __name__ == '__main__':
 		'German': 'de',
 		'English': 'SpeechCorpus',
 		'Spanish': 'es',
+		'Persian': 'fa',
+		'Russian': 'ru',
+		'Turkish': 'tr',
+		'Chinese': 'zh',
 	}
 
 	args = make_args()
