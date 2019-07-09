@@ -471,7 +471,7 @@ class Reverb(object):
         return self.__class__.__name__ + attrs
 
 
-class band_drop(object):
+class BandDrop(object):
 
     def __init__(self, filt_files, report=False, filt_fmt='npy',
                  data_root='.'):
@@ -538,10 +538,10 @@ class band_drop(object):
 
         sig_filt=sig_filt[:wav.shape[0]]
 
-        sig_filt=sig_filt/np.max(np.abs(sig_filt))
+        #sig_filt=sig_filt/np.max(np.abs(sig_filt))
 
         Efilt = np.dot(sig_filt, sig_filt)
-        Ex = np.dot(wav, wav)
+        #Ex = np.dot(wav, wav)
         
         Eratio = np.sqrt(Ex / Efilt)
 
