@@ -11,7 +11,8 @@ from pase.models.discriminator import *
 import torch.optim as optim
 
 
-def pase_parser(cfg_fname, batch_acum=None, device='cpu', do_losses=True):
+def pase_parser(cfg_fname, batch_acum=1, device='cpu', do_losses=True,
+                frontend=None):
     with open(cfg_fname, 'r') as cfg_f:
         cfg_all = json.load(cfg_f)
         if do_losses:
@@ -26,15 +27,15 @@ def pase_parser(cfg_fname, batch_acum=None, device='cpu', do_losses=True):
                         dnet_cfg = {}
                         if 'DNet_cfg' in cfg_all[i]:
                             dnet_cfg = cfg_all[i].pop('DNet_cfg')
+                        dnet_cfg['frontend'] = frontend
                         # make DNet
-                        DNet =  WaveDiscriminator(**dnet_cfg)
+                        DNet =  RNNDiscriminator(**dnet_cfg)
                         if 'Dopt_cfg' in cfg_all[i]:
                             Dopt_cfg = cfg_all[i].pop('Dopt_cfg')
-                            Dopt = optim.Adam(DNet.parameters(),
-                                              Dopt_cfg['lr'], betas=(0.5, 0.99))
+                            Dopt = optim.RMSprop(DNet.parameters(),
+                                                 Dopt_cfg['lr'])
                         else:
-                            Dopt = optim.Adam(DNet.parameters(), 0.0001,
-                                              betas=(0.5,0.99))
+                            Dopt = optim.RMSprop(DNet.parameters(), 0.0005)
                     Dloss = 'L2' if loss_name == 'LSGAN' else 'BCE'
                     cfg_all[i]['loss'] = WaveAdversarialLoss(DNet, Dopt,
                                                              loss=Dloss,

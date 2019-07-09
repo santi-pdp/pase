@@ -1,3 +1,5 @@
+import librosa
+import torch
 from pase.models.core import Waveminionet
 from pase.models.modules import VQEMA
 from pase.models.frontend import wf_builder
@@ -8,7 +10,6 @@ from pase.transforms import *
 from pase.losses import *
 from pase.utils import pase_parser
 from torch.utils.data import DataLoader
-import torch
 import pickle
 import torch.nn as nn
 import numpy as np
@@ -16,6 +17,7 @@ import argparse
 import os
 import json
 import random
+torch.backends.cudnn.benchmark = True
 
 
 def make_transforms(opts, minions_cfg):
@@ -46,7 +48,7 @@ def make_transforms(opts, minions_cfg):
         elif name == 'prosody':
             znorm = True
             trans.append(Prosody(hop=160, win=400))
-        elif name == 'chunk':
+        elif name == 'chunk' or name == 'cchunk':
             znorm = True
         else:
             raise TypeError('Unrecognized module \"{}\"'
@@ -64,24 +66,65 @@ def make_transforms(opts, minions_cfg):
 def config_distortions(reverb_irfiles=[], 
                        reverb_fmt='imp',
                        reverb_data_root='.',
+                       reverb_p=0.5,
+                       overlap_dir=None,
+                       overlap_list=None,
+                       overlap_snrs=[0, 5, 10],
+                       overlap_reverb=False,
+                       overlap_p=0.5,
+                       noises_dir=None,
+                       noises_snrs=[0, 5, 10],
+                       noises_p=0.5,
+                       speed_range=None,
+                       speed_p=0.5,
                        resample_factors=[],
+                       resample_p=0.5,
+                       bandrop_irfiles=[],
+                       bandrop_fmt='npy',
+                       bandrop_data_root='.',
+                       bandrop_p=0.5,
                        clip_factors=[], 
-                       chop_factors=[(0.05, 0.025), (0.1, 0.05)], 
+                       clip_p=0.5,
+                       chop_factors=[],
+                       #chop_factors=[(0.05, 0.025), (0.1, 0.05)], 
                        max_chops=5,
-                       trans_p=0.4):
+                       chop_p=0.5):
     trans = []
+    probs = []
+    # this can be shared in two different stages of the pipeline
+    reverb = Reverb(reverb_irfiles, ir_fmt=reverb_fmt,
+                    data_root=reverb_data_root)
     if len(reverb_irfiles) > 0:
-        trans.append(Reverb(reverb_irfiles, ir_fmt=reverb_fmt,
-                            data_root=reverb_data_root))
+        trans.append(reverb)
+        probs.append(reverb_p)
+    if overlap_dir is not None:
+        noise_trans = reverb if overlap_reverb else None
+        trans.append(SimpleAdditiveShift(overlap_dir, overlap_snrs,
+                                         noises_list=overlap_list,
+                                         noise_transform=noise_trans))
+        probs.append(overlap_p)
+    if noises_dir is not None:
+        trans.append(SimpleAdditive(noises_dir, noises_snrs))
+        probs.append(noises_p)
+    if speed_range is not None:
+        # speed changer
+        trans.append(SpeedChange(speed_range))
+        probs.append(speed_p)
     if len(resample_factors) > 0:
         trans.append(Resample(resample_factors))
+        probs.append(resample_p)
     if len(clip_factors) > 0:
         trans.append(Clipping(clip_factors))
+        probs.append(clip_p)
     if len(chop_factors) > 0:
         trans.append(Chopper(max_chops=max_chops,
                              chop_factors=chop_factors))
+        probs.append(chop_p)
+    if len(bandrop_irfiles) > 0:
+        trans.append(BandDrop(bandrop_irfiles,filt_fmt=bandrop_fmt, data_root=bandrop_data_root))
+        probs.append(bandrop_p)
     if len(trans) > 0:
-        return PCompose(trans, probs=trans_p)
+        return PCompose(trans, probs=probs)
     else:
         return None
 
@@ -104,12 +147,12 @@ def train(opts):
     # ---------------------
     # Build Model
     frontend = wf_builder(opts.fe_cfg)
-    minions_cfg = pase_parser(opts.net_cfg, #batch_acum=opts.batch_acum,
-                              device=device)
+    minions_cfg = pase_parser(opts.net_cfg, batch_acum=opts.batch_acum,
+                              device=device,
+                              frontend=frontend)
     model = Waveminionet(minions_cfg=minions_cfg,
                          adv_loss=opts.adv_loss,
                          num_devices=num_devices,
-                         pretrained_ckpt=opts.pretrained_ckpt,
                          frontend=frontend)
     
     print(model)
@@ -120,8 +163,9 @@ def train(opts):
     if opts.dtrans_cfg is not None:
         with open(opts.dtrans_cfg, 'r') as dtr_cfg:
             dtr = json.load(dtr_cfg)
-            dtr['trans_p'] = opts.distortion_p
+            #dtr['trans_p'] = opts.distortion_p
             dist_trans = config_distortions(**dtr)
+            print(dist_trans)
     else:
         dist_trans = None
     # Build Dataset(s) and DataLoader(s)
@@ -205,6 +249,7 @@ if __name__ == '__main__':
     parser.add_argument('--epoch', type=int, default=1000)
     parser.add_argument('--nfft', type=int, default=2048)
     parser.add_argument('--batch_size', type=int, default=100)
+    parser.add_argument('--batch_acum', type=int, default=1)
     parser.add_argument('--hidden_size', type=int, default=256)
     parser.add_argument('--hidden_layers', type=int, default=2)
     parser.add_argument('--fe_opt', type=str, default='Adam')
