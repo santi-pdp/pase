@@ -484,7 +484,7 @@ class BandDrop(object):
         self.data_root = data_root
 
 
-    def load_filt(self, filt_file, filt_fmt):
+    def load_filter(self, filt_file, filt_fmt):
         
         filt_file = os.path.join(self.data_root, filt_file)
 
