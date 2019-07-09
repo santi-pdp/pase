@@ -83,6 +83,10 @@ def config_distortions(reverb_irfiles=[],
                        bandrop_fmt='npy',
                        bandrop_data_root='.',
                        bandrop_p=0.5,
+                       downsample_irfiles=[],
+                       downsample_fmt='npy',
+                       downsample_data_root='.',
+                       downsample_p=0.5,
                        clip_factors=[], 
                        clip_p=0.5,
                        chop_factors=[],
@@ -123,6 +127,12 @@ def config_distortions(reverb_irfiles=[],
     if len(bandrop_irfiles) > 0:
         trans.append(BandDrop(bandrop_irfiles,filt_fmt=bandrop_fmt, data_root=bandrop_data_root))
         probs.append(bandrop_p)
+
+    if len(downsample_irfiles) > 0:
+        trans.append(Downsample(downsample_irfiles,filt_fmt=downsample_fmt, data_root=downsample_data_root))
+        probs.append(downsample_p)
+
+
     if len(trans) > 0:
         return PCompose(trans, probs=probs)
     else:
