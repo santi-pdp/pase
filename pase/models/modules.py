@@ -6,7 +6,10 @@ from torch.nn.utils.spectral_norm import spectral_norm
 import numpy as np
 import json
 import os
-
+try:
+    from torchqrnn import QRNN
+except ImportError:
+    QRNN = None
 
 def build_norm_layer(norm_type, param=None, num_feats=None):
     if norm_type == 'bnorm':
@@ -328,6 +331,7 @@ class GDeconv1DBlock(NeuralBlock):
     def __init__(self, ninp, fmaps,
                  kwidth, stride=4, norm_type=None,
                  act=None,
+                 bias=True,
                  name='GDeconv1DBlock'):
         super().__init__(name=name)
         if act is not None and act == 'glu':
@@ -338,9 +342,10 @@ class GDeconv1DBlock(NeuralBlock):
         self.deconv = nn.ConvTranspose1d(ninp, Wfmaps,
                                          kwidth, 
                                          stride=stride,
-                                         padding=pad)
+                                         padding=pad, 
+                                         bias=bias)
         self.norm = build_norm_layer(norm_type, self.deconv,
-                                     fmaps)
+                                     Wfmaps)
         self.act = build_activation(act, fmaps)
         self.kwidth = kwidth
         self.stride = stride
@@ -349,9 +354,8 @@ class GDeconv1DBlock(NeuralBlock):
         h = self.deconv(x)
         if self.kwidth % 2 != 0 and self.stride < self.kwidth:
             h = h[:, :, :-1]
-        h = forward_activation(self.act, h)
         h = forward_norm(h, self.norm)
-        #h = self.act(h)
+        h = forward_activation(self.act, h)
         return h
 
 class ResBasicBlock1D(NeuralBlock):
@@ -895,6 +899,22 @@ class VQEMA(nn.Module):
         # perplexity
         PP = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
         return loss, Q.permute(0, 2, 1).contiguous(), PP, enc
+
+def build_rnn_block(in_size, rnn_size, rnn_layers, rnn_type,
+                    bidirectional=True,
+                    dropout=0):
+    if (rnn_type.lower() == 'qrnn') and QRNN is not None:
+        if bidirectional:
+            print('WARNING: QRNN ignores bidirectional flag')
+            rnn_size = 2 * rnn_size
+        rnn = QRNN(in_size, rnn_size, rnn_layers, dropout=dropout, window=2)
+    elif rnn_type.lower() == 'lstm' or rnn_type.lower() == 'gru':
+        rnn = getattr(nn, rnn_type.upper())(in_size, rnn_size, rnn_layers,
+                                            dropout=dropout,
+                                            bidirectional=bidirectional)
+    else:
+        raise TypeError('Unrecognized rnn type: ', rnn_type)
+    return rnn
 
 
 if __name__ == '__main__':
