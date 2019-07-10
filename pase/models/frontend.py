@@ -36,6 +36,9 @@ class WaveFe(Model):
                  emb_dim=256,
                  activation=None,
                  rnn_pool=False,
+                 rnn_layers=1,
+                 rnn_dropout=0,
+                 rnn_type='qrnn',
                  vq_K=None,
                  vq_beta=0.25,
                  vq_gamma=0.99,
@@ -83,9 +86,12 @@ class WaveFe(Model):
             ninp = fmap
         # last projection
         if rnn_pool:
-            self.rnn = nn.GRU(fmap, emb_dim // 2, bidirectional=True, 
-                              batch_first=True)
-            self.W = nn.Linear(emb_dim, emb_dim)
+            self.rnn = build_rnn_block(fmap, emb_dim // 2,
+                                       rnn_layers=rnn_layers,
+                                       rnn_type=rnn_type,
+                                       bidirectional=True,
+                                       dropout=rnn_dropout)
+            self.W = nn.Conv1d(emb_dim, emb_dim, 1)
         else:
             self.W = nn.Conv1d(fmap, emb_dim, 1)
         self.emb_dim = emb_dim
@@ -127,11 +133,12 @@ class WaveFe(Model):
                     h_proj = proj(h)
                     dskips = self.fuse_skip(h_proj, dskips)
         if self.rnn_pool:
-            ht, _ = self.rnn(h.transpose(1, 2))
-            y = self.W(ht) 
-            y = y.transpose(1, 2)
-        else:
-            y = self.W(h)
+            h = h.transpose(1, 2).transpose(0, 1)
+            h, _ = self.rnn(h)
+            h = h.transpose(0, 1).transpose(1, 2)
+            #y = self.W(h) 
+        #else:
+        y = self.W(h)
         if denseskips:
             # sum all dskips contributions in the embedding
             y = self.fuse_skip(y, dskips)
