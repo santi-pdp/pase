@@ -104,8 +104,8 @@ class DecoderMinion(Model):
             x = x.detach()
         h = x
         if self.shuffle_p > 0:
-            shuffle = random.random() <= self.shuffle_p
-            if shuffle:
+            do_shuffle = random.random() <= self.shuffle_p
+            if do_shuffle:
                 h = torch.chunk(h, h.size(2), dim=2)
                 shuffle(h)
                 h = torch.cat(h, dim=2)
@@ -162,8 +162,8 @@ class MLPMinion(Model):
     def forward(self, x):
         h = x
         if self.shuffle_p > 0:
-            shuffle = random.random() <= self.shuffle_p
-            if shuffle:
+            do_shuffle = random.random() <= self.shuffle_p
+            if do_shuffle:
                 h = torch.chunk(h, h.size(2), dim=2)
                 shuffle(h)
                 h = torch.cat(h, dim=2)
@@ -212,8 +212,8 @@ class GRUMinion(Model):
     def forward(self, x):
         h = x
         if self.shuffle_p > 0:
-            shuffle = random.random() <= self.shuffle_p
-            if shuffle:
+            do_shuffle = random.random() <= self.shuffle_p
+            if do_shuffle:
                 h = torch.chunk(h, h.size(2), dim=2)
                 shuffle(h)
                 h = torch.cat(h, dim=2)
