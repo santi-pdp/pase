@@ -22,6 +22,10 @@ import torch.optim as optim
 from pase.models.frontend import wf_builder
 # from waveminionet.models.frontend import wf_builder #old models
 import soundfile as sf
+import pase.models as models
+import models.WorkerScheduler
+from models.WorkerScheduler.encoder import encoder
+
 
 def get_freer_gpu(trials=10):
 	for j in range(trials):
@@ -90,8 +94,9 @@ device=get_freer_gpu()
 text_file=open(output_file, "w")
 
 # Loading pase
-pase = wf_builder(pase_cfg)
+pase= encoder(wf_builder(pase_cfg))
 pase.load_pretrained(pase_model, load_last=True, verbose=False)
+pase = pase.frontend
 pase.to(device)
 pase.eval()
 

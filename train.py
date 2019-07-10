@@ -1,15 +1,13 @@
-import librosa
-import torch
-from pase.models.core import Waveminionet
+# from pase.models.core import Waveminionet
 from pase.models.modules import VQEMA
-from pase.models.frontend import wf_builder
-import pase
-from pase.dataset import PairWavDataset, LibriSpeechSegTupleWavDataset, DictCollater
+from pase.dataset import PairWavDataset, DictCollater
+from pase.models.WorkerScheduler.trainer import trainer
 #from torchvision.transforms import Compose
 from pase.transforms import *
 from pase.losses import *
 from pase.utils import pase_parser
 from torch.utils.data import DataLoader
+import torch
 import pickle
 import torch.nn as nn
 import numpy as np
@@ -17,8 +15,11 @@ import argparse
 import os
 import json
 import random
-torch.backends.cudnn.benchmark = True
+# torch.backends.cudnn.benchmark = True
 
+
+def str2bool(v):
+  return v.lower() in ("yes", "true", "t", "1")
 
 def make_transforms(opts, minions_cfg):
     trans = [ToTensor()]
@@ -48,7 +49,7 @@ def make_transforms(opts, minions_cfg):
         elif name == 'prosody':
             znorm = True
             trans.append(Prosody(hop=160, win=400))
-        elif name == 'chunk' or name == 'cchunk':
+        elif name == 'chunk':
             znorm = True
         else:
             raise TypeError('Unrecognized module \"{}\"'
@@ -139,37 +140,22 @@ def train(opts):
 
     # ---------------------
     # Build Model
-    frontend = wf_builder(opts.fe_cfg)
-    minions_cfg = pase_parser(opts.net_cfg, batch_acum=opts.batch_acum,
-                              device=device,
-                              frontend=frontend)
-    model = Waveminionet(minions_cfg=minions_cfg,
-                         adv_loss=opts.adv_loss,
-                         num_devices=num_devices,
-                         frontend=frontend)
-    
-    print(model)
-    print('Frontend params: ', model.frontend.describe_params())
-    model.to(device)
+    if opts.fe_cfg is not None:
+        with open(opts.fe_cfg, 'r') as fe_cfg_f:
+            print(fe_cfg_f)
+            fe_cfg = json.load(fe_cfg_f)
+            print(fe_cfg)
+    else:
+        fe_cfg = None
+    minions_cfg = pase_parser(opts.net_cfg)
+    make_transforms(opts, minions_cfg)
+
     trans = make_transforms(opts, minions_cfg)
     print(trans)
-    if opts.dtrans_cfg is not None:
-        with open(opts.dtrans_cfg, 'r') as dtr_cfg:
-            dtr = json.load(dtr_cfg)
-            #dtr['trans_p'] = opts.distortion_p
-            dist_trans = config_distortions(**dtr)
-            print(dist_trans)
-    else:
-        dist_trans = None
     # Build Dataset(s) and DataLoader(s)
-    dataset = getattr(pase.dataset, opts.dataset)
-    dset = dataset(opts.data_root, opts.data_cfg, 'train',
-                   transform=trans,
-                   noise_folder=opts.noise_folder,
-                   whisper_folder=opts.whisper_folder,
-                   distortion_probability=opts.distortion_p,
-                   distortion_transforms=dist_trans,
-                   preload_wav=opts.preload_wav)
+    dset = PairWavDataset(opts.data_root, opts.data_cfg, 'train',
+                          transform=trans,
+                          preload_wav=opts.preload_wav)
     dloader = DataLoader(dset, batch_size=opts.batch_size,
                          shuffle=True, collate_fn=DictCollater(),
                          num_workers=opts.num_workers,
@@ -180,13 +166,9 @@ def train(opts):
     bpe = (dset.total_wav_dur // opts.chunk_size) // opts.batch_size
     opts.bpe = bpe
     if opts.do_eval:
-        va_dset = dataset(opts.data_root, opts.data_cfg,
-                          'valid', transform=trans,
-                          noise_folder=opts.noise_folder,
-                          whisper_folder=opts.whisper_folder,
-                          distortion_probability=opts.distortion_p,
-                          distortion_transforms=dist_trans,
-                          preload_wav=opts.preload_wav)
+        va_dset = PairWavDataset(opts.data_root, opts.data_cfg,
+                                 'valid', transform=trans,
+                                 preload_wav=opts.preload_wav)
         va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
                                 shuffle=False, collate_fn=DictCollater(),
                                 num_workers=opts.num_workers,
@@ -197,27 +179,44 @@ def train(opts):
         va_dloader = None
     # fastet lr to MI
     #opts.min_lrs = {'mi':0.001}
-    model.train_(dloader, vars(opts), device=device, va_dloader=va_dloader)
+
+    # load config file for attention blocks
+    if opts.att_cfg:
+        with open(opts.att_cfg) as f:
+            att_cfg = json.load(f)
+            print(att_cfg)
+    else:
+        att_cfg = None
+
+    print(str2bool(opts.tensorboard))
+    Trainer = trainer(frontend_cfg=fe_cfg,
+                      att_cfg=att_cfg,
+                      minions_cfg=minions_cfg,
+                      cfg=vars(opts),
+                      backprop_mode=opts.backprop_mode,
+                      tensorboard=str2bool(opts.tensorboard))
+    # print(Trainer.model)
+    print('Frontend params: ', Trainer.model.frontend.describe_params())
+    Trainer.model.to(device)
+    if opts.net_ckpt is not None:
+        Trainer.model.load_pretrained(opts.net_ckpt, load_last=True,
+                                      verbose=True)
+
+    Trainer.train_(dloader, device=device, valid_dataloader=va_dloader)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_root', type=str, 
+    parser.add_argument('--data_root', type=str,
                         default='data/LibriSpeech/Librispeech_spkid_sel')
-    parser.add_argument('--data_cfg', type=str, 
+    parser.add_argument('--data_cfg', type=str,
                         default='data/librispeech_data.cfg')
-    parser.add_argument('--noise_folder', type=str, default=None)
-    parser.add_argument('--whisper_folder', type=str, default=None)
-    parser.add_argument('--distortion_p', type=float, default=0.4)
-    parser.add_argument('--dtrans_cfg', type=str, default=None)
     parser.add_argument('--net_ckpt', type=str, default=None,
                         help='Ckpt to initialize the full network '
                              '(Def: None).')
     parser.add_argument('--net_cfg', type=str,
                         default=None)
     parser.add_argument('--fe_cfg', type=str, default=None)
-    parser.add_argument('--sup_exec', type=str, default=None)
-    parser.add_argument('--sup_freq', type=int, default=1)
     parser.add_argument('--do_eval', action='store_true', default=False)
     parser.add_argument('--stats', type=str, default='data/librispeech_stats.pkl')
     parser.add_argument('--pretrained_ckpt', type=str, default=None)
@@ -225,16 +224,8 @@ if __name__ == '__main__':
     parser.add_argument('--max_ckpts', type=int, default=5)
     parser.add_argument('--trans_cache', type=str,
                         default=None)
-    parser.add_argument('--log_types', type=str, nargs='+', 
-                        default=['tensorboard', 'pkl'],
-                        help='Types of log writing interfaces to use: '
-                             '(1) tensorboard, (2) pkl (Def: tensorboard '
-                             'and pkl).')
     parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--seed', type=int, default=2)
-    parser.add_argument('--no-continue', action='store_true', default=False,
-                        help='Dump any existing ckpt in the folder and start '
-                             'training from scratch (Def: False)')
     parser.add_argument('--no-cuda', action='store_true', default=False)
     parser.add_argument('--random_scale', action='store_true', default=False)
     parser.add_argument('--chunk_size', type=int, default=16000)
@@ -242,7 +233,6 @@ if __name__ == '__main__':
     parser.add_argument('--epoch', type=int, default=1000)
     parser.add_argument('--nfft', type=int, default=2048)
     parser.add_argument('--batch_size', type=int, default=100)
-    parser.add_argument('--batch_acum', type=int, default=1)
     parser.add_argument('--hidden_size', type=int, default=256)
     parser.add_argument('--hidden_layers', type=int, default=2)
     parser.add_argument('--fe_opt', type=str, default='Adam')
@@ -284,9 +274,18 @@ if __name__ == '__main__':
                              '(1) PairWavDataset, (2) '
                              'LibriSpeechSegTupleWavDataset. '
                              '(Def: LibriSpeechSegTupleWavDataset.')
+    parser.add_argument('--no_continue', type=str, default="False",help="whether continue the training")
+    
+    parser.add_argument('--att_cfg', type=str, help='Path to the config file of attention blocks')
+    parser.add_argument('--tensorboard', type=str, help='use tensorboard for logging')
+    parser.add_argument('--backprop_mode', type=str, help='backprop policy can be choose from: [base, select_one, select_half]')
+    parser.add_argument('--dropout_rate', type=float, default=0.5, help="drop out rate for workers")
+    parser.add_argument('--delta', type=float, help="delta for hyper volume loss scheduling")
+    parser.add_argument('--temp', type=float, help="temp for softmax or adaptive losss")
+    parser.add_argument('--alpha', type=float, help="alpha for adaptive loss")
 
     opts = parser.parse_args()
-    opts.ckpt_continue = not opts.no_continue
+    opts.ckpt_continue = not str2bool(opts.no_continue)
     if opts.net_cfg is None:
         raise ValueError('Please specify a net_cfg file')
 

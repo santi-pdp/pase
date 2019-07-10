@@ -21,6 +21,8 @@ from pase.models.frontend import wf_builder
 # from waveminionet.models.frontend import wf_builder #old models
 import soundfile as sf
 import os
+import json
+from pase.models.WorkerScheduler.encoder import encoder, aspp_encoder
 
 
 def get_freer_gpu(trials=10):
@@ -91,8 +93,15 @@ if not os.path.exists(dname):
 text_file=open(output_file, "w")
 
 # Loading pase
-pase = wf_builder(pase_cfg)
-pase.load_pretrained(pase_model, load_last=True, verbose=False)
+with open(pase_cfg, 'r') as cfg_f:
+    cfg = json.load(cfg_f)
+if "aspp" in cfg.keys():
+    pase = aspp_encoder(cfg['sinc_out'], cfg['hidden_dim'])
+    pase.load_pretrained(pase_model, load_last=True, verbose=False)
+else:
+    pase = encoder(wf_builder(pase_cfg))
+    pase.load_pretrained(pase_model, load_last=True, verbose=False)
+    pase = pase.frontend
 pase.to(device)
 pase.eval()
 
@@ -122,7 +131,10 @@ print('Computing PASE features...')
 fea_pase={}
 for snt_id in fea.keys():
     pase.eval()
-    fea_pase[snt_id]=pase(fea[snt_id]).to('cpu').detach()
+    if "aspp" in cfg.keys():
+        fea_pase[snt_id]=pase(fea[snt_id], device).to('cpu').detach()
+    else:
+        fea_pase[snt_id]=pase(fea[snt_id]).to('cpu').detach()
     fea_pase[snt_id]=fea_pase[snt_id].view(fea_pase[snt_id].shape[1],fea_pase[snt_id].shape[2]).transpose(0,1)
 
 inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
@@ -130,9 +142,11 @@ inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
 # Computing pase features for test
 fea_pase_dev={}
 for snt_id in fea_dev.keys():
-    fea_pase_dev[snt_id]=pase(fea_dev[snt_id]).detach()
+    if "aspp" in cfg.keys():
+        fea_pase_dev[snt_id]=pase(fea_dev[snt_id], device).to('cpu').detach()
+    else:
+        fea_pase_dev[snt_id]=pase(fea_dev[snt_id]).to('cpu').detach()
     fea_pase_dev[snt_id]=fea_pase_dev[snt_id].view(fea_pase_dev[snt_id].shape[1],fea_pase_dev[snt_id].shape[2]).transpose(0,1)
-
 
   
 
@@ -263,7 +277,7 @@ for ep in range(N_epochs):
         
         for dev_snt in fea_pase_dev.keys():
             
-             fea_dev_norm=(fea_pase_dev[dev_snt]-mean)/std
+             fea_dev_norm=(fea_pase_dev[dev_snt].to('cpu')-mean)/std
              out_dev=nnet(fea_dev_norm)
              lab_snt=torch.zeros(fea_pase_dev[dev_snt].shape[0])+lab[dev_snt.split('_')[0]]
              lab_snt=lab_snt.long().to(device)
