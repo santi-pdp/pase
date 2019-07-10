@@ -5,6 +5,7 @@ from .modules import *
 import torch.nn.functional as F
 import json
 import random
+from random import shuffle
 
 
 def minion_maker(cfg):
@@ -23,11 +24,12 @@ def minion_maker(cfg):
 
 class MLPBlock(NeuralBlock):
 
-    def __init__(self, ninp, fmaps, dout=0, name='MLPBlock'):
+    def __init__(self, ninp, fmaps, dout=0, bias=True,
+                 name='MLPBlock'):
         super().__init__(name=name)
         self.ninp = ninp
         self.fmaps = fmaps
-        self.W = nn.Conv1d(ninp, fmaps, 1)
+        self.W = nn.Conv1d(ninp, fmaps, 1, bias=bias)
         self.act = nn.PReLU(fmaps)
         self.dout = nn.Dropout(dout)
     
@@ -44,6 +46,13 @@ class DecoderMinion(Model):
                  strides=[2, 2, 2, 2, 2, 5],
                  kwidths=[2, 2, 2, 2, 2, 5],
                  norm_type=None,
+                 out_tanh=True,
+                 rnn_layers=0,
+                 rnn_size=512,
+                 rnn_type='qrnn',
+                 shuffle_p=0,
+                 bias=True,
+                 detach_frontend=False,
                  skip=False,
                  loss=None,
                  loss_weight=1.,
@@ -54,13 +63,16 @@ class DecoderMinion(Model):
         self.num_outputs = num_outputs
         self.dropout = dropout
         self.skip = skip
+        self.shuffle_p = shuffle_p
         self.hidden_size = hidden_size
         self.hidden_layers = hidden_layers
         self.fmaps = fmaps
         self.strides = strides
         self.kwidths = kwidths
+        self.detach_frontend = detach_frontend
         self.norm_type = norm_type
         self.loss = loss
+        self.out_tanh = out_tanh
         self.loss_weight = loss_weight
         self.keys = keys
         if keys is None:
@@ -70,22 +82,41 @@ class DecoderMinion(Model):
         # First go through deconvolving structure
         for (fmap, kw, stride) in zip(fmaps, kwidths, strides):
             block = GDeconv1DBlock(ninp, fmap, kw, stride,
-                                   norm_type=norm_type)
+                                   norm_type=norm_type,
+                                   bias=bias)
             self.blocks.append(block)
             ninp = fmap
 
         for _ in range(hidden_layers):
             self.blocks.append(MLPBlock(ninp,
-                                        hidden_size, dropout))
+                                        hidden_size, dropout,
+                                        bias=bias))
             ninp = hidden_size
-        self.W = nn.Conv1d(hidden_size, num_outputs, 1)
+        if rnn_layers > 0:
+            self.rnn_block = build_rnn_block(ninp, rnn_size,
+                                             rnn_layers, rnn_type,
+                                             dropout=dropout)
+            ninp = rnn_size
+        self.W = nn.Conv1d(ninp, num_outputs, 1, bias=bias)
         
     def forward(self, x):
+        if self.detach_frontend:
+            x = x.detach()
         h = x
+        if self.shuffle_p > 0:
+            shuffle = random.random() <= self.shuffle_p
+            if shuffle:
+                h = torch.chunk(h, h.size(2), dim=2)
+                shuffle(h)
+                h = torch.cat(h, dim=2)
         for bi, block in enumerate(self.blocks, start=1):
             h_ = h
             h = block(h)
         y = self.W(h)
+        if hasattr(self, 'rnn_block'):
+            y, _ = self.rnn_block(y)
+        if self.out_tanh:
+            y = torch.tanh(y)
         if self.skip:
             return y, h
         else:
@@ -97,6 +128,7 @@ class MLPMinion(Model):
                  num_outputs,
                  dropout, hidden_size=256,
                  hidden_layers=2,
+                 shuffle_p=0,
                  skip=True,
                  loss=None,
                  loss_weight=1.,
@@ -110,6 +142,7 @@ class MLPMinion(Model):
         self.num_outputs = num_outputs
         self.dropout = dropout
         self.skip = skip
+        self.shuffle_p = shuffle_p
         self.hidden_size = hidden_size
         self.hidden_layers = hidden_layers
         self.loss = loss
@@ -128,6 +161,12 @@ class MLPMinion(Model):
         
     def forward(self, x):
         h = x
+        if self.shuffle_p > 0:
+            shuffle = random.random() <= self.shuffle_p
+            if shuffle:
+                h = torch.chunk(h, h.size(2), dim=2)
+                shuffle(h)
+                h = torch.cat(h, dim=2)
         for bi, block in enumerate(self.blocks, start=1):
             h = block(h)
         y = self.W(h)
@@ -142,6 +181,7 @@ class GRUMinion(Model):
                  num_outputs,
                  dropout, hidden_size=256,
                  hidden_layers=2,
+                 shuffle_p=0,
                  skip=True,
                  loss=None,
                  loss_weight=1.,
@@ -152,6 +192,7 @@ class GRUMinion(Model):
         self.num_outputs = num_outputs
         self.dropout = dropout
         self.skip = skip
+        self.shuffle_p = shuffle_p
         self.hidden_size = hidden_size
         self.hidden_layers = hidden_layers
         self.loss = loss
@@ -169,7 +210,14 @@ class GRUMinion(Model):
         self.W = nn.Conv1d(hidden_size, num_outputs, 1)
         
     def forward(self, x):
-        h, _ = self.rnn(x.transpose(1, 2))
+        h = x
+        if self.shuffle_p > 0:
+            shuffle = random.random() <= self.shuffle_p
+            if shuffle:
+                h = torch.chunk(h, h.size(2), dim=2)
+                shuffle(h)
+                h = torch.cat(h, dim=2)
+        h, _ = self.rnn(h.transpose(1, 2))
         h = h.transpose(1, 2)
         y = self.W(h)
         if self.skip:
