@@ -106,7 +106,7 @@ class DecoderMinion(Model):
         if self.shuffle_p > 0:
             do_shuffle = random.random() <= self.shuffle_p
             if do_shuffle:
-                h = torch.chunk(h, h.size(2), dim=2)
+                h = list(torch.chunk(h, h.size(2), dim=2))
                 shuffle(h)
                 h = torch.cat(h, dim=2)
         for bi, block in enumerate(self.blocks, start=1):
@@ -164,7 +164,7 @@ class MLPMinion(Model):
         if self.shuffle_p > 0:
             do_shuffle = random.random() <= self.shuffle_p
             if do_shuffle:
-                h = torch.chunk(h, h.size(2), dim=2)
+                h = list(torch.chunk(h, h.size(2), dim=2))
                 shuffle(h)
                 h = torch.cat(h, dim=2)
         for bi, block in enumerate(self.blocks, start=1):
@@ -214,7 +214,7 @@ class GRUMinion(Model):
         if self.shuffle_p > 0:
             do_shuffle = random.random() <= self.shuffle_p
             if do_shuffle:
-                h = torch.chunk(h, h.size(2), dim=2)
+                h = list(torch.chunk(h, h.size(2), dim=2))
                 shuffle(h)
                 h = torch.cat(h, dim=2)
         h, _ = self.rnn(h.transpose(1, 2))
