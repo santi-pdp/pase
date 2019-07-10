@@ -75,3 +75,45 @@ class ASPP(Model):
                 m.bias.data.zero_()
 
 
+
+class aspp_resblock(Model):
+
+    def __init__(self, in_channel, out_channel):
+
+        super().__init__(name="aspp_resblock")
+
+        self.block1 = nn.Sequential(ASPP(in_channel, out_channel),
+                                    nn.Conv1d(out_channel, out_channel, kernel_size=11, stride=1, padding=5, bias=False),
+                                    nn.BatchNorm1d(out_channel),
+                                    nn.ReLU(out_channel))
+
+        self.block2 = nn.Sequential(ASPP(out_channel, out_channel),
+                                    nn.Conv1d(out_channel, out_channel, kernel_size=11, stride=1, padding=5, bias=False),
+                                    nn.BatchNorm1d(out_channel),
+                                    nn.ReLU(out_channel))
+
+        self._init_weight()
+
+    def forward(self, x):
+
+
+        out_1 = self.block1(x)
+
+        out_2 = self.block2(out_1)
+
+        y = out_1 + out_2
+
+        return y
+
+
+    def _init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv1d):
+                n = m.kernel_size[0] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+            elif isinstance(m, nn.BatchNorm1d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+
+

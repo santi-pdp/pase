@@ -143,9 +143,9 @@ inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
 fea_pase_dev={}
 for snt_id in fea_dev.keys():
     if "aspp" in cfg.keys():
-        fea_pase_dev[snt_id]=pase(fea_dev[snt_id], device).to('cpu').detach()
+        fea_pase_dev[snt_id]=pase(fea_dev[snt_id], device).detach()
     else:
-        fea_pase_dev[snt_id]=pase(fea_dev[snt_id]).to('cpu').detach()
+        fea_pase_dev[snt_id]=pase(fea_dev[snt_id]).detach()
     fea_pase_dev[snt_id]=fea_pase_dev[snt_id].view(fea_pase_dev[snt_id].shape[1],fea_pase_dev[snt_id].shape[2]).transpose(0,1)
 
   
@@ -277,7 +277,7 @@ for ep in range(N_epochs):
         
         for dev_snt in fea_pase_dev.keys():
             
-             fea_dev_norm=(fea_pase_dev[dev_snt].to('cpu')-mean)/std
+             fea_dev_norm=(fea_pase_dev[dev_snt]-mean)/std
              out_dev=nnet(fea_dev_norm)
              lab_snt=torch.zeros(fea_pase_dev[dev_snt].shape[0])+lab[dev_snt.split('_')[0]]
              lab_snt=lab_snt.long().to(device)

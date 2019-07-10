@@ -15,7 +15,7 @@ conda info -e
 nvidia-smi
 
 python -u train.py --batch_size 32 --epoch 150 --num_workers 8 \
-        --save_path /export/team-mic/zhong/test/aspp_res  \
+        --save_path /export/team-mic/zhong/test/aspp_res_deep  \
         --net_cfg cfg/workers_aspp.cfg \
         --fe_cfg cfg/PASE_aspp.cfg \
         --do_eval --data_cfg /export/corpora/LibriSpeech_50h/librispeech_data_50h.cfg --min_lr 0.0005 --fe_lr 0.001 \
