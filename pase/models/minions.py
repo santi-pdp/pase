@@ -133,6 +133,7 @@ class MLPMinion(Model):
                  loss=None,
                  loss_weight=1.,
                  keys=None,
+                 grad_reverse=False,
                  name='MLPMinion'):
         super().__init__(name=name)
         # Implemented with Conv1d layers to not 
@@ -146,6 +147,7 @@ class MLPMinion(Model):
         self.hidden_size = hidden_size
         self.hidden_layers = hidden_layers
         self.loss = loss
+        self.grad_reverse = grad_reverse
         self.loss_weight = loss_weight
         self.keys = keys
         if keys is None:
@@ -160,6 +162,8 @@ class MLPMinion(Model):
         self.W = nn.Conv1d(hidden_size, num_outputs, 1)
         
     def forward(self, x):
+        if self.grad_reverse:
+            x = GradReverse.apply(x)
         h = x
         if self.shuffle_p > 0:
             do_shuffle = random.random() <= self.shuffle_p
