@@ -302,11 +302,14 @@ if __name__ == '__main__':
     parser.add_argument('--vq', action='store_true', default=False,
                         help='Do VQ quantization of enc output (Def: False).')
     parser.add_argument('--cchunk_prior', action='store_true', default=False)
+    parser.add_argument('--sup_exec', type=str, default=None)
+    parser.add_argument('--sup_freq', type=int, default=1)
     parser.add_argument('--preload_wav', action='store_true', default=False,
                         help='Preload wav files in Dataset (Def: False).')
     parser.add_argument('--cache_on_load', action='store_true', default=False,
                         help='Argument to activate cache loading on the fly '
                              'for the wav files in datasets (Def: False).')
+    parser.add_argument('--dtrans_cfg', type=str, default=None)
     parser.add_argument('--dataset', type=str,
                         default='LibriSpeechSegTupleWavDataset',
                         help='Dataset to be used: '
