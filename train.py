@@ -170,10 +170,23 @@ def train(opts):
 
     trans = make_transforms(opts, minions_cfg)
     print(trans)
+    if opts.dtrans_cfg is not None:
+        with open(opts.dtrans_cfg, 'r') as dtr_cfg:
+            dtr = json.load(dtr_cfg)
+            #dtr['trans_p'] = opts.distortion_p
+            dist_trans = config_distortions(**dtr)
+            print(dist_trans)
+    else:
+        dist_trans = None
     # Build Dataset(s) and DataLoader(s)
-    dset = PairWavDataset(opts.data_root, opts.data_cfg, 'train',
-                          transform=trans,
-                          preload_wav=opts.preload_wav)
+    dataset = getattr(pase.dataset, opts.dataset)
+    dset = dataset(opts.data_root, opts.data_cfg, 'train',
+                   transform=trans,
+                   noise_folder=opts.noise_folder,
+                   whisper_folder=opts.whisper_folder,
+                   distortion_probability=opts.distortion_p,
+                   distortion_transforms=dist_trans,
+                   preload_wav=opts.preload_wav)
     dloader = DataLoader(dset, batch_size=opts.batch_size,
                          shuffle=True, collate_fn=DictCollater(),
                          num_workers=opts.num_workers,
@@ -184,9 +197,13 @@ def train(opts):
     bpe = (dset.total_wav_dur // opts.chunk_size) // opts.batch_size
     opts.bpe = bpe
     if opts.do_eval:
-        va_dset = PairWavDataset(opts.data_root, opts.data_cfg,
-                                 'valid', transform=trans,
-                                 preload_wav=opts.preload_wav)
+        va_dset = dataset(opts.data_root, opts.data_cfg,
+                          'valid', transform=trans,
+                          noise_folder=opts.noise_folder,
+                          whisper_folder=opts.whisper_folder,
+                          distortion_probability=opts.distortion_p,
+                          distortion_transforms=dist_trans,
+                          preload_wav=opts.preload_wav)
         va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
                                 shuffle=False, collate_fn=DictCollater(),
                                 num_workers=opts.num_workers,
