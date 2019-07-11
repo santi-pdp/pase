@@ -118,8 +118,24 @@ class trainer(object):
                                 prefix='M-{}-'.format(worker.name)))
 
         if cfg["ckpt_continue"]:
-                self.load_checkpoints(self.save_path)
-                self.model.to(device)
+            self.load_checkpoints(self.save_path)
+            self.model.to(device)
+
+            self.frontend_optim = getattr(optim, cfg['fe_opt'])(self.model.frontend.parameters(),
+                                                                lr=cfg['fe_lr'])
+
+            for worker in self.model.classification_workers:
+                min_opt = cfg['min_opt']
+                min_lr = cfg['min_lr']
+                self.cls_optim[worker.name] = getattr(optim, min_opt)(worker.parameters(),
+                                                                      lr=min_lr)
+            for worker in self.model.regression_workers:
+                min_opt = cfg['min_opt']
+                min_lr = cfg['min_lr']
+                self.regr_optim[worker.name] = getattr(optim, min_opt)(worker.parameters(),
+                                                                       lr=min_lr)
+
+
 
         # init tensorboard writer
         print("Use tenoserboard: {}".format(tensorboard))

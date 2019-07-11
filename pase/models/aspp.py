@@ -32,17 +32,21 @@ class _ASPPModule(Model):
 class ASPP(Model):
     def __init__(self, inplanes, emb_dim):
         super(ASPP, self).__init__()
-        dilations = [1, 6, 12, 18]
 
-        self.aspp1 = _ASPPModule(inplanes, 48, 1, padding=0, dilation=dilations[0])
-        self.aspp2 = _ASPPModule(inplanes, 48, 3, padding=dilations[1], dilation=dilations[1])
-        self.aspp3 = _ASPPModule(inplanes, 48, 3, padding=dilations[2], dilation=dilations[2])
-        self.aspp4 = _ASPPModule(inplanes, 48, 3, padding=dilations[3], dilation=dilations[3])
+        if not dense:
 
-        self.global_avg_pool = nn.Sequential(nn.AdaptiveAvgPool1d((1)),
-                                             nn.Conv1d(inplanes, 48, 1, stride=1, bias=False),
-                                             nn.BatchNorm1d(48),
-                                             nn.ReLU())
+            dilations = [1, 6, 12, 18]
+
+            self.aspp1 = _ASPPModule(inplanes, 48, 1, padding=0, dilation=dilations[0])
+            self.aspp2 = _ASPPModule(inplanes, 48, 3, padding=dilations[1], dilation=dilations[1])
+            self.aspp3 = _ASPPModule(inplanes, 48, 3, padding=dilations[2], dilation=dilations[2])
+            self.aspp4 = _ASPPModule(inplanes, 48, 3, padding=dilations[3], dilation=dilations[3])
+
+            self.global_avg_pool = nn.Sequential(nn.AdaptiveAvgPool1d((1)),
+                                                 nn.Conv1d(inplanes, 48, 1, stride=1, bias=False),
+                                                 nn.BatchNorm1d(48),
+                                                 nn.ReLU())
+
         self.conv1 = nn.Conv1d(240, emb_dim, 1, bias=False)
         self.bn1 = nn.BatchNorm1d(emb_dim)
         self.relu = nn.ReLU()
@@ -94,7 +98,7 @@ class aspp_resblock(Model):
 
         self.connection = (in_channel == out_channel)
 
-        # self._init_weight()
+        self._init_weight()
 
     def forward(self, x):
 

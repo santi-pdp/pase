@@ -215,8 +215,8 @@ fea_conc_dev=np.concatenate(fea_lst_dev)
 fea_conc_dev=context_window(fea_conc_dev,left,right)
 
 # feature normalization
-fea_conc=(fea_conc-np.mean(fea_conc,axis=0))/np.std(fea_conc,axis=0)
-fea_conc_dev=(fea_conc_dev-np.mean(fea_conc_dev,axis=0))/np.std(fea_conc_dev,axis=0)
+# fea_conc=(fea_conc-np.mean(fea_conc,axis=0))/np.std(fea_conc,axis=0)
+# fea_conc_dev=(fea_conc_dev-np.mean(fea_conc_dev,axis=0))/np.std(fea_conc_dev,axis=0)
 
 
 # lab matrix
