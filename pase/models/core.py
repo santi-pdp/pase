@@ -72,9 +72,13 @@ class Waveminionet(Model):
                 z_cfg = {
                     'num_inputs':self.frontend.emb_dim,
                     'num_outputs':1,
+                    'hidden_layers':3,
+                    'hidden_size':1024,
+                    'norm_type':'bnorm',
                     'dropout':0.,
+                    'kwidths':[31,11,5],
                     'name':'z',
-                    'grad_reverse':True,
+                    'grad_reverse':False,
                     'skip':False
                 }
             self.z_cfg = z_cfg
@@ -224,6 +228,8 @@ class Waveminionet(Model):
                                 save_path, max_ckpts=cfg['max_ckpts'],
                                 optimizer=zopt, prefix='Zminion-'))
 
+        # print model components
+        print(self)
         if 'min_lrs' in cfg:
             min_lrs = cfg['min_lrs']
         else:

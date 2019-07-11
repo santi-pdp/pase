@@ -46,6 +46,7 @@ class WaveFe(Model):
                  tanh_out=False,
                  resblocks=False,
                  denseskips=False,
+                 densemerge='sum',
                  name='WaveFe'):
         super().__init__(name=name) 
         # apply sincnet at first layer
@@ -53,11 +54,13 @@ class WaveFe(Model):
         self.kwidths = kwidths
         self.strides = strides
         self.fmaps = fmaps
+        self.densemerge = densemerge
         if denseskips:
             self.denseskips = nn.ModuleList()
         self.blocks = nn.ModuleList()
         assert len(kwidths) == len(strides)
         assert len(strides) == len(fmaps)
+        concat_emb_dim = emb_dim
         ninp = num_inputs
         for n, (kwidth, stride, dilation, fmap) in enumerate(zip(kwidths, 
                                                                  strides,
@@ -83,6 +86,8 @@ class WaveFe(Model):
             if denseskips and n < len(kwidths):
                 # add projection adapter 
                 self.denseskips.append(nn.Conv1d(fmap, emb_dim, 1, bias=False))
+                if densemerge == 'concat':
+                    concat_emb_dim += emb_dim
             ninp = fmap
         # last projection
         if rnn_pool:
@@ -94,7 +99,7 @@ class WaveFe(Model):
             self.W = nn.Conv1d(emb_dim, emb_dim, 1)
         else:
             self.W = nn.Conv1d(fmap, emb_dim, 1)
-        self.emb_dim = emb_dim
+        self.emb_dim = concat_emb_dim
         self.rnn_pool = rnn_pool
         if vq_K is not None and vq_K > 0:
             self.quantizer = VQEMA(vq_K, self.emb_dim,
@@ -114,7 +119,12 @@ class WaveFe(Model):
         if dfactor > 1:
             # downsample skips
             skip = F.adaptive_avg_pool1d(skip, input_.shape[2])
-        return input_ + skip
+        if self.densemerge == 'concat':
+            return torch.cat((input_, skip), dim=1)
+        elif self.densemerge == 'sum':
+            return input_ + skip
+        else:
+            raise TypeError('Unknown densemerge: ', self.densemerge)
         
     def forward(self, x):
         h = x
