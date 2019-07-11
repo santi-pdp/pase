@@ -36,6 +36,9 @@ class WaveFe(Model):
                  emb_dim=256,
                  activation=None,
                  rnn_pool=False,
+                 rnn_layers=1,
+                 rnn_dropout=0,
+                 rnn_type='qrnn',
                  vq_K=None,
                  vq_beta=0.25,
                  vq_gamma=0.99,
@@ -43,6 +46,7 @@ class WaveFe(Model):
                  tanh_out=False,
                  resblocks=False,
                  denseskips=False,
+                 densemerge='sum',
                  name='WaveFe'):
         super().__init__(name=name) 
         # apply sincnet at first layer
@@ -50,11 +54,13 @@ class WaveFe(Model):
         self.kwidths = kwidths
         self.strides = strides
         self.fmaps = fmaps
+        self.densemerge = densemerge
         if denseskips:
             self.denseskips = nn.ModuleList()
         self.blocks = nn.ModuleList()
         assert len(kwidths) == len(strides)
         assert len(strides) == len(fmaps)
+        concat_emb_dim = emb_dim
         ninp = num_inputs
         for n, (kwidth, stride, dilation, fmap) in enumerate(zip(kwidths, 
                                                                  strides,
@@ -80,15 +86,20 @@ class WaveFe(Model):
             if denseskips and n < len(kwidths):
                 # add projection adapter 
                 self.denseskips.append(nn.Conv1d(fmap, emb_dim, 1, bias=False))
+                if densemerge == 'concat':
+                    concat_emb_dim += emb_dim
             ninp = fmap
         # last projection
         if rnn_pool:
-            self.rnn = nn.GRU(fmap, emb_dim // 2, bidirectional=True, 
-                              batch_first=True)
-            self.W = nn.Linear(emb_dim, emb_dim)
+            self.rnn = build_rnn_block(fmap, emb_dim // 2,
+                                       rnn_layers=rnn_layers,
+                                       rnn_type=rnn_type,
+                                       bidirectional=True,
+                                       dropout=rnn_dropout)
+            self.W = nn.Conv1d(emb_dim, emb_dim, 1)
         else:
             self.W = nn.Conv1d(fmap, emb_dim, 1)
-        self.emb_dim = emb_dim
+        self.emb_dim = concat_emb_dim
         self.rnn_pool = rnn_pool
         if vq_K is not None and vq_K > 0:
             self.quantizer = VQEMA(vq_K, self.emb_dim,
@@ -108,7 +119,12 @@ class WaveFe(Model):
         if dfactor > 1:
             # downsample skips
             skip = F.adaptive_avg_pool1d(skip, input_.shape[2])
-        return input_ + skip
+        if self.densemerge == 'concat':
+            return torch.cat((input_, skip), dim=1)
+        elif self.densemerge == 'sum':
+            return input_ + skip
+        else:
+            raise TypeError('Unknown densemerge: ', self.densemerge)
         
     def forward(self, x):
         h = x
@@ -127,11 +143,12 @@ class WaveFe(Model):
                     h_proj = proj(h)
                     dskips = self.fuse_skip(h_proj, dskips)
         if self.rnn_pool:
-            ht, _ = self.rnn(h.transpose(1, 2))
-            y = self.W(ht) 
-            y = y.transpose(1, 2)
-        else:
-            y = self.W(h)
+            h = h.transpose(1, 2).transpose(0, 1)
+            h, _ = self.rnn(h)
+            h = h.transpose(0, 1).transpose(1, 2)
+            #y = self.W(h) 
+        #else:
+        y = self.W(h)
         if denseskips:
             # sum all dskips contributions in the embedding
             y = self.fuse_skip(y, dskips)
