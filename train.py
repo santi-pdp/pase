@@ -1,4 +1,5 @@
 # from pase.models.core import Waveminionet
+import librosa
 from pase.models.modules import VQEMA
 from pase.dataset import PairWavDataset, DictCollater
 from pase.models.WorkerScheduler.trainer import trainer
