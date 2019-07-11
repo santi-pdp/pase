@@ -95,13 +95,18 @@ class aspp_res_encoder(Model):
         self.sinc = SincConv_fast(1, sinc_out, 251,
                                   sample_rate=16000,
                                   padding='SAME',
-                                  stride=160,
+                                  stride=1,
                                   pad_mode='reflect'
                                   )
 
-        self.block1 = aspp_resblock(sinc_out, hidden_dim)
+        self.block1 = aspp_resblock(sinc_out, hidden_dim, 10)
 
-        self.block2 = aspp_resblock(hidden_dim, hidden_dim)
+        self.block2 = aspp_resblock(hidden_dim, hidden_dim, 4)
+
+        self.block3 = aspp_resblock(hidden_dim, hidden_dim, 2)
+
+        self.block4 = aspp_resblock(hidden_dim, hidden_dim, 2)
+
 
         self.emb_dim = hidden_dim
 
@@ -123,7 +128,9 @@ class aspp_res_encoder(Model):
 
         out_2 = self.block2(out_1)
 
-        y = out_1 + out_2
+        out_3 = self.block3(out_2)
+
+        y = self.block4(out_3)
 
 
         if type(batch) == dict:

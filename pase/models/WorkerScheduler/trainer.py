@@ -33,7 +33,8 @@ class trainer(object):
                  pretrained_ckpt=None,
                  tensorboard=None,
                  backprop_mode = None,
-                 name='Pase_base'):
+                 name='Pase_base',
+                 device=None):
 
         # init the pase
         if not cls_lst:
@@ -118,6 +119,7 @@ class trainer(object):
 
         if cfg["ckpt_continue"]:
                 self.load_checkpoints(self.save_path)
+                self.model.to(device)
 
         # init tensorboard writer
         print("Use tenoserboard: {}".format(tensorboard))
@@ -196,7 +198,8 @@ class trainer(object):
                                            dropout_rate=self.worker_drop_rate,
                                            delta=self.delta,
                                            temperture=self.temp,
-                                           alpha=self.alpha)
+                                           alpha=self.alpha,
+                                           batch = batch)
 
 
                     if bidx % self.log_freq == 0 or bidx >= self.bpe:

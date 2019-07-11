@@ -2,6 +2,9 @@ import torch
 import random
 import numpy as np
 import torch.nn.functional as F
+from .min_norm_solvers import MinNormSolver, gradient_normalizers
+from torch.autograd import Variable
+
 
 class backprop_scheduler(object):
 
@@ -13,7 +16,7 @@ class backprop_scheduler(object):
         self.pi = torch.ones(7).detach()
 
 
-    def __call__(self, preds, label, cls_optim, regr_optim, frontend_optim, device, h=None, dropout_rate=None, delta=None, temperture=None, alpha=None):
+    def __call__(self, preds, label, cls_optim, regr_optim, frontend_optim, device, h=None, dropout_rate=None, delta=None, temperture=None, alpha=None, batch=None):
 
         if self.mode == "base":
             return self._base_scheduler(preds, label, cls_optim, regr_optim, frontend_optim, device)
@@ -31,6 +34,8 @@ class backprop_scheduler(object):
             return self._softmax(preds, label, cls_optim, regr_optim, frontend_optim, temperture=temperture)
         elif self.mode == "adaptive":
             return self._online_adaptive(preds, label, cls_optim, regr_optim, frontend_optim, temperture=temperture, alpha=alpha)
+        elif self.mode == "MGD":
+            return self._MGDA(preds, label, cls_optim, regr_optim, frontend_optim, batch=batch, device=device)
         else:
             raise NotImplementedError
 
@@ -319,5 +324,78 @@ class backprop_scheduler(object):
         losses["total"] = tot_loss
 
         return losses
+
+    def _MGDA(self, preds, label, cls_optim, regr_optim, frontend_optim, batch, device):
+        frontend_optim.zero_grad()
+        losses = {}
+
+        grads = {}
+        for worker in self.model.classification_workers:
+            self.model.zero_grad()
+            h, chunk, preds, labels = self.model.forward(batch, device)
+            # print(worker.name)
+            loss = worker.loss(preds[worker.name], label[worker.name])
+            losses[worker.name] = loss
+            grads[worker.name] = self._get_gen_grads(loss)
+
+        for worker in self.model.regression_workers:
+            self.model.zero_grad()
+            h, chunk, preds, labels = self.model.forward(batch, device)
+            # print(worker.name)
+            loss = worker.loss(preds[worker.name], label[worker.name])
+            losses[worker.name] = loss
+            grads[worker.name] = self._get_gen_grads(loss)
+
+
+
+        sol, min_norm = MinNormSolver.find_min_norm_element([grads[worker].unsqueeze(0) for worker, _ in grads.items()])
+
+        tot_loss = 0
+        idx = 0
+
+        self.model.zero_grad()
+        h, chunk, preds, labels = self.model.forward(batch, device)
+        for worker in self.model.classification_workers:
+            loss = worker.loss(preds[worker.name], label[worker.name])
+            losses[worker.name] = loss
+            tot_loss += sol[idx] * loss
+
+
+        for worker in self.model.regression_workers:
+            loss = worker.loss(preds[worker.name], label[worker.name])
+            losses[worker.name] = loss
+            tot_loss += sol[idx] * loss
+
+
+        tot_loss.backward()
+
+
+        for _, optim in cls_optim.items():
+            optim.step()
+
+        for _, optim in regr_optim.items():
+            optim.step()
+
+        frontend_optim.step()
+        losses["total"] = tot_loss
+
+        return losses
+
+    def _get_gen_grads(self, loss_):
+        # grads = torch.autograd.grad(outputs=loss_, inputs=self.model.frontend.parameters())
+        self.model.frontend.zero_grad()
+        loss_.backward()
+        # grads = self.model.frontend.grad()
+        for params in self.model.frontend.parameters():
+
+            try:
+                grads_ = torch.cat([grads_, params.grad.view(-1)], 0)
+            except:
+                grads_ = params.grad.view(-1)
+
+        return grads_ / grads_.norm()
+
+
+
 
 

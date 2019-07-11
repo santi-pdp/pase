@@ -22,7 +22,7 @@ from pase.models.frontend import wf_builder
 import soundfile as sf
 import os
 import json
-from pase.models.WorkerScheduler.encoder import encoder, aspp_encoder
+from pase.models.WorkerScheduler.encoder import *
 
 
 def get_freer_gpu(trials=10):
@@ -98,6 +98,9 @@ with open(pase_cfg, 'r') as cfg_f:
 if "aspp" in cfg.keys():
     pase = aspp_encoder(cfg['sinc_out'], cfg['hidden_dim'])
     pase.load_pretrained(pase_model, load_last=True, verbose=False)
+elif"aspp_res" in cfg.keys():
+    pase = aspp_res_encoder(cfg['sinc_out'], cfg['hidden_dim'])
+    pase.load_pretrained(pase_model, load_last=True, verbose=False)
 else:
     pase = encoder(wf_builder(pase_cfg))
     pase.load_pretrained(pase_model, load_last=True, verbose=False)
@@ -131,7 +134,7 @@ print('Computing PASE features...')
 fea_pase={}
 for snt_id in fea.keys():
     pase.eval()
-    if "aspp" in cfg.keys():
+    if "aspp" in cfg.keys() or "aspp_res" in cfg.keys():
         fea_pase[snt_id]=pase(fea[snt_id], device).to('cpu').detach()
     else:
         fea_pase[snt_id]=pase(fea[snt_id]).to('cpu').detach()
@@ -142,7 +145,7 @@ inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
 # Computing pase features for test
 fea_pase_dev={}
 for snt_id in fea_dev.keys():
-    if "aspp" in cfg.keys():
+    if "aspp" in cfg.keys() or "aspp_res" in cfg.keys():
         fea_pase_dev[snt_id]=pase(fea_dev[snt_id], device).detach()
     else:
         fea_pase_dev[snt_id]=pase(fea_dev[snt_id]).detach()

@@ -210,6 +210,8 @@ class pase(Model):
         # init frontend
         if 'aspp' in frontend_cfg.keys():
             self.frontend = aspp_encoder(sinc_out=frontend_cfg['sinc_out'], hidden_dim = frontend_cfg['hidden_dim'])
+        elif 'aspp_res' in frontend_cfg.keys():
+            self.frontend = aspp_res_encoder(sinc_out=frontend_cfg['sinc_out'], hidden_dim = frontend_cfg['hidden_dim'])
         else:
             self.frontend = encoder(WaveFe(**frontend_cfg))
 
