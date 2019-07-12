@@ -8,20 +8,14 @@
 #SBATCH -p gpu
 #SBATCH --gres=gpu:1 -C K80
 
-module load cuda
-module load anaconda
-source activate humor
-conda info -e
-nvidia-smi
-
-python -u train.py --batch_size 32 --epoch 150 --num_workers 8 \
-        --save_path /scratch/jzhong9/model_ckpt/hyper_1.1_K80  \
-        --net_cfg cfg/workers.cfg \
-        --fe_cfg cfg/PASE_dense.cfg \
-        --do_eval --data_cfg /scratch/jzhong9/data/LibriSpeech_50h/librispeech_data_50h.cfg --min_lr 0.0005 --fe_lr 0.0005 \
-        --data_root /scratch/jzhong9/data/LibriSpeech_50h/wav_sel \
-        --stats /scratch/jzhong9/data/LibriSpeech_50h/librispeech_50h_stats.pkl \
-        --log_freq 100 \
-	    --backprop_mode hyper_volume --delta 1.1 \
-	    --tensorboard False\
-        --chunk_size 32000
+python -u  train.py --batch_size 32 --epoch 50 --save_path /export/team-mic/zhong/hyper_noise \
+       --num_workers 8 --warmup 10000000 --net_cfg cfg/workers.cfg \
+       --fe_cfg cfg/PASE_dense.cfg --do_eval --data_cfg /export/corpora/LibriSpeech_50h/librispeech_data_50h.cfg \
+       --min_lr 0.0005 --fe_lr 0.0005 --data_root /export/corpora/LibriSpeech_50h/wav_sel \
+       --dtrans_cfg cfg/distortions/all.cfg \
+       --stats data/librispeech_50h_stats.pkl --lrdec_step 30 --lrdecay 0.5 \
+       --chunk_size 32000 \
+       --random_scale \
+       --backprop_mode hyper_volume --delta 1.1 \
+       --tensorboard True \
+       --sup_exec sup_cmd_mila.txt --sup_freq 10
