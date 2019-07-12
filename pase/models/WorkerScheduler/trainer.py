@@ -176,7 +176,7 @@ class trainer(object):
             self.temp = cfg['temp']
             self.alpha = cfg['alpha']
         else:
-            self.temp = None
+            # self.temp = None
             self.alpha = None
 
 
