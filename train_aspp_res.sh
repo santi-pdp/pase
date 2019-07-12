@@ -10,8 +10,8 @@
 
 nvidia-smi
 
-python -u train.py --batch_size 15 --epoch 50 --num_workers 8 \
-        --save_path /export/team-mic/zhong/test/aspp_res_dense  \
+python -u train.py --batch_size 10 --epoch 50 --num_workers 8 \
+        --save_path /export/team-mic/zhong/test/aspp_deep_new_dataset  \
         --net_cfg cfg/workers_aspp.cfg \
         --fe_cfg cfg/PASE_aspp_res.cfg \
         --do_eval --data_cfg /export/corpora/LibriSpeech_50h/librispeech_data_50h.cfg --min_lr 0.0005 --fe_lr 0.0005 \

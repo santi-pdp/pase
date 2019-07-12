@@ -30,7 +30,7 @@ class _ASPPModule(Model):
                 m.bias.data.zero_()
 
 class ASPP(Model):
-    def __init__(self, inplanes, emb_dim):
+    def __init__(self, inplanes, emb_dim, dense=False):
         super(ASPP, self).__init__()
 
         if not dense:
