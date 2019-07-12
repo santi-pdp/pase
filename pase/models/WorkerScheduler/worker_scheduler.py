@@ -262,7 +262,7 @@ class backprop_scheduler(object):
 
         with torch.no_grad():
             loss_vec = torch.tensor(loss_tmp, requires_grad=False)
-            alpha = F.softmax(temperture * loss_vec, dim=0).to(device)
+            alpha = F.softmax(temperture * loss_vec, dim=0).cpu().detach().numpy().astype(np.float)
 
         tot_loss = 0
         for worker in self.model.classification_workers:
