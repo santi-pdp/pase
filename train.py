@@ -165,7 +165,6 @@ def train(opts):
                          num_devices=num_devices,
                          frontend=frontend)
     
-    print(model)
     print('Frontend params: ', model.frontend.describe_params())
     model.to(device)
     trans = make_transforms(opts, minions_cfg)
@@ -288,8 +287,11 @@ if __name__ == '__main__':
     parser.add_argument('--vq_K', type=int, default=50,
                         help='Number of K embeddings in VQ-enc. '
                              '(Def: 50).')
+    parser.add_argument('--log_grad_keys', type=str, nargs='+',
+                        default=[])
     parser.add_argument('--vq', action='store_true', default=False,
                         help='Do VQ quantization of enc output (Def: False).')
+    parser.add_argument('--cchunk_prior', action='store_true', default=False)
     parser.add_argument('--preload_wav', action='store_true', default=False,
                         help='Preload wav files in Dataset (Def: False).')
     parser.add_argument('--cache_on_load', action='store_true', default=False,

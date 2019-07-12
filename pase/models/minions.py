@@ -25,16 +25,30 @@ def minion_maker(cfg):
 class MLPBlock(NeuralBlock):
 
     def __init__(self, ninp, fmaps, dout=0, bias=True,
+                 kwidth=1,
+                 norm_type=None,
                  name='MLPBlock'):
         super().__init__(name=name)
         self.ninp = ninp
         self.fmaps = fmaps
-        self.W = nn.Conv1d(ninp, fmaps, 1, bias=bias)
+        self.kwidth = kwidth
+        self.W = nn.Conv1d(ninp, fmaps, kwidth, bias=bias)
+        self.norm = build_norm_layer(norm_type, self.W,
+                                     fmaps)
         self.act = nn.PReLU(fmaps)
         self.dout = nn.Dropout(dout)
     
     def forward(self, x):
-        return self.dout(self.act(self.W(x)))
+        if self.kwidth > 1:
+            if self.kwidth % 2 == 0:
+                x = F.pad(x, (self.kwidth // 2 - 1,
+                              self.kwidth // 2))
+            else:
+                x = F.pad(x, (self.kwidth // 2, self.kwidth // 2))
+        h = self.W(x)
+        h = forward_norm(h, self.norm)
+        h = self.act(h)
+        return self.dout(h)
 
 class DecoderMinion(Model):
 
@@ -90,7 +104,7 @@ class DecoderMinion(Model):
         for _ in range(hidden_layers):
             self.blocks.append(MLPBlock(ninp,
                                         hidden_size, dropout,
-                                        bias=bias))
+                                        bias=bias, norm_type=norm_type))
             ninp = hidden_size
         if rnn_layers > 0:
             self.rnn_block = build_rnn_block(ninp, rnn_size,
@@ -104,9 +118,9 @@ class DecoderMinion(Model):
             x = x.detach()
         h = x
         if self.shuffle_p > 0:
-            shuffle = random.random() <= self.shuffle_p
-            if shuffle:
-                h = torch.chunk(h, h.size(2), dim=2)
+            do_shuffle = random.random() <= self.shuffle_p
+            if do_shuffle:
+                h = list(torch.chunk(h, h.size(2), dim=2))
                 shuffle(h)
                 h = torch.cat(h, dim=2)
         for bi, block in enumerate(self.blocks, start=1):
@@ -122,6 +136,7 @@ class DecoderMinion(Model):
         else:
             return y
                  
+
 class MLPMinion(Model):
 
     def __init__(self, num_inputs, 
@@ -129,10 +144,13 @@ class MLPMinion(Model):
                  dropout, hidden_size=256,
                  hidden_layers=2,
                  shuffle_p=0,
+                 norm_type=None,
                  skip=True,
                  loss=None,
                  loss_weight=1.,
                  keys=None,
+                 grad_reverse=False,
+                 kwidths=[],
                  name='MLPMinion'):
         super().__init__(name=name)
         # Implemented with Conv1d layers to not 
@@ -141,30 +159,43 @@ class MLPMinion(Model):
         self.num_inputs = num_inputs
         self.num_outputs = num_outputs
         self.dropout = dropout
+        self.norm_type = norm_type
         self.skip = skip
         self.shuffle_p = shuffle_p
         self.hidden_size = hidden_size
         self.hidden_layers = hidden_layers
         self.loss = loss
+        self.grad_reverse = grad_reverse
         self.loss_weight = loss_weight
         self.keys = keys
+        if len(kwidths) > 0:
+            # assert each layer has a kwidth specified
+            assert len(kwidths) == hidden_layers, len(kwidths)
         if keys is None:
             keys = [name]
         self.blocks = nn.ModuleList()
         ninp = num_inputs
-        for _ in range(hidden_layers):
+        for lidx in range(hidden_layers):
+            if len(kwidths) > 0:
+                kw = kwidths[lidx]
+            else:
+                kw = 1
             self.blocks.append(MLPBlock(ninp,
                                         hidden_size,
-                                        dropout))
+                                        dropout,
+                                        kwidth=kw,
+                                        norm_type=norm_type))
             ninp = hidden_size
         self.W = nn.Conv1d(hidden_size, num_outputs, 1)
         
     def forward(self, x):
+        if self.grad_reverse:
+            x = GradReverse.apply(x)
         h = x
         if self.shuffle_p > 0:
-            shuffle = random.random() <= self.shuffle_p
-            if shuffle:
-                h = torch.chunk(h, h.size(2), dim=2)
+            do_shuffle = random.random() <= self.shuffle_p
+            if do_shuffle:
+                h = list(torch.chunk(h, h.size(2), dim=2))
                 shuffle(h)
                 h = torch.cat(h, dim=2)
         for bi, block in enumerate(self.blocks, start=1):
@@ -212,9 +243,9 @@ class GRUMinion(Model):
     def forward(self, x):
         h = x
         if self.shuffle_p > 0:
-            shuffle = random.random() <= self.shuffle_p
-            if shuffle:
-                h = torch.chunk(h, h.size(2), dim=2)
+            do_shuffle = random.random() <= self.shuffle_p
+            if do_shuffle:
+                h = list(torch.chunk(h, h.size(2), dim=2))
                 shuffle(h)
                 h = torch.cat(h, dim=2)
         h, _ = self.rnn(h.transpose(1, 2))
