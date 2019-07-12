@@ -43,9 +43,9 @@ class ASPP(Model):
             self.aspp4 = _ASPPModule(inplanes, 48, 3, padding=dilations[3], dilation=dilations[3])
 
             self.global_avg_pool = nn.Sequential(nn.AdaptiveAvgPool1d((1)),
-                                                 nn.Conv1d(inplanes, 48, 1, stride=1, bias=False),
-                                                 nn.BatchNorm1d(48),
-                                                 nn.ReLU())
+                                                     nn.Conv1d(inplanes, 48, 1, stride=1, bias=False),
+                                                     nn.BatchNorm1d(48),
+                                                     nn.ReLU())
 
         self.conv1 = nn.Conv1d(240, emb_dim, 1, bias=False)
         self.bn1 = nn.BatchNorm1d(emb_dim)

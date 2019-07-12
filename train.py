@@ -51,7 +51,7 @@ def make_transforms(opts, minions_cfg):
         elif name == 'prosody':
             znorm = True
             trans.append(Prosody(hop=160, win=400))
-        elif name == 'chunk':
+        elif name == 'chunk' or name == 'cchunk':
             znorm = True
         else:
             raise TypeError('Unrecognized module \"{}\"'
