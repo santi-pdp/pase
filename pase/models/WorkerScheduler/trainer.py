@@ -50,6 +50,8 @@ class trainer(object):
                             minions_cfg=minions_cfg,
                             att_cfg=att_cfg,
                             cls_lst=cls_lst, regr_lst=regr_lst,
+                            K=cfg['attention_K'],
+                            chunk_size=cfg['chunk_size'],
                             pretrained_ckpt=pretrained_ckpt,
                             name=name)
         else:

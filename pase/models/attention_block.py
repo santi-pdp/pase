@@ -4,17 +4,23 @@ import torch
 
 class attention_block(Model):
 
-    def __init__(self, emb_dim, name, options, K):
+    def __init__(self, input_dim, name, options, K):
         super().__init__(name=name)
         self.name = name
         # options['dnn_lay'] = str(emb_dim) + "," + str(emb_dim)
 
-        self.mlp = MLP(options=options, inp_dim=emb_dim)
+        self.mlp = MLP(options=options, inp_dim=input_dim)
         self.K = K
 
     def forward(self, hidden, device):
+        emb_dim = hidden.shape[1]
+        feature_length = hidden.shape[2]
+
+        hidden = hidden.view(hidden.shape[0], emb_dim * feature_length)
         distribution = self.mlp(hidden)
-        distribution = torch.sum(distribution, dim=2)
+        hidden = hidden.view(hidden.shape[0], emb_dim, feature_length)
+
+        # distribution = torch.sum(distribution, dim=1)
         _, indices = torch.topk(distribution, dim=1, k=self.K, largest=True, sorted=False)
 
         # ugly
