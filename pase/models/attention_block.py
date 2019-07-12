@@ -7,7 +7,7 @@ class attention_block(Model):
     def __init__(self, emb_dim, name, options, K):
         super().__init__(name=name)
         self.name = name
-        options['dnn_lay'] = str(emb_dim) + "," + str(emb_dim)
+        # options['dnn_lay'] = str(emb_dim) + "," + str(emb_dim)
 
         self.mlp = MLP(options=options, inp_dim=emb_dim)
         self.K = K
