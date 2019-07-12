@@ -31,7 +31,7 @@ class backprop_scheduler(object):
         elif self.mode == "hyper_volume":
             return self._hyper_volume(preds, label, cls_optim, regr_optim, frontend_optim, device=device, delta=delta)
         elif self.mode == "softmax":
-            return self._softmax(preds, label, cls_optim, regr_optim, frontend_optim, temperture=temperture)
+            return self._softmax(preds, label, cls_optim, regr_optim, frontend_optim, temperture=temperture, device=device)
         elif self.mode == "adaptive":
             return self._online_adaptive(preds, label, cls_optim, regr_optim, frontend_optim, temperture=temperture, alpha=alpha)
         elif self.mode == "MGD":
@@ -237,7 +237,7 @@ class backprop_scheduler(object):
 
         return losses
 
-    def _softmax(self, preds, label, cls_optim, regr_optim, frontend_optim, temperture):
+    def _softmax(self, preds, label, cls_optim, regr_optim, frontend_optim, temperture, device):
         assert temperture > 0
 
         num_worker = len(self.model.regression_workers) + len(self.model.classification_workers)
@@ -261,7 +261,7 @@ class backprop_scheduler(object):
             idx += 1
 
         alpha = F.softmax(temperture * loss_tmp.detach())
-        tot_loss = alpha * loss_tmp
+        tot_loss = torch.sum(alpha * loss_tmp)
         tot_loss.backward(retain_graph=True)
 
 
@@ -272,7 +272,7 @@ class backprop_scheduler(object):
             optim.step()
 
         frontend_optim.step()
-        losses["total"] = hyper_votolume
+        losses["total"] = tot_loss
 
         return losses
 
