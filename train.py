@@ -7,6 +7,7 @@ from pase.models.WorkerScheduler.trainer import trainer
 from pase.transforms import *
 from pase.losses import *
 from pase.utils import pase_parser
+import pase
 from torch.utils.data import DataLoader
 import torch
 import pickle
@@ -247,6 +248,10 @@ if __name__ == '__main__':
                         default='data/LibriSpeech/Librispeech_spkid_sel')
     parser.add_argument('--data_cfg', type=str,
                         default='data/librispeech_data.cfg')
+    parser.add_argument('--noise_folder', type=str, default=None)
+    parser.add_argument('--whisper_folder', type=str, default=None)
+    parser.add_argument('--distortion_p', type=float, default=0.4)
+    parser.add_argument('--dtrans_cfg', type=str, default=None)
     parser.add_argument('--net_ckpt', type=str, default=None,
                         help='Ckpt to initialize the full network '
                              '(Def: None).')
@@ -309,7 +314,6 @@ if __name__ == '__main__':
     parser.add_argument('--cache_on_load', action='store_true', default=False,
                         help='Argument to activate cache loading on the fly '
                              'for the wav files in datasets (Def: False).')
-    parser.add_argument('--dtrans_cfg', type=str, default=None)
     parser.add_argument('--dataset', type=str,
                         default='LibriSpeechSegTupleWavDataset',
                         help='Dataset to be used: '
