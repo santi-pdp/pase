@@ -22,4 +22,5 @@ python -u train.py --batch_size 32 --epoch 150 --num_workers 8 \
         --data_root /export/corpora/LibriSpeech_50h/wav_sel \
         --stats /export/fs01/zhong/pase_dev/pase/data/librispeech_50h_stats.pkl \
         --log_freq 100 \
-	    --att_cfg cfg/attention.cfg --backprop_mode base --tensorboard true
+	    --att_cfg cfg/attention.cfg --attention_K 40\
+	    --backprop_mode base --tensorboard true
