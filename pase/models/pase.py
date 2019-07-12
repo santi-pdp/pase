@@ -26,7 +26,14 @@ class pase_attention(Model):
                              'GIMME SOMETHING TO DO.')
 
         # init frontend
-        self.frontend = encoder(WaveFe(**frontend_cfg))
+        # init frontend
+        if 'aspp' in frontend_cfg.keys():
+            self.frontend = aspp_encoder(sinc_out=frontend_cfg['sinc_out'], hidden_dim=frontend_cfg['hidden_dim'])
+        elif 'aspp_res' in frontend_cfg.keys():
+            self.frontend = aspp_res_encoder(sinc_out=frontend_cfg['sinc_out'],
+                                                 hidden_dim=frontend_cfg['hidden_dim'])
+        else:
+            self.frontend = encoder(WaveFe(**frontend_cfg))
 
         # init all workers
         # putting them into two lists
@@ -47,11 +54,11 @@ class pase_attention(Model):
         for cfg in minions_cfg:
 
             if cfg["name"] in self.cls_lst:
-                self.classification_workers.append(cls_worker_maker(cfg, ninp))
+                self.classification_workers.append(cls_worker_maker(cfg, K))
                 self.attention_blocks.append(attention_block(nn_input, cfg['name'], att_cfg, K))
 
             elif cfg["name"] in self.reg_lst:
-                cfg['num_inputs'] = ninp
+                cfg['num_inputs'] = K
                 minion = minion_maker(cfg)
                 self.regression_workers.append(minion)
                 self.attention_blocks.append(attention_block(nn_input, cfg['name'], att_cfg, K))
