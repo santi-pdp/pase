@@ -330,6 +330,7 @@ if __name__ == '__main__':
     parser.add_argument('--delta', type=float, help="delta for hyper volume loss scheduling")
     parser.add_argument('--temp', type=float, help="temp for softmax or adaptive losss")
     parser.add_argument('--alpha', type=float, help="alpha for adaptive loss")
+    parser.add_argument('--attention_K', type=int, help="top K indices to select for attention")
 
     opts = parser.parse_args()
     opts.ckpt_continue = not str2bool(opts.no_continue)
