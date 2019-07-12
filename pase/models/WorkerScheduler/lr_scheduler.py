@@ -13,7 +13,7 @@ class LR_Scheduler(object):
         iters_per_epoch: number of iterations per epoch
     """
     def __init__(self, mode, optim_name, base_lr, num_epochs, iters_per_epoch=0,
-                 lr_step=0, warmup_epochs=0):
+                 lr_step=30, warmup_epochs=0):
         self.mode = mode
         self.name = optim_name
         print('Using {} LR Scheduler for {}!'.format(self.mode, optim_name))

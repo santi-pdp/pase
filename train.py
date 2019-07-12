@@ -231,6 +231,7 @@ def train(opts):
                       minions_cfg=minions_cfg,
                       cfg=vars(opts),
                       backprop_mode=opts.backprop_mode,
+                      lr_mode=opts.lr_mode,
                       tensorboard=str2bool(opts.tensorboard))
     # print(Trainer.model)
     print('Frontend params: ', Trainer.model.frontend.describe_params())
@@ -278,8 +279,8 @@ if __name__ == '__main__':
     parser.add_argument('--hidden_layers', type=int, default=2)
     parser.add_argument('--fe_opt', type=str, default='Adam')
     parser.add_argument('--min_opt', type=str, default='Adam')
-    parser.add_argument('--lrdec_step', type=int, default=15,
-                        help='Number of epochs to scale lr (Def: 15).')
+    parser.add_argument('--lrdec_step', type=int, default=30,
+                        help='Number of epochs to scale lr (Def: 30).')
     parser.add_argument('--lrdecay', type=float, default=0,
                         help='Learning rate decay factor with '
                              'cross validation. After patience '
@@ -321,10 +322,10 @@ if __name__ == '__main__':
                              'LibriSpeechSegTupleWavDataset. '
                              '(Def: LibriSpeechSegTupleWavDataset.')
     parser.add_argument('--no_continue', type=str, default="False",help="whether continue the training")
-    
+    parser.add_argument('--lr_mode', type=str, default='step', help='learning rate scheduler mode')
     parser.add_argument('--att_cfg', type=str, help='Path to the config file of attention blocks')
     parser.add_argument('--tensorboard', type=str, help='use tensorboard for logging')
-    parser.add_argument('--backprop_mode', type=str, help='backprop policy can be choose from: [base, select_one, select_half]')
+    parser.add_argument('--backprop_mode', type=str, default='base',help='backprop policy can be choose from: [base, select_one, select_half]')
     parser.add_argument('--dropout_rate', type=float, default=0.5, help="drop out rate for workers")
     parser.add_argument('--delta', type=float, help="delta for hyper volume loss scheduling")
     parser.add_argument('--temp', type=float, help="temp for softmax or adaptive losss")

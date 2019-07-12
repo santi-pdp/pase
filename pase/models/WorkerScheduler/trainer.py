@@ -33,6 +33,7 @@ class trainer(object):
                  pretrained_ckpt=None,
                  tensorboard=None,
                  backprop_mode = None,
+                 lr_mode = 'step',
                  name='Pase_base',
                  device=None):
 
@@ -74,7 +75,7 @@ class trainer(object):
         # init front end optim
         self.frontend_optim = getattr(optim, cfg['fe_opt'])(self.model.frontend.parameters(),
                                               lr=cfg['fe_lr'])
-        self.fe_scheduler = LR_Scheduler('poly', optim_name="frontend", base_lr=cfg['fe_lr'],
+        self.fe_scheduler = LR_Scheduler(lr_mode, lr_step=cfg['lrdec_step'], optim_name="frontend", base_lr=cfg['fe_lr'],
                                     num_epochs=self.epoch,
                                     iters_per_epoch=self.bpe)
 
@@ -91,7 +92,7 @@ class trainer(object):
             self.cls_optim[worker.name] = getattr(optim, min_opt)(worker.parameters(),
                                                              lr=min_lr)
 
-            worker_scheduler = LR_Scheduler('poly', optim_name=worker.name, base_lr=min_lr,
+            worker_scheduler = LR_Scheduler(lr_mode, lr_step=cfg['lrdec_step'],optim_name=worker.name, base_lr=min_lr,
                                             num_epochs=self.epoch,
                                             iters_per_epoch=self.bpe)
             self.cls_scheduler[worker.name] = worker_scheduler
@@ -108,7 +109,7 @@ class trainer(object):
             min_lr = cfg['min_lr']
             self.regr_optim[worker.name] = getattr(optim, min_opt)(worker.parameters(),
                                                               lr=min_lr)
-            worker_scheduler = LR_Scheduler('poly', optim_name=worker.name, base_lr=min_lr,
+            worker_scheduler = LR_Scheduler(lr_mode, lr_step=cfg['lrdec_step'], optim_name=worker.name, base_lr=min_lr,
                                             num_epochs=self.epoch,
                                             iters_per_epoch=self.bpe)
             self.regr_scheduler[worker.name] = worker_scheduler
