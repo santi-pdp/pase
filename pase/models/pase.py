@@ -42,8 +42,8 @@ class pase_attention(Model):
         compress_factor = 1
         for s in strides:
             compress_factor = compress_factor * s
-        nn_input = int(chunk_size / compress_factor)
-
+        nn_input = int(chunk_size / compress_factor) * self.frontend.emb_dim
+        print("input_dim of the attention blocks: {}".format(nn_input))
         for cfg in minions_cfg:
 
             if cfg["name"] in self.cls_lst:
