@@ -241,7 +241,7 @@ class backprop_scheduler(object):
         assert temperture > 0
 
         num_worker = len(self.model.regression_workers) + len(self.model.classification_workers)
-        loss_tmp = torch.zeros(num_worker).to(device)
+        loss_tmp = []
         idx = 0
 
         frontend_optim.zero_grad()
@@ -250,18 +250,29 @@ class backprop_scheduler(object):
             cls_optim[worker.name].zero_grad()
             loss = worker.loss(preds[worker.name], label[worker.name])
             losses[worker.name] = loss
-            loss_tmp[idx] = loss
-            idx += 1
+            loss_tmp.append(loss)
+            # idx += 1
 
         for worker in self.model.regression_workers:
             regr_optim[worker.name].zero_grad()
             loss = worker.loss(preds[worker.name], label[worker.name])
             losses[worker.name] = loss
-            loss_tmp[idx] = loss
+            loss_tmp.append(loss)
+            # idx += 1
+
+        with torch.no_grad():
+            loss_vec = torch.tensor(loss_tmp, requires_grad=False)
+            alpha = F.softmax(temperture * loss_vec, dim=0).to(device)
+
+        tot_loss = 0
+        for worker in self.model.classification_workers:
+            tot_loss += alpha[idx] * losses[worker.name]
+            idx += 1
+        for worker in self.model.regression_workers:
+            tot_loss += alpha[idx] * losses[worker.name]
             idx += 1
 
-        alpha = F.softmax(temperture * loss_tmp.detach())
-        tot_loss = torch.sum(alpha * loss_tmp)
+        # tot_loss = torch.sum(alpha.detach() * loss_vec)
         tot_loss.backward(retain_graph=True)
 
 

@@ -14,6 +14,7 @@ class pase_attention(Model):
                  minions_cfg=None,
                  cls_lst=["mi", "cmi", "spc"],
                  regr_lst=["chunk", "lps", "mfcc", "prosody"],
+                 K=40,
                  pretrained_ckpt=None,
                  name="adversarial"):
 

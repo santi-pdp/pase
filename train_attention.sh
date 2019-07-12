@@ -15,11 +15,11 @@ conda info -e
 nvidia-smi
 
 python -u train.py --batch_size 32 --epoch 150 --num_workers 8 \
-        --save_path /scratch/jzhong9/model_ckpt/att_dense  \
+        --save_path /export/team-mic/zhong/test/attention_debug  \
         --net_cfg cfg/workers.cfg \
-        --fe_cfg cfg/PASE_dense.cfg \
-        --do_eval --data_cfg /scratch/jzhong9/data/LibriSpeech_50h/librispeech_data_50h.cfg --min_lr 0.0005 --fe_lr 0.0005 \
-        --data_root /scratch/jzhong9/data/LibriSpeech_50h/wav_sel \
-        --stats /scratch/jzhong9/data/LibriSpeech_50h/librispeech_50h_stats.pkl \
+        --fe_cfg cfg/PASE_att.cfg \
+        --do_eval --data_cfg /export/corpora/LibriSpeech_50h/librispeech_data_50h.cfg --min_lr 0.0005 --fe_lr 0.0005 \
+        --data_root /export/corpora/LibriSpeech_50h/wav_sel \
+        --stats /export/fs01/zhong/pase_dev/pase/data/librispeech_50h_stats.pkl \
         --log_freq 100 \
-	    --att_cfg cfg/attention.cfg --backprop_mode base --tensorboard False
+	    --att_cfg cfg/attention.cfg --backprop_mode base --tensorboard true
