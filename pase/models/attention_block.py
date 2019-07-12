@@ -15,7 +15,7 @@ class attention_block(Model):
     def forward(self, hidden, device):
         emb_dim = hidden.shape[1]
         feature_length = hidden.shape[2]
-
+        hidden = hidden.contiguous()
         hidden = hidden.view(hidden.shape[0], emb_dim * feature_length)
         distribution = self.mlp(hidden)
         hidden = hidden.view(hidden.shape[0], emb_dim, feature_length)

@@ -55,11 +55,11 @@ class pase_attention(Model):
         for cfg in minions_cfg:
 
             if cfg["name"] in self.cls_lst:
-                self.classification_workers.append(cls_worker_maker(cfg, K))
+                self.classification_workers.append(cls_worker_maker(cfg, ninp))
                 self.attention_blocks.append(attention_block(nn_input, cfg['name'], att_cfg, K))
 
             elif cfg["name"] in self.reg_lst:
-                cfg['num_inputs'] = K
+                cfg['num_inputs'] = ninp
                 minion = minion_maker(cfg)
                 self.regression_workers.append(minion)
                 self.attention_blocks.append(attention_block(nn_input, cfg['name'], att_cfg, K))

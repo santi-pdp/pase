@@ -40,13 +40,13 @@ class pase_attention(Model):
 
             if cfg["name"] in self.cls_lst:
                 self.classification_workers.append(cls_worker_maker(cfg, ninp))
-                self.attention_blocks.append(attention_block(ninp, cfg['name'], att_cfg, 40))
+                self.attention_blocks.append(attention_block(K, cfg['name'], att_cfg, 40))
 
             elif cfg["name"] in self.reg_lst:
                 cfg['num_inputs'] = ninp
                 minion = minion_maker(cfg)
                 self.regression_workers.append(minion)
-                self.attention_blocks.append(attention_block(ninp, cfg['name'], att_cfg, 40))
+                self.attention_blocks.append(attention_block(K, cfg['name'], att_cfg, 40))
 
         if pretrained_ckpt is not None:
             self.load_pretrained(pretrained_ckpt, load_last=True)
