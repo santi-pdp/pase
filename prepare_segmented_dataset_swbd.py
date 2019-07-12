@@ -30,7 +30,7 @@ def handle_multichannel_wav(wav, channel):
     return wav, suffixes[channel]
 
 def segment_signal(args):
-    data_root, wav_file = args
+    data_root, wav_file, channel = args
     wlen = 3200
     wshift = 80
     en_th = 0.3
@@ -42,7 +42,7 @@ def segment_signal(args):
     #signal, fs = sf.read(data_folder+wav_file)
     signal, fs = sf.read(wav_path)
 
-    signal, side = handle_multichannel_wav(signal, args.channel)
+    signal, side = handle_multichannel_wav(signal, channel)
 
     signal = signal / np.max(np.abs(signal))
     
@@ -138,7 +138,7 @@ def main(opts):
 
             # Readline all the files
             with open(file_lst, 'r') as lst_f:
-                wav_lst = [(data_folder, line.rstrip()) for line in lst_f]
+                wav_lst = [(data_folder, line.rstrip(), opts.channel) for line in lst_f]
 
                 count=1
                 count_seg_tot=0
