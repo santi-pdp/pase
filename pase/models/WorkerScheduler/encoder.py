@@ -107,6 +107,8 @@ class aspp_res_encoder(Model):
 
         self.block4 = aspp_resblock(hidden_dim, hidden_dim, stride[3])
 
+        self.rnn_pool = rnn_pool
+
         if rnn_pool:
             self.rnn = build_rnn_block(hidden_dim, hidden_dim // 2,
                                        rnn_layers=1,
