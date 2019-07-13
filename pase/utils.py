@@ -32,10 +32,10 @@ def pase_parser(cfg_fname, batch_acum=1, device='cpu', do_losses=True,
                         DNet =  RNNDiscriminator(**dnet_cfg)
                         if 'Dopt_cfg' in cfg_all[i]:
                             Dopt_cfg = cfg_all[i].pop('Dopt_cfg')
-                            Dopt = optim.RMSprop(DNet.parameters(),
+                            Dopt = optim.Adam(DNet.parameters(),
                                                  Dopt_cfg['lr'])
                         else:
-                            Dopt = optim.RMSprop(DNet.parameters(), 0.0005)
+                            Dopt = optim.Adam(DNet.parameters(), 0.0005)
                     Dloss = 'L2' if loss_name == 'LSGAN' else 'BCE'
                     cfg_all[i]['loss'] = WaveAdversarialLoss(DNet, Dopt,
                                                              loss=Dloss,
@@ -137,4 +137,22 @@ class AuxiliarSuperviser(object):
             #print(shsub)
             p = subprocess.Popen(sub_cmd,
                                 shell=True)
+
+
+def get_grad_norms(model, keys=[]):
+    grads = {}
+    for i, (k, param) in enumerate(dict(model.named_parameters()).items()):
+        accept = False
+        for key in keys:
+            # match substring in collection of model keys
+            if key in k:
+                accept = True
+                break
+        if not accept:
+            continue
+        if param.grad is None:
+            print('WARNING getting grads: {} param grad is None'.format(k))
+            continue
+        grads[k] = torch.norm(param.grad).cpu().item()
+    return grads
 
