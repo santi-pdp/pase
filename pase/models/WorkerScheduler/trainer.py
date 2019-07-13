@@ -4,6 +4,7 @@ from .encoder import encoder
 from .lr_scheduler import LR_Scheduler
 from ..pase import pase, pase_attention, pase_chunking
 from .worker_scheduler import backprop_scheduler
+from ...utils import AuxiliarSuperviser, get_grad_norms
 import torch
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
@@ -138,8 +139,6 @@ class trainer(object):
                 self.regr_optim[worker.name] = getattr(optim, min_opt)(worker.parameters(),
                                                                        lr=min_lr)
 
-
-
         # init tensorboard writer
         print("Use tenoserboard: {}".format(tensorboard))
         self.tensorboard = tensorboard and use_tb
@@ -181,6 +180,14 @@ class trainer(object):
             # self.temp = None
             self.alpha = None
 
+        # auto supervise task evaluation
+        if cfg['sup_exec'] is not None:
+            aux_save_path = os.path.join(cfg['save_path'],
+                                             'sup_aux')
+            if not os.path.exists(aux_save_path):
+                os.makedirs(aux_save_path)
+            self.aux_sup = AuxiliarSuperviser(cfg['sup_exec'], aux_save_path)
+        self.sup_freq = cfg['sup_freq']
 
     def train_(self, dataloader, valid_dataloader, device):
 
@@ -248,6 +255,12 @@ class trainer(object):
             for saver in self.savers:
                 saver.save(saver.prefix[:-1], e * self.bpe + bidx)
 
+            # TODO: sup. aux losses
+            if (e + 1) % self.sup_freq == 0 or \
+                    (e + 1) >= self.epoch:
+                if hasattr(self, 'aux_sup'):
+                    self.aux_sup(epoch_, fe_path, cfg['fe_cfg'])
+
 
 
     def _eval(self, dataloader, epoch=0, device='cpu'):
@@ -257,7 +270,6 @@ class trainer(object):
             print('=' * 50)
             print('Beginning evaluation...')
             running_loss = {}
-
             iterator = iter(dataloader)
             with trange(1, self.va_bpe + 1) as pbar:
                 for bidx in pbar:

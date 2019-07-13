@@ -24,4 +24,4 @@ python -u train.py --batch_size 32 --epoch 150 --num_workers 8 \
         --log_freq 100 \
 	    --att_cfg cfg/attention.cfg --attention_K 40\
 	    --backprop_mode base --tensorboard true \
-	    --chunk_size 32000
+	    --chunk_size 34000
