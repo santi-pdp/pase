@@ -46,12 +46,11 @@ class pase_attention(Model):
         self.classification_workers = nn.ModuleList()
         self.attention_blocks = nn.ModuleList()
 
-        strides = frontend_cfg['strides']
-        compress_factor = 1
-        for s in strides:
-            compress_factor = compress_factor * s
-        nn_input = int(chunk_size / compress_factor) * self.frontend.emb_dim
-        print("input_dim of the attention blocks: {}".format(nn_input))
+        nn_input = self.cal_nn_input_dim(frontend_cfg['strides'], chunk_size)
+
+        # auto infer the output dim of first nn layer
+        att_cfg['dnn_lay'] += "," + str(ninp)
+
         for cfg in minions_cfg:
 
             if cfg["name"] in self.cls_lst:
@@ -74,7 +73,6 @@ class pase_attention(Model):
 
         h, chunk = self.frontend(x, device)
 
-
         # forward all attention blocks
         # chunk => new_chunk, indices
         new_hidden = {}
@@ -92,6 +90,8 @@ class pase_attention(Model):
             y = worker(hidden)
             preds[worker.name] = y
             labels[worker.name] = x[worker.name].to(device).detach()
+            if worker.name == 'chunk':
+                labels[worker.name] = x['cchunk'].to(device).detach()
 
         # forward all regression workers
         # h => y, label
@@ -107,6 +107,19 @@ class pase_attention(Model):
             labels[worker.name] = label
 
         return h, chunk, preds, labels
+
+    def cal_nn_input_dim(self, strides, chunk_size):
+
+        compress_factor = 1
+        for s in strides:
+            compress_factor = compress_factor * s
+
+        if chunk_size % compress_factor != 0:
+            raise ValueError('chunk_size should be divisible by the product of the strides factors!')
+
+        nn_input = int(chunk_size // compress_factor) * self.frontend.emb_dim
+        print("input_dim of the attention blocks: {}".format(nn_input))
+        return nn_input
 
 class pase_chunking(Model):
 
@@ -185,6 +198,8 @@ class pase_chunking(Model):
             y = worker(chunk)
             preds[worker.name] = y
             labels[worker.name] = x[worker.name].to(device).detach()
+            if worker.name == 'chunk':
+                labels[worker.name] =  x['cchunk'].to(device).detach()
 
         # forward all regression workers
         # h => y, label
@@ -281,6 +296,8 @@ class pase(Model):
             y = worker(chunk)
             preds[worker.name] = y
             labels[worker.name] = x[worker.name].to(device).detach()
+            if worker.name == 'chunk':
+                labels[worker.name] =  x['cchunk'].to(device).detach()
 
         # forward all regression workers
         # h => y, label
