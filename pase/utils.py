@@ -138,3 +138,21 @@ class AuxiliarSuperviser(object):
             p = subprocess.Popen(sub_cmd,
                                 shell=True)
 
+
+def get_grad_norms(model, keys=[]):
+    grads = {}
+    for i, (k, param) in enumerate(dict(model.named_parameters()).items()):
+        accept = False
+        for key in keys:
+            # match substring in collection of model keys
+            if key in k:
+                accept = True
+                break
+        if not accept:
+            continue
+        if param.grad is None:
+            print('WARNING getting grads: {} param grad is None'.format(k))
+            continue
+        grads[k] = torch.norm(param.grad).cpu().item()
+    return grads
+
