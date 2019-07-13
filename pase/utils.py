@@ -32,10 +32,10 @@ def pase_parser(cfg_fname, batch_acum=1, device='cpu', do_losses=True,
                         DNet =  RNNDiscriminator(**dnet_cfg)
                         if 'Dopt_cfg' in cfg_all[i]:
                             Dopt_cfg = cfg_all[i].pop('Dopt_cfg')
-                            Dopt = optim.RMSprop(DNet.parameters(),
+                            Dopt = optim.Adam(DNet.parameters(),
                                                  Dopt_cfg['lr'])
                         else:
-                            Dopt = optim.RMSprop(DNet.parameters(), 0.0005)
+                            Dopt = optim.Adam(DNet.parameters(), 0.0005)
                     Dloss = 'L2' if loss_name == 'LSGAN' else 'BCE'
                     cfg_all[i]['loss'] = WaveAdversarialLoss(DNet, Dopt,
                                                              loss=Dloss,
