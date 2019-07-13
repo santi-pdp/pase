@@ -202,8 +202,6 @@ class trainer(object):
 
             iterator = iter(dataloader)
 
-            self.bpe = 20
-
             with trange(1, self.bpe + 1) as pbar:
                 for bidx in pbar:
                     pbar.set_description("Epoch {}/{}".format(e, self.epoch))
@@ -272,7 +270,6 @@ class trainer(object):
             print('=' * 50)
             print('Beginning evaluation...')
             running_loss = {}
-            self.va_bpe = 10
             iterator = iter(dataloader)
             with trange(1, self.va_bpe + 1) as pbar:
                 for bidx in pbar:
