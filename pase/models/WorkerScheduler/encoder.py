@@ -46,9 +46,6 @@ class aspp_res_encoder(Model):
                                   pad_mode='reflect'
                                   )
 
-        # if pool2d:
-        #     self.conv1 = nn.Sequential(nn.Conv1d(sinc_out, hidden_dim, kernel_sizes))
-
 
         self.ASPP_blocks = nn.ModuleList()
         for i in range(len(kernel_sizes)):
@@ -56,20 +53,14 @@ class aspp_res_encoder(Model):
                 self.ASPP_blocks.append(aspp_resblock(sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, pool2d))
 
             elif i == 0 and pool2d:
-                self.ASPP_blocks.append(nn.Sequential(nn.Conv1d(sinc_out, hidden_dim, kernel_sizes[i], strides[i], padding=kernel_sizes//2),
+                self.ASPP_blocks.append(nn.Sequential(nn.Conv1d(sinc_out, hidden_dim, kernel_sizes[i], strides[i], padding=kernel_sizes[i]//2),
                                                       nn.BatchNorm1d(hidden_dim),
                                                       nn.ReLU(hidden_dim)))
             else:
                 self.ASPP_blocks.append(aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, pool2d))
 
+        self._init_weight()
 
-        # self.block1 = aspp_resblock(sinc_out, hidden_dim, kernel_sizes[0], strides[0], dilations, fmaps, pool2d)
-        #
-        # self.block2 = aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[1], strides[1], dilations, fmaps, pool2d)
-        #
-        # self.block3 = aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[2], strides[2], dilations, fmaps, pool2d)
-        #
-        # self.block4 = aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[3], strides[3], dilations, fmaps, pool2d)
 
         self.rnn_pool = rnn_pool
 
@@ -106,14 +97,6 @@ class aspp_res_encoder(Model):
 
         h = out
 
-        # out_1 = self.block1(sinc_out)
-        #
-        # out_2 = self.block2(out_1)
-        #
-        # out_3 = self.block3(out_2)
-        #
-        # h = self.block4(out_3)
-
         if self.rnn_pool:
             h = h.transpose(1, 2).transpose(0, 1)
             h, _ = self.rnn(h)
@@ -127,3 +110,11 @@ class aspp_res_encoder(Model):
             return embedding, chunk
         else:
             return h
+
+    def _init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv1d):
+                torch.nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, nn.BatchNorm1d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
