@@ -46,11 +46,19 @@ class aspp_res_encoder(Model):
                                   pad_mode='reflect'
                                   )
 
+        # if pool2d:
+        #     self.conv1 = nn.Sequential(nn.Conv1d(sinc_out, hidden_dim, kernel_sizes))
+
 
         self.ASPP_blocks = nn.ModuleList()
         for i in range(len(kernel_sizes)):
-            if i == 0:
+            if i == 0 and not pool2d:
                 self.ASPP_blocks.append(aspp_resblock(sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, pool2d))
+
+            elif i == 0 and pool2d:
+                self.ASPP_blocks.append(nn.Sequential(nn.Conv1d(sinc_out, hidden_dim, kernel_sizes[i], strides[i], padding=kernel_sizes//2),
+                                                      nn.BatchNorm1d(hidden_dim),
+                                                      nn.ReLU(hidden_dim)))
             else:
                 self.ASPP_blocks.append(aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, pool2d))
 
