@@ -26,13 +26,9 @@ class pase_attention(Model):
                              'GIMME SOMETHING TO DO.')
 
         # init frontend
-        if 'aspp' in frontend_cfg.keys():
-            self.frontend = aspp_encoder(sinc_out=frontend_cfg['sinc_out'], hidden_dim=frontend_cfg['hidden_dim'])
-        elif 'aspp_res' in frontend_cfg.keys():
-            self.frontend = aspp_res_encoder(sinc_out=frontend_cfg['sinc_out'],
-                                             hidden_dim=frontend_cfg['hidden_dim'],
-                                             stride=frontend_cfg['strides'],
-                                             rnn_pool=frontend_cfg['rnn_pool'])
+        print(frontend_cfg)
+        if 'name' in frontend_cfg.keys() and frontend_cfg['name'] == 'asppRes':
+            self.frontend = aspp_res_encoder(**frontend_cfg)
         else:
             self.frontend = encoder(WaveFe(**frontend_cfg))
 
@@ -247,13 +243,8 @@ class pase(Model):
                              'GIMME SOMETHING TO DO.')
 
         # init frontend
-        if 'aspp' in frontend_cfg.keys():
-            self.frontend = aspp_encoder(sinc_out=frontend_cfg['sinc_out'], hidden_dim=frontend_cfg['hidden_dim'])
-        elif 'aspp_res' in frontend_cfg.keys():
-            self.frontend = aspp_res_encoder(sinc_out=frontend_cfg['sinc_out'],
-                                             hidden_dim=frontend_cfg['hidden_dim'],
-                                             stride=frontend_cfg['strides'],
-                                             rnn_pool=frontend_cfg['rnn_pool'])
+        if 'name' in frontend_cfg.keys() and frontend_cfg['name'] == 'asppRes':
+            self.frontend = aspp_res_encoder(**frontend_cfg)
         else:
             self.frontend = encoder(WaveFe(**frontend_cfg))
 
