@@ -123,23 +123,8 @@ class trainer(object):
                                 optimizer=self.regr_optim[worker.name],
                                 prefix='M-{}-'.format(worker.name)))
 
-        if cfg["ckpt_continue"]:
-            self.load_checkpoints(self.save_path)
-            self.model.to(device)
+        self.epoch_beg = 0
 
-            self.frontend_optim = getattr(optim, cfg['fe_opt'])(self.model.frontend.parameters(),
-                                                                lr=cfg['fe_lr'])
-
-            for worker in self.model.classification_workers:
-                min_opt = cfg['min_opt']
-                min_lr = cfg['min_lr']
-                self.cls_optim[worker.name] = getattr(optim, min_opt)(worker.parameters(),
-                                                                      lr=min_lr)
-            for worker in self.model.regression_workers:
-                min_opt = cfg['min_opt']
-                min_lr = cfg['min_lr']
-                self.regr_optim[worker.name] = getattr(optim, min_opt)(worker.parameters(),
-                                                                       lr=min_lr)
 
         # init tensorboard writer
         print("Use tenoserboard: {}".format(tensorboard))
@@ -198,11 +183,19 @@ class trainer(object):
         print('Batches per epoch: ', self.bpe)
         print('Loss schedule policy: {}'.format(self.backprop.mode))
 
-        for e in range(self.epoch):
+        if self.cfg["ckpt_continue"]:
+            self.resume_training(device)
+
+        else:
+            self.epoch_beg = 0
+
+        for e in range(self.epoch_beg, self.epoch):
 
             self.model.train()
 
             iterator = iter(dataloader)
+
+            self.bpe = 3
 
 
             with trange(1, self.bpe + 1) as pbar:
@@ -249,12 +242,6 @@ class trainer(object):
                        epoch=e,
                        device=device)
 
-            # torch.save(self.model.frontend.state_dict(),
-            #            os.path.join(self.save_path,
-            #                         'FE_e{}.ckpt'.format(e)))
-            # torch.save(self.model.state_dict(),
-            #            os.path.join(self.save_path,
-            #                         'fullmodel_e{}.ckpt'.format(e)))
             fe_path = os.path.join(self.save_path,
                                    'FE_e{}.ckpt'.format(e))
             torch.save(self.model.frontend.state_dict(), fe_path)
@@ -276,6 +263,7 @@ class trainer(object):
         with torch.no_grad():
             print('=' * 50)
             print('Beginning evaluation...')
+            self.va_bpe = 3
             running_loss = {}
             iterator = iter(dataloader)
             with trange(1, self.va_bpe + 1) as pbar:
@@ -323,6 +311,33 @@ class trainer(object):
                                   ''.format(name, loss.item()))
 
             self.eval_logger(running_loss, epoch, pbar)
+
+    def resume_training(self, device):
+        giters = 0
+        for saver in self.savers:
+            # try loading all savers last state if not forbidden is active
+            try:
+                state = saver.read_latest_checkpoint()
+                giter_ = saver.load_ckpt_step(state)
+                print('giter_ found: ', giter_)
+                # assert all ckpts happened at last same step
+                if giters == 0:
+                    giters = giter_
+                else:
+                    assert giters == giter_, giter_
+                saver.load_pretrained_ckpt(os.path.join(self.save_path,
+                                                        'weights_' + state),
+                                           load_last=True)
+            except TypeError:
+                break
+
+            global_step = giters
+            # redefine num epochs depending on where we left it
+            self.bpe = 3
+            self.epoch_beg = int(global_step / self.bpe)
+
+        # self.load_checkpoints(self.save_path)
+        self.model.to(device)
 
     def load_checkpoints(self, load_path):
 
