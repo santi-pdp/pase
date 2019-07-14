@@ -72,6 +72,8 @@ class trainer(object):
         self.bpe = cfg['bpe']
         self.va_bpe = cfg['va_bpe']
         self.savers = []
+        self.fronted_cfg = frontend_cfg
+        self.cfg = cfg
 
 
 
@@ -202,6 +204,7 @@ class trainer(object):
 
             iterator = iter(dataloader)
 
+
             with trange(1, self.bpe + 1) as pbar:
                 for bidx in pbar:
                     pbar.set_description("Epoch {}/{}".format(e, self.epoch))
@@ -252,6 +255,10 @@ class trainer(object):
             # torch.save(self.model.state_dict(),
             #            os.path.join(self.save_path,
             #                         'fullmodel_e{}.ckpt'.format(e)))
+            fe_path = os.path.join(self.save_path,
+                                   'FE_e{}.ckpt'.format(e))
+            torch.save(self.model.frontend.state_dict(), fe_path)
+
             for saver in self.savers:
                 saver.save(saver.prefix[:-1], e * self.bpe + bidx)
 
@@ -259,7 +266,7 @@ class trainer(object):
             if (e + 1) % self.sup_freq == 0 or \
                     (e + 1) >= self.epoch:
                 if hasattr(self, 'aux_sup'):
-                    self.aux_sup(epoch_, fe_path, cfg['fe_cfg'])
+                    self.aux_sup(e, fe_path, self.cfg['fe_cfg'])
 
 
 
