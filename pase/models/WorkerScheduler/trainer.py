@@ -364,6 +364,12 @@ class trainer(object):
                                      labels[name].data,
                                      bins='sturges',
                                      global_step=step)
+
+        grads = get_grad_norms(self.model)
+        for kgrad, vgrad in grads.items():
+            writer.add_scalar('train/GRAD/{}'.format(kgrad),
+                              vgrad, global_step)
+
         if not self.tensorboard:
 
             for name, _ in preds.items():

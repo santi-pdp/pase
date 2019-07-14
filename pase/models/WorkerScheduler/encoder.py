@@ -34,64 +34,11 @@ class encoder(Model):
         else:
             return y
 
-class aspp_encoder(Model):
-
-    def __init__(self, sinc_out, hidden_dim):
-        super().__init__(name='aspp_encoder')
-        self.sinc = SincConv_fast(1, sinc_out, 251,
-                                  sample_rate=16000,
-                                  padding='SAME',
-                                  stride=160,
-                                  pad_mode='reflect'
-                                  )
-
-        self.block1 = nn.Sequential(ASPP(sinc_out, hidden_dim),
-                                    nn.Conv1d(hidden_dim, hidden_dim, kernel_size=11, stride=1, padding=5,
-                                              bias=False),
-                                    nn.BatchNorm1d(hidden_dim),
-                                    nn.ReLU(hidden_dim))
-
-        self.block2 = nn.Sequential(ASPP(hidden_dim, hidden_dim),
-                                    nn.Conv1d(hidden_dim, hidden_dim, kernel_size=11, stride=1, padding=5,
-                                              bias=False),
-                                    nn.BatchNorm1d(hidden_dim),
-                                    nn.ReLU(hidden_dim))
-
-        # self.fc = nn.Linear(hidden_dim, hidden_dim)
-
-        self.emb_dim = hidden_dim
-
-    def forward(self, batch, device):
-
-        if type(batch) == dict:
-            x = torch.cat((batch['chunk'],
-                           batch['chunk_ctxt'],
-                           batch['chunk_rand']),
-                          dim=0).to(device)
-        else:
-            x = batch
-
-        sinc_out = self.sinc(x)
-
-        out_1 = self.block1(sinc_out)
-
-        out_2 = self.block2(out_1)
-
-        y = out_1 + out_2
-
-
-        if type(batch) == dict:
-            embedding = torch.chunk(y, 3, dim=0)
-
-            chunk = embedding[0]
-            return embedding, chunk
-        else:
-            return y
 
 class aspp_res_encoder(Model):
 
-    def __init__(self, sinc_out, hidden_dim, stride=[10, 4, 2, 2], rnn_pool=False):
-        super().__init__(name='aspp_encoder')
+    def __init__(self, sinc_out, hidden_dim, kernel_sizes=[11, 11, 11, 11], strides=[10, 4, 2, 2], dilations=[1, 6, 12, 18], fmaps=48, name='aspp_encoder', pool2d=False,rnn_pool=False):
+        super().__init__(name=name)
         self.sinc = SincConv_fast(1, sinc_out, 251,
                                   sample_rate=16000,
                                   padding='SAME',
@@ -99,13 +46,22 @@ class aspp_res_encoder(Model):
                                   pad_mode='reflect'
                                   )
 
-        self.block1 = aspp_resblock(sinc_out, hidden_dim, stride[0])
 
-        self.block2 = aspp_resblock(hidden_dim, hidden_dim, stride[1])
+        self.ASPP_blocks = nn.ModuleList()
+        for i in range(len(kernel_sizes)):
+            if i == 0:
+                self.ASPP_blocks.append(aspp_resblock(sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, pool2d))
+            else:
+                self.ASPP_blocks.append(aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, pool2d))
 
-        self.block3 = aspp_resblock(hidden_dim, hidden_dim, stride[2])
 
-        self.block4 = aspp_resblock(hidden_dim, hidden_dim, stride[3])
+        # self.block1 = aspp_resblock(sinc_out, hidden_dim, kernel_sizes[0], strides[0], dilations, fmaps, pool2d)
+        #
+        # self.block2 = aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[1], strides[1], dilations, fmaps, pool2d)
+        #
+        # self.block3 = aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[2], strides[2], dilations, fmaps, pool2d)
+        #
+        # self.block4 = aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[3], strides[3], dilations, fmaps, pool2d)
 
         self.rnn_pool = rnn_pool
 
@@ -129,18 +85,26 @@ class aspp_res_encoder(Model):
                            batch['chunk_ctxt'],
                            batch['chunk_rand']),
                           dim=0).to(device)
+
+
         else:
             x = batch
 
         sinc_out = self.sinc(x)
 
-        out_1 = self.block1(sinc_out)
+        out = sinc_out
+        for block in self.ASPP_blocks:
+            out = block(out)
 
-        out_2 = self.block2(out_1)
+        h = out
 
-        out_3 = self.block3(out_2)
-
-        h = self.block4(out_3)
+        # out_1 = self.block1(sinc_out)
+        #
+        # out_2 = self.block2(out_1)
+        #
+        # out_3 = self.block3(out_2)
+        #
+        # h = self.block4(out_3)
 
         if self.rnn_pool:
             h = h.transpose(1, 2).transpose(0, 1)

@@ -169,7 +169,7 @@ def train(opts):
         fe_cfg = None
     minions_cfg = pase_parser(opts.net_cfg)
     #make_transforms(opts, minions_cfg)
-
+    opts.random_scale = str2bool(opts.random_scale)
     trans = make_transforms(opts, minions_cfg)
     print(trans)
     if opts.dtrans_cfg is not None:
@@ -235,10 +235,8 @@ def train(opts):
                       tensorboard=str2bool(opts.tensorboard))
     # print(Trainer.model)
     print('Frontend params: ', Trainer.model.frontend.describe_params())
+
     Trainer.model.to(device)
-    if opts.net_ckpt is not None:
-        Trainer.model.load_pretrained(opts.net_ckpt, load_last=True,
-                                      verbose=True)
 
     Trainer.train_(dloader, device=device, valid_dataloader=va_dloader)
 
@@ -269,7 +267,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--seed', type=int, default=2)
     parser.add_argument('--no-cuda', action='store_true', default=False)
-    parser.add_argument('--random_scale', action='store_true', default=False)
+    parser.add_argument('--random_scale', type=str, default='False', help="random scaling of noise")
     parser.add_argument('--chunk_size', type=int, default=16000)
     parser.add_argument('--log_freq', type=int, default=100)
     parser.add_argument('--epoch', type=int, default=1000)
