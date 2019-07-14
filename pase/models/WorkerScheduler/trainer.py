@@ -195,8 +195,6 @@ class trainer(object):
 
             iterator = iter(dataloader)
 
-            self.bpe = 3
-
 
             with trange(1, self.bpe + 1) as pbar:
                 for bidx in pbar:
@@ -263,7 +261,6 @@ class trainer(object):
         with torch.no_grad():
             print('=' * 50)
             print('Beginning evaluation...')
-            self.va_bpe = 3
             running_loss = {}
             iterator = iter(dataloader)
             with trange(1, self.va_bpe + 1) as pbar:
@@ -333,7 +330,6 @@ class trainer(object):
 
             global_step = giters
             # redefine num epochs depending on where we left it
-            self.bpe = 3
             self.epoch_beg = int(global_step / self.bpe)
 
         # self.load_checkpoints(self.save_path)
