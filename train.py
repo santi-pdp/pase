@@ -232,7 +232,8 @@ def train(opts):
                       cfg=vars(opts),
                       backprop_mode=opts.backprop_mode,
                       lr_mode=opts.lr_mode,
-                      tensorboard=str2bool(opts.tensorboard))
+                      tensorboard=str2bool(opts.tensorboard),
+                      device=device)
     # print(Trainer.model)
     print('Frontend params: ', Trainer.model.frontend.describe_params())
 
