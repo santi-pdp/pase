@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "run_minivox_fast.py", line 55, in <module>
+    dev_lst_file=sys.argv[5] # e.g., 'minvox_test_list.txt'
+IndexError: list index out of range
