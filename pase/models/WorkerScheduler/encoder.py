@@ -37,7 +37,7 @@ class encoder(Model):
 
 class aspp_res_encoder(Model):
 
-    def __init__(self, sinc_out, hidden_dim, kernel_sizes=[11, 11, 11, 11], strides=[10, 4, 2, 2], dilations=[1, 6, 12, 18], fmaps=48, name='aspp_encoder', pool2d=False,rnn_pool=False):
+    def __init__(self, sinc_out, hidden_dim, kernel_sizes=[11, 11, 11, 11], strides=[10, 4, 2, 2], dilations=[1, 6, 12, 18], fmaps=48, name='aspp_encoder', pool2d=False, rnn_pool=False, dense=False):
         super().__init__(name=name)
         self.sinc = SincConv_fast(1, sinc_out, 251,
                                   sample_rate=16000,
@@ -51,11 +51,11 @@ class aspp_res_encoder(Model):
 
         for i in range(len(kernel_sizes)):
             if i == 0 and not pool2d:
-                self.ASPP_blocks.append(aspp_resblock(sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, pool2d))
+                self.ASPP_blocks.append(aspp_resblock(sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, pool2d, dense))
             elif i == 0 and pool2d:
-                self.ASPP_blocks.append(aspp_resblock(sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, not pool2d))
+                self.ASPP_blocks.append(aspp_resblock(sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, not pool2d, dense))
             else:
-                self.ASPP_blocks.append(aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, pool2d))
+                self.ASPP_blocks.append(aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, pool2d, dense))
 
 
         self.rnn_pool = rnn_pool
