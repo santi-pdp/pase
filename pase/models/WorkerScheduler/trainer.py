@@ -40,9 +40,12 @@ class trainer(object):
 
         # init the pase
         if not cls_lst:
-            cls_lst = ["mi", "cmi", "spc"]
+            cls_lst = [worker['name'] for worker in minions_cfg['cls']]
         if not regr_lst:
-            regr_lst = ["cchunk", "chunk", "lps", "mfcc", "prosody"]
+            regr_lst = [worker['name'] for worker in minions_cfg['regr']]
+
+        print(cls_lst)
+        print(regr_lst)
 
         if att_cfg:
             print("training pase with attention!")

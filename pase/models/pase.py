@@ -257,15 +257,17 @@ class pase(Model):
         self.regression_workers = nn.ModuleList()
         self.classification_workers = nn.ModuleList()
 
-        for cfg in minions_cfg:
+        for type, cfg_lst in minions_cfg.items():
 
-            if cfg["name"] in self.cls_lst:
-                self.classification_workers.append(cls_worker_maker(cfg, ninp))
+            for cfg in cfg_lst:
 
-            elif cfg["name"] in self.reg_lst:
-                cfg['num_inputs'] = ninp
-                minion = minion_maker(cfg)
-                self.regression_workers.append(minion)
+                if type == 'cls':
+                    self.classification_workers.append(cls_worker_maker(cfg, ninp))
+
+                elif type == 'regr':
+                    cfg['num_inputs'] = ninp
+                    minion = minion_maker(cfg)
+                    self.regression_workers.append(minion)
 
         if pretrained_ckpt is not None:
             self.load_pretrained(pretrained_ckpt, load_last=True)
