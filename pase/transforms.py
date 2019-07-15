@@ -451,7 +451,12 @@ class Reverb(object):
         #rev = rev / np.max(np.abs(rev))
         # IR delay compensation
         rev = self.shift(rev, -p_max)
-        Eratio = np.sqrt(Ex / Er)
+        if Er > 0:
+            Eratio = np.sqrt(Ex / Er)
+        else:
+            Eratio = 1.0
+            rev = rev / np.max(np.abs(rev))
+
         # Trim rev signal to match clean length
         rev = rev[:wav.shape[0]]
         rev = Eratio * rev
@@ -543,8 +548,12 @@ class Downsample(object):
         Efilt = np.dot(sig_filt, sig_filt)
         #Ex = np.dot(wav, wav)
         
-        Eratio = np.sqrt(Ex / Efilt)
-
+        if Efilt>0:
+            Eratio = np.sqrt(Ex / Efilt)
+        else:
+            Eratio = 1.0
+            sig_filt = wav
+        
         sig_filt = Eratio * sig_filt
         sig_filt = torch.FloatTensor(sig_filt)
         if self.report:
@@ -632,8 +641,11 @@ class BandDrop(object):
 
         Efilt = np.dot(sig_filt, sig_filt)
         #Ex = np.dot(wav, wav)
-        
-        Eratio = np.sqrt(Ex / Efilt)
+        if Efilt>0:
+            Eratio = np.sqrt(Ex / Efilt)
+        else:
+            Eratio = 1.0
+            sig_filt=wav
 
         sig_filt = Eratio * sig_filt
         sig_filt = torch.FloatTensor(sig_filt)
@@ -935,7 +947,10 @@ class SimpleAdditive(object):
     def compute_SNR_K(self, signal, noise, snr):
         Ex = np.dot(signal, signal)
         En = np.dot(noise, noise)
-        K = np.sqrt(Ex / ((10 ** (snr / 10.)) * En))
+        if En > 0 :
+            K = np.sqrt(Ex / ((10 ** (snr / 10.)) * En))
+        else:
+            K = 1.0
         return K, Ex, En
 
     def norm_energy(self, osignal, ienergy, eps=1e-14):
@@ -972,8 +987,12 @@ class SimpleAdditive(object):
         snr = random.choice(self.snr_levels)
         K, Ex, En = self.compute_SNR_K(wav, noise, snr)
         scaled_noise = K * noise
-        noisy = wav + scaled_noise
-        noisy = self.norm_energy(noisy, Ex)
+        if En > 0 :
+            noisy = wav + scaled_noise
+            noisy = self.norm_energy(noisy, Ex)
+        else:
+            noisy = wav
+
         x_ = torch.FloatTensor(noisy)
         if self.report:
             if 'report' not in pkg:
