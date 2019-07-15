@@ -824,10 +824,6 @@ class FeBlock(NeuralBlock):
                 P = (pad, pad)
             x = F.pad(x, P, mode=self.pad_mode)
         h = self.conv(x)
-        if self.sincnet:
-            print(self.conv.low_hz_.size())
-            print(self.conv.low_hz_)
-            print(self.conv.band_hz_.size())
         if hasattr(self, 'norm'):
             h = forward_norm(h, self.norm)
         h = forward_activation(self.act, h)
