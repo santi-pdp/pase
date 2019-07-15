@@ -33,7 +33,7 @@ class backprop_scheduler(object):
         elif self.mode == "softmax":
             return self._softmax(preds, label, cls_optim, regr_optim, frontend_optim, temperture=temperture, device=device)
         elif self.mode == "adaptive":
-            return self._online_adaptive(preds, label, cls_optim, regr_optim, frontend_optim, temperture=temperture, alpha=alpha)
+            return self._online_adaptive(preds, label, cls_optim, regr_optim, frontend_optim, temperture=temperture, alpha=alpha, device=device)
         elif self.mode == "MGD":
             return self._MGDA(preds, label, cls_optim, regr_optim, frontend_optim, batch=batch, device=device)
         else:
@@ -287,10 +287,10 @@ class backprop_scheduler(object):
 
         return losses
 
-    def _online_adaptive(self, preds, label, cls_optim, regr_optim, frontend_optim, temperture, alpha):
+    def _online_adaptive(self, preds, label, cls_optim, regr_optim, frontend_optim, temperture, alpha, device):
 
         assert temperture > 0 and alpha > 0
-        device = preds['chunk'].device
+        # device = preds['chunk'].device
         num_worker = len(self.model.regression_workers) + len(self.model.classification_workers)
         loss_tmp = torch.zeros(num_worker).to(device)
         idx = 0

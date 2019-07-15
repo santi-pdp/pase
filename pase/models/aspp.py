@@ -191,7 +191,6 @@ class aspp_resblock(Model):
     def forward(self, x):
 
         out_1 = self.block1(x)
-
         out_2 = self.block2(out_1)
 
         y = out_1 + out_2

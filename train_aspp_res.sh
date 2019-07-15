@@ -21,5 +21,5 @@ python -u  train.py --batch_size 8 --epoch 50 --save_path /export/team-mic/zhong
        --backprop_mode base\
        --lr_mode poly \
        --tensorboard True \
-       --sup_exec ./sup_cmd.txt --sup_freq 10 --log_freq 1
+       --sup_exec ./sup_cmd.txt --sup_freq 10 --log_freq 100
 
