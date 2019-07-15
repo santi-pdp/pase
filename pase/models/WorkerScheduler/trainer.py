@@ -42,7 +42,7 @@ class trainer(object):
         if not cls_lst:
             cls_lst = ["mi", "cmi", "spc"]
         if not regr_lst:
-            regr_lst = ["chunk", "lps", "mfcc", "prosody"]
+            regr_lst = ["cchunk", "chunk", "lps", "mfcc", "prosody"]
 
         if att_cfg:
             print("training pase with attention!")
