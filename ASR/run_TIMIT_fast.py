@@ -11,6 +11,8 @@
 #
 # To run the experiment with the noisy and reverberated version of TIMIT, just change the data folder with the one containing TIMIT_rev_noise.
 
+import librosa
+
 import os
 import sys
 from neural_networks import MLP,context_window
