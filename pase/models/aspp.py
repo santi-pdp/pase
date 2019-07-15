@@ -71,6 +71,18 @@ class ASPP(Model):
                                                      nn.BatchNorm1d(fmaps),
                                                      nn.ReLU())
 
+        else:
+
+            self.aspp1 = _ASPPModule(inplanes, fmaps, dilations[0], padding=0, dilation=1)
+            self.aspp2 = _ASPPModule(inplanes, fmaps, dilations[1], padding=dilations[1]//2, dilation=1)
+            self.aspp3 = _ASPPModule(inplanes, fmaps, dilations[2], padding=dilations[2]//2, dilation=1)
+            self.aspp4 = _ASPPModule(inplanes, fmaps, dilations[3], padding=dilations[3]//2, dilation=1)
+
+            self.global_avg_pool = nn.Sequential(nn.AdaptiveAvgPool1d((1)),
+                                                 nn.Conv1d(inplanes, fmaps, 1, stride=1, bias=False),
+                                                 nn.BatchNorm1d(fmaps),
+                                                 nn.ReLU())
+
         self.conv1 = nn.Conv1d(fmaps * 5, emb_dim, 1, bias=False)
         self.bn1 = nn.BatchNorm1d(emb_dim)
         self.relu = nn.ReLU()
@@ -120,6 +132,8 @@ class ASPP2d(Model):
                                                      nn.BatchNorm2d(fmaps),
                                                      nn.ReLU())
 
+
+
         self.conv1 = nn.Conv2d(fmaps * 5, 1, 1, bias=False)
         self.bn1 = nn.BatchNorm2d(1)
         self.relu = nn.ReLU()
@@ -141,7 +155,7 @@ class ASPP2d(Model):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-        x = self.dropout(x).squeeze()
+        x = self.dropout(x).squeeze(1)
         return x
 
     def _init_weight(self):
@@ -156,32 +170,32 @@ class ASPP2d(Model):
 
 class aspp_resblock(Model):
 
-    def __init__(self, in_channel, out_channel, kernel_size, stride, dilations, fmaps, pool2d=False):
+    def __init__(self, in_channel, out_channel, kernel_size, stride, dilations, fmaps, pool2d=False, dense=False):
 
         super().__init__(name="aspp_resblock")
 
         padding = kernel_size // 2
 
         if pool2d:
-            self.block1 = nn.Sequential(ASPP2d(1, out_channel, dilations, fmaps),
+            self.block1 = nn.Sequential(ASPP2d(1, out_channel, dilations, fmaps, dense),
                                         nn.Conv1d(in_channel, out_channel, kernel_size=kernel_size, stride=stride,
                                                   padding=padding, bias=False),
                                         nn.BatchNorm1d(out_channel),
                                         nn.ReLU(out_channel))
 
-            self.block2 = nn.Sequential(ASPP2d(1, out_channel, dilations, fmaps),
+            self.block2 = nn.Sequential(ASPP2d(1, out_channel, dilations, fmaps, dense),
                                         nn.Conv1d(out_channel, out_channel, kernel_size=kernel_size, stride=1,
                                                   padding=padding, bias=False),
                                         nn.BatchNorm1d(out_channel),
                                         nn.ReLU(out_channel))
 
         else:
-            self.block1 = nn.Sequential(ASPP(in_channel, out_channel, dilations, fmaps),
+            self.block1 = nn.Sequential(ASPP(in_channel, out_channel, dilations, fmaps, dense),
                                         nn.Conv1d(out_channel, out_channel, kernel_size=kernel_size, stride=stride, padding=padding, bias=False),
                                         nn.BatchNorm1d(out_channel),
                                         nn.ReLU(out_channel))
 
-            self.block2 = nn.Sequential(ASPP(out_channel, out_channel, dilations, fmaps),
+            self.block2 = nn.Sequential(ASPP(out_channel, out_channel, dilations, fmaps, dense),
                                         nn.Conv1d(out_channel, out_channel, kernel_size=kernel_size, stride=1, padding=padding, bias=False),
                                         nn.BatchNorm1d(out_channel),
                                         nn.ReLU(out_channel))
