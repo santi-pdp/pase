@@ -11,9 +11,10 @@ class backprop_scheduler(object):
     def __init__(self, model, mode=None):
         self.model = model
         self.mode = mode
-        self.Q = torch.zeros(7).detach()
-        self.last_loss = torch.zeros(7).detach()
-        self.pi = torch.ones(7).detach()
+        self.num_worker = len(self.model.regression_workers) + len(self.model.classification_workers)
+        self.Q = torch.zeros(self.num_worker).detach()
+        self.last_loss = torch.zeros(self.num_worker).detach()
+        self.pi = torch.ones(self.num_worker).detach()
 
 
     def __call__(self, preds, label, cls_optim, regr_optim, frontend_optim, device, h=None, dropout_rate=None, delta=None, temperture=None, alpha=None, batch=None):

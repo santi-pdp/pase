@@ -9,7 +9,7 @@
 #SBATCH --gres=gpu:1 -C K80
 
 python -u  train.py --batch_size 5 --epoch 50 --save_path /export/team-mic/zhong/test/aspp_res2d \
-       --num_workers 8 --warmup 10000000 --net_cfg cfg/workers_aspp.cfg \
+       --num_workers 8 --warmup 10000000 --net_cfg cfg/workers.cfg \
        --fe_cfg cfg/PASE_aspp_res.cfg --do_eval --data_cfg /export/corpora/LibriSpeech_50h/librispeech_data_50h.cfg \
        --min_lr 0.0005 --fe_lr 0.0005 --data_root /export/corpora/LibriSpeech_50h/wav_sel \
        --dtrans_cfg cfg/distortions/all.cfg \
@@ -19,5 +19,5 @@ python -u  train.py --batch_size 5 --epoch 50 --save_path /export/team-mic/zhong
        --backprop_mode adaptive --temp 1 --alpha 0.1 \
        --lr_mode poly \
        --tensorboard True \
-       --att_cfg cfg/attention.cfg --attention_K 40
+       --att_cfg cfg/attention.cfg --attention_K 40 \
        --sup_exec ./sup_cmd.txt --sup_freq 1
