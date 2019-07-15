@@ -1,6 +1,6 @@
 from .minions import *
 from ..losses import *
-from ..utils import AuxiliarSuperviser
+from ..utils import AuxiliarSuperviser, get_grad_norms
 from ..log import *
 #from tensorboardX import SummaryWriter
 import soundfile as sf
@@ -72,19 +72,35 @@ class Waveminionet(Model):
                 z_cfg = {
                     'num_inputs':self.frontend.emb_dim,
                     'num_outputs':1,
+                    'hidden_layers':3,
+                    'hidden_size':1024,
+                    'norm_type':'bnorm',
                     'dropout':0.,
+                    'kwidths':[31,11,5],
                     'name':'z',
-                    'skip':False,
-                    'loss':AdversarialLoss(loss=adv_loss)
+                    'grad_reverse':False,
+                    'skip':False
                 }
-            self.z_minion = minion_maker(z_cfg)
-            self.z_minion.loss.register_DNet(self.z_minion)
+            self.z_cfg = z_cfg
+            self.z_adv_loss = adv_loss
+            #self.z_minion = minion_maker(z_cfg)
+            #self.z_minion.loss.register_DNet(self.z_minion)
         if pretrained_ckpts is not None:
             self.load_checkpoints(pretrained_ckpts)
         if num_devices > 1:
             self.frontend_dp = nn.DataParallel(self.frontend)
             self.minions_dp = nn.ModuleList([nn.DataParallel(m) for m in \
                                              self.minions])
+
+    def build_z_minion(self, cfg):
+        print('Built regularizer Z minion')
+        device = 'cuda' if next(self.parameters()).is_cuda else 'cpu'
+        self.z_cfg['loss'] = ZAdversarialLoss(loss=self.z_adv_loss,
+                                              batch_acum=cfg['batch_acum'])
+        # Build the regularizer Z minion
+        self.z_minion = minion_maker(self.z_cfg)
+        self.z_minion.loss.register_DNet(self.z_minion)
+        self.z_minion.to(device)
 
     def forward(self, x):
         raise NotImplementedError
@@ -137,13 +153,22 @@ class Waveminionet(Model):
             except TypeError:
                 break
 
+    def forward_chunk(self, frontend, batch, chunk_name, device):
+        if self.vq:
+            vq_loss, fe_Q, \
+            vq_pp, vq_idx = frontend(batch[chunk_name].to(device))
+            return fe_Q
+        else:
+            return frontend(batch[chunk_name].to(device))
 
     def train_(self, dloader, cfg, device='cpu', va_dloader=None):
         epoch = cfg['epoch']
         bsize = cfg['batch_size']
+        batch_acum = cfg['batch_acum']
         save_path = cfg['save_path']
         log_freq = cfg['log_freq']
         sup_freq = cfg['sup_freq']
+        grad_keys = cfg['log_grad_keys']
         if cfg['sup_exec'] is not None:
             aux_save_path = os.path.join(cfg['save_path'],
                                          'sup_aux')
@@ -159,6 +184,8 @@ class Waveminionet(Model):
             frontend = self.frontend_dp
         else:
             frontend = self.frontend
+        # Build the regularizer minion
+        self.build_z_minion(cfg)
         # Make the log writer(s)
         writer = LogWriter(save_path, log_types=cfg['log_types'])
         bpe = cfg['bpe'] if 'bpe' in cfg else len(dloader)
@@ -201,6 +228,8 @@ class Waveminionet(Model):
                                 save_path, max_ckpts=cfg['max_ckpts'],
                                 optimizer=zopt, prefix='Zminion-'))
 
+        # print model components
+        print(self)
         if 'min_lrs' in cfg:
             min_lrs = cfg['min_lrs']
         else:
@@ -261,6 +290,7 @@ class Waveminionet(Model):
             epoch_beg = 0
             global_step = 0
 
+        z_losses = None
         print('Beginning step of training: ', global_step)
         print('Looping for {} epochs: '.format(epoch))
 
@@ -279,43 +309,38 @@ class Waveminionet(Model):
                 except StopIteration:
                     iterator = iter(dloader)
                     batch = next(iterator)
-                feopt.zero_grad()
+                #feopt.zero_grad()
                 fe_h = {}
+                # accumulate all forwards of FE and concat in same batch
+                fe_forwards = [batch['chunk']]
                 # forward chunk (alone) through frontend
                 if self.mi_fwd:
-                    # build triplet batch and forward it too
-                    triplet = torch.cat((batch['chunk'],
-                                         batch['chunk_ctxt'],
-                                         batch['chunk_rand']),
-                                        dim=0)
-                    if self.vq:
-                        vq_loss, fe_Q, \
-                        vq_pp, vq_idx = frontend(triplet.to(device))
-                        fe_h['triplet'] = fe_Q
-                    else:
-                        fe_h['triplet'] = frontend(triplet.to(device))
-                    triplets = torch.chunk(fe_h['triplet'], 3,
-                                           dim=0)
-                    fe_h['chunk'] = triplets[0]
+                    fe_forwards.extend([batch['chunk_ctxt'],
+                                       batch['chunk_rand']])
+                fe_forwards.append(batch['cchunk'])
+                # build triplet batch and forward it too
+                fe_forwards_b = torch.cat(fe_forwards, dim=0)
+                if self.vq:
+                    vq_loss, fe_Q, \
+                    vq_pp, vq_idx = frontend(fe_forwards_b.to(device))
+                    fe_h['all'] = fe_Q
                 else:
-                    if self.vq:
-                        vq_loss, fe_Q, \
-                        vq_pp, vq_idx = frontend(batch['chunk'].to(device))
-                        fe_h['chunk'] = fe_Q
-                    else:
-                        fe_h['chunk'] = frontend(batch['chunk'].to(device))
-
+                    fe_h['all'] = frontend(fe_forwards_b.to(device))
+                # slice the tensor back in batch dimension
+                all_feh = torch.chunk(fe_h['all'], len(fe_forwards), dim=0)
+                fe_h['chunk'] = all_feh[0]
+                fe_h['cchunk'] = all_feh[-1]
                 min_h = {}
                 h = fe_h['chunk']
                 skip_acum = None
                 for mi, minion in enumerate(minions_run, start=1):
                     min_name = self.minions[mi - 1].name
                     if 'mi' in min_name:
-                        triplet_P = self.join_skip(torch.cat((triplets[0],
-                                                              triplets[1]),
+                        triplet_P = self.join_skip(torch.cat((all_feh[0],
+                                                              all_feh[1]),
                                                              dim=1), skip_acum)
-                        triplet_N = self.join_skip(torch.cat((triplets[0],
-                                                              triplets[2]),
+                        triplet_N = self.join_skip(torch.cat((all_feh[0],
+                                                              all_feh[2]),
                                                              dim=1), skip_acum)
                         triplet_all = torch.cat((triplet_P, triplet_N), dim=0)
                         if min_name == 'cmi':
@@ -352,74 +377,128 @@ class Waveminionet(Model):
 
                 if epoch_ + 1 >= warmup_epoch and hasattr(self, 'z_minion'):
                     # First shape the hidden space as Z if needed
-                    zopt.zero_grad()
                     # Adversarial learning to map Fe(wav) to Z ~ prior
-                    dreal_loss, dfake_loss, \
-                            greal_loss = self.z_minion.loss(fe_h['chunk'],
-                                                            zopt)
-                    d_loss = dreal_loss + dfake_loss
-
-                    greal_loss = zweight * greal_loss
+                    if cfg['cchunk_prior']:
+                        # clean chunk inference is the 'real' reference
+                        z_real = fe_h['cchunk']
+                        z_true_trainable = True
+                    else:
+                        z_real = None
+                        z_true_trainable = False
+                    z_losses = self.z_minion.loss(global_step,
+                                                  fe_h['chunk'],
+                                                  zopt,
+                                                  z_true=z_real,
+                                                  z_true_trainable=z_true_trainable)
+                    # TODO: weight new adversarial minion?
+                    #g_loss = zweight * g_loss
                    
-                    greal_loss.backward(retain_graph=True)
                     # update weight incrementally if needed still
                     zweight = min(1, zweight + zinc)
-                else:
-                    dreal_loss = torch.zeros(1)
-                    dfake_loss = torch.zeros(1)
-                    greal_loss = torch.zeros(1)
-                global_step += 1
 
+                global_step += 1
                 t_loss = torch.zeros(1).to(device)
+                if z_losses is not None and 'g_loss' in z_losses:
+                    # aggregate adversarial loss for PASE trunk
+                    t_loss += z_losses['g_loss']
                 if self.vq:
-                    # Backprop VQ related stuff
+                    # aggregate VQ loss
                     t_loss += vq_loss
                 # backprop time
                 if rndmin_train:
+                    if rnd_min not in min_global_steps:
+                        min_global_steps[rnd_min] = 0
                     min_names = list(min_h.keys())
                     rnd_min = random.choice(min_names)
-                    minopts[rnd_min].zero_grad()
+                    #minopts[rnd_min].zero_grad()
                     y_ = min_h[rnd_min]
                     minion = minions_run[self.min2idx[rnd_min]]
                     y_lab = batch[rnd_min].to(device)
                     lweight = minion.loss_weight
-                    loss = minion.loss(y_, y_lab)
-                    loss = lweight * loss
-                    loss.backward()
+                    if isinstance(minion.loss, WaveAdversarialLoss):
+                        loss = minion.loss(min_global_steps[rnd_min],
+                                           y_, y_lab, c_real=fe_h['chunk'])
+                        d_real_loss = loss['d_real_loss']
+                        d_fake_loss = loss['d_fake_loss']
+                        if not '{}_Dreal'.format(rnd_min) in min_loss:
+                            min_loss['{}_Dreal'.format(rnd_min)] = []
+                            min_loss['{}_Dfake'.format(rnd_min)] = []
+                        if not '{}_Dreal'.format(rnd_min) in min_global_steps:
+                            min_global_steps['{}_Dreal'.format(rnd_min)] = 0
+                            min_global_steps['{}_Dfake'.format(rnd_min)] = 0
+                        min_loss['{}_Dreal'.format(rnd_min)] = d_real_loss.item()
+                        min_loss['{}_Dfake'.format(rnd_min)] = d_fake_loss.item()
+                        loss = loss['g_loss']
+                        loss = lweight * loss
+                        loss.backward()
+                    else:
+                        loss = minion.loss(y_, y_lab)
+                        loss = lweight * loss
+                        loss.backward()
                     if rnd_min not in min_loss:
                         min_loss[rnd_min] = []
-                    if rnd_min not in min_global_steps:
-                        min_global_steps[rnd_min] = 0
                     min_loss[rnd_min].append(loss.item())
                     min_global_steps[rnd_min] += 1
-                    minopts[rnd_min].step()
+                    if '{}_Dreal'.format(rnd_min) in min_global_steps:
+                        min_global_steps['{}_Dreal'.format(rnd_min)] += 1
+                        min_global_steps['{}_Dfake'.format(rnd_min)] += 1
+                    #minopts[rnd_min].step()
                 else:
                     #if hasattr(self, 'minions_dp'):
                     #    raise NotImplementedError('DataParallel to be included')
                     # Compute all minion losses
                     for min_name, y_ in min_h.items():
+                        if min_name not in min_global_steps:
+                            min_global_steps[min_name] = 0
                         minion = minions_run[self.min2idx[min_name]]
                         minopts[min_name].zero_grad()
                         y_lab = batch[min_name].to(device)
                         lweight = minion.loss_weight
-                        loss = minion.loss(y_, y_lab)
-                        loss = lweight * loss
+                        if isinstance(minion.loss, WaveAdversarialLoss):
+                            loss = minion.loss(min_global_steps[min_name],
+                                               y_, y_lab, c_real=fe_h['chunk'])
+                            d_real_loss = loss['d_real_loss']
+                            d_fake_loss = loss['d_fake_loss']
+                            if not '{}_Dreal'.format(min_name) in min_loss:
+                                min_loss['{}_Dreal'.format(min_name)] = []
+                                min_loss['{}_Dfake'.format(min_name)] = []
+                            if not '{}_Dreal'.format(min_name) in min_global_steps:
+                                min_global_steps['{}_Dreal'.format(min_name)] = 0
+                                min_global_steps['{}_Dfake'.format(min_name)] = 0
+                            min_loss['{}_Dreal'.format(min_name)].append(d_real_loss.item())
+                            min_loss['{}_Dfake'.format(min_name)].append(d_fake_loss.item())
+                            loss = loss['g_loss']
+                            loss = lweight * loss
+                        else:
+                            loss = minion.loss(y_, y_lab)
+                            loss = lweight * loss
                         t_loss += loss
                         #loss.backward(retain_graph=True)
                         if min_name not in min_loss:
                             min_loss[min_name] = []
-                        if min_name not in min_global_steps:
-                            min_global_steps[min_name] = 0
                         min_loss[min_name].append(loss.item())
                         min_global_steps[min_name] += 1
+                        if '{}_Dreal'.format(min_name) in min_global_steps:
+                            min_global_steps['{}_Dreal'.format(min_name)] += 1
+                            min_global_steps['{}_Dfake'.format(min_name)] += 1
                         #minopts[min_name].step()
                     t_loss.backward()
+                if bidx % batch_acum == 0 or bidx >= bpe:
+                    # first store the gradients
+                    grads = get_grad_norms(self, grad_keys)
+                    # update minions
                     for min_name, y_ in min_h.items():
                         minopts[min_name].step()
+                        minopts[min_name].zero_grad()
+                    # update frontend
+                    feopt.step()
+                    feopt.zero_grad()
+                    if epoch_ + 1 >= warmup_epoch and hasattr(self, 'z_minion'):
+                        zopt.step()
+                        zopt.zero_grad()
                 end_t = timeit.default_timer()
                 timings.append(end_t - beg_t)
                 beg_t = timeit.default_timer()
-                feopt.step()
                 if bidx % log_freq == 0 or bidx >= bpe:
                     print('-' * 50)
                     print('Batch {}/{} (Epoch {}):'.format(bidx, bpe, epoch_))
@@ -429,32 +508,54 @@ class Waveminionet(Model):
                                               min_global_steps[min_name]))
                         writer.add_scalar('train/{}_loss'.format(min_name),
                                           losses[-1], min_global_steps[min_name])
-                        writer.add_histogram('train/{}'.format(min_name),
-                                             min_h[min_name].data,
-                                             bins='sturges',
-                                             global_step=min_global_steps[min_name])
-                        writer.add_histogram('train/gtruth_{}'.format(min_name),
-                                             batch[min_name].data,
-                                             bins='sturges',
-                                             global_step=min_global_steps[min_name])
-                    if hasattr(self, 'z_minion'):
-                        print('ZMinion dfake_loss: {:.3f}, dreal_loss: {:.3f}, '
-                              'gloss: {:.3f}'.format(dfake_loss.item(),
-                                                     dreal_loss.item(),
-                                                     greal_loss.item()))
-                        writer.add_scalar('train/dfake_loss',
-                                          dfake_loss.item(),
-                                          global_step)
-                        writer.add_scalar('train/dreal_loss',
-                                          dreal_loss.item(),
-                                          global_step)
-                        writer.add_scalar('train/g_loss',
-                                          greal_loss.item(),
-                                          global_step)
-                        writer.add_scalar('train/zweight',
-                                          zweight,
-                                          global_step)
-                        writer.add_histogram('train/z',
+                        if min_name in min_h:
+                            # Adversarial are not included
+                            writer.add_histogram('train/{}'.format(min_name),
+                                                 min_h[min_name].data,
+                                                 bins='sturges',
+                                                 global_step=min_global_steps[min_name])
+                        if min_name in min_h:
+                            # Adversarial are not included
+                            writer.add_histogram('train/gtruth_{}'.format(min_name),
+                                                 batch[min_name].data,
+                                                 bins='sturges',
+                                                 global_step=min_global_steps[min_name])
+                    if z_losses is not None:
+                        z_log = 'ZMinion '
+                        if 'dfake_loss' in z_losses:
+                            dfake_loss = z_losses['dfake_loss'].item()
+                            z_log += 'dfake_loss: {:.3f},'.format(dfake_loss)
+                            writer.add_scalar('train/dfake_loss',
+                                              dfake_loss,
+                                              global_step)
+                        if 'dreal_loss' in z_losses:
+                            dreal_loss = z_losses['dreal_loss'].item()
+                            writer.add_scalar('train/dreal_loss',
+                                              dreal_loss,
+                                              global_step)
+                            z_log += ' dreal_loss: {:.3f},'.format(dreal_loss)
+                        if 'greal_loss' in z_losses:
+                            greal_loss = z_losses['greal_loss'].item()
+                            z_log += ', greal_loss: {:.3f},'.format(greal_loss)
+                            writer.add_scalar('train/greal_loss',
+                                              greal_loss,
+                                              global_step)
+                        if 'gfake_loss' in z_losses:
+                            gfake_loss = z_losses['gfake_loss'].item()
+                            z_log += ', gfake_loss: {:.3f},'.format(gfake_loss)
+                            writer.add_scalar('train/gfake_loss',
+                                              gfake_loss,
+                                              global_step)
+                        print(z_log)
+                        #writer.add_scalar('train/zweight',
+                        #                  zweight,
+                        #                  global_step)
+                        if z_true_trainable:
+                            writer.add_histogram('train/z_real',
+                                                 fe_h['cchunk'],
+                                                 bins='sturges',
+                                                 global_step=global_step)
+                        writer.add_histogram('train/z_fake',
                                              fe_h['chunk'],
                                              bins='sturges',
                                              global_step=global_step)
@@ -465,6 +566,10 @@ class Waveminionet(Model):
                                           global_step=global_step)
                         writer.add_scalar('train/vq_pp', vq_pp.item(),
                                           global_step=global_step)
+                    # --- Get gradient norms for sanity check ----
+                    for kgrad, vgrad in grads.items():
+                        writer.add_scalar('train/GRAD/{}'.format(kgrad),
+                                          vgrad, global_step)
                     print('Total summed loss: {:.3f}'.format(t_loss.item()))
 
 
@@ -589,8 +694,17 @@ class Waveminionet(Model):
                 # Compute all minion losses
                 for min_name, y_ in min_h.items():
                     y_lab = batch[min_name].to(device)
-                    lweight = self.minions[self.min2idx[min_name]].loss_weight
-                    loss = lweight * self.minions[self.min2idx[min_name]].loss(y_, y_lab)
+                    minion = self.minions[self.min2idx[min_name]]
+                    lweight = minion.loss_weight
+                    if isinstance(minion.loss, WaveAdversarialLoss):
+                        loss = minion.loss(bidx,
+                                           y_, y_lab, c_real=fe_h['chunk'],
+                                           grad=False)
+                        loss = loss['g_loss']
+                    else:
+                        loss = minion.loss(y_, y_lab)
+                    loss = lweight * loss
+                    #loss = lweight * self.minions[self.min2idx[min_name]].loss(y_, y_lab)
                     if min_name not in min_loss:
                         min_loss[min_name] = []
                     min_loss[min_name].append(loss.item())
