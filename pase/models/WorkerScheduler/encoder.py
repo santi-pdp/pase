@@ -52,15 +52,10 @@ class aspp_res_encoder(Model):
         for i in range(len(kernel_sizes)):
             if i == 0 and not pool2d:
                 self.ASPP_blocks.append(aspp_resblock(sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, pool2d))
-
             elif i == 0 and pool2d:
-                self.ASPP_blocks.append(nn.Sequential(nn.Conv1d(sinc_out, hidden_dim, kernel_sizes[i], strides[i], padding=kernel_sizes[i]//2),
-                                                      nn.BatchNorm1d(hidden_dim),
-                                                      nn.ReLU(hidden_dim)))
+                self.ASPP_blocks.append(aspp_resblock(sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, not pool2d))
             else:
                 self.ASPP_blocks.append(aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, pool2d))
-
-        self._init_weight()
 
 
         self.rnn_pool = rnn_pool
@@ -110,10 +105,3 @@ class aspp_res_encoder(Model):
         else:
             return h
 
-    def _init_weight(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv1d):
-                torch.nn.init.kaiming_normal_(m.weight)
-            elif isinstance(m, nn.BatchNorm1d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
