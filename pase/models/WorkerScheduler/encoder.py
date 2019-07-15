@@ -48,6 +48,7 @@ class aspp_res_encoder(Model):
 
 
         self.ASPP_blocks = nn.ModuleList()
+
         for i in range(len(kernel_sizes)):
             if i == 0 and not pool2d:
                 self.ASPP_blocks.append(aspp_resblock(sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, pool2d))
@@ -84,8 +85,6 @@ class aspp_res_encoder(Model):
                            batch['chunk_ctxt'],
                            batch['chunk_rand']),
                           dim=0).to(device)
-
-
         else:
             x = batch
 

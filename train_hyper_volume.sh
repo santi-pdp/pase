@@ -16,7 +16,7 @@ python -u  train.py --batch_size 5 --epoch 50 --save_path /export/team-mic/zhong
        --stats data/librispeech_50h_stats.pkl --lrdec_step 30 --lrdecay 0.5 \
        --chunk_size 16000 \
        --random_scale True \
-       --backprop_mode hyper_volume --delta 1.1 \
+       --backprop_mode adaptive --temp 1 --alpha 0.1 \
        --lr_mode poly \
        --tensorboard True \
        --att_cfg cfg/attention.cfg --attention_K 40
