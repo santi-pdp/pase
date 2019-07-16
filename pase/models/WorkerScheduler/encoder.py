@@ -50,12 +50,10 @@ class aspp_res_encoder(Model):
         self.ASPP_blocks = nn.ModuleList()
 
         for i in range(len(kernel_sizes)):
-            if i == 0 and not pool2d:
-                self.ASPP_blocks.append(aspp_resblock(sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, pool2d, dense))
-            elif i == 0 and pool2d:
-                self.ASPP_blocks.append(aspp_resblock(sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, not pool2d, dense))
+            if i == 0:
+                self.ASPP_blocks.append(aspp_resblock(sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps[i], pool2d[i], dense))
             else:
-                self.ASPP_blocks.append(aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps, pool2d, dense))
+                self.ASPP_blocks.append(aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps[i], pool2d[i], dense))
 
 
         self.rnn_pool = rnn_pool
