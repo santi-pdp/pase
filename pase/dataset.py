@@ -24,7 +24,7 @@ class DictCollater(object):
                                       'lps',
                                       'mfcc',
                                       'prosody'],
-                labs=False):
+                 labs=False):
         self.batching_keys = batching_keys
         self.labs = labs
 
@@ -40,7 +40,6 @@ class DictCollater(object):
                 if len(lab_batches) == 0:
                     for lab in labs:
                         lab_batches.append([])
-            print("sample", sample.keys())
             for k, v in sample.items():
                 if k not in self.batching_keys:
                     continue
@@ -57,7 +56,6 @@ class DictCollater(object):
             if labs is not None:
                 for lab_i, lab in enumerate(labs):
                     lab_batches[lab_i].append(lab)
-        print("batches", batches.keys())
         for k in batches.keys():
             batches[k] = torch.cat(batches[k], dim=0)
         if labs is not None:
@@ -69,6 +67,7 @@ class DictCollater(object):
         else:
             rets = batches
         return rets
+
 
 def uttwav_collater(batch):
     """ Simple collater where (wav, utt) pairs are
@@ -98,6 +97,7 @@ def uttwav_collater(batch):
         lens.append(T)
     return torch.FloatTensor(wavs), utts, torch.LongTensor(lens)
 
+
 def ft2spk_collater(batch):
     """ Simple collater where (fbank, spkid) pairs are
     given by the a dataset, and (fbanks, spkids, lens) are
@@ -118,7 +118,7 @@ def ft2spk_collater(batch):
         seq_len = ft.shape[1]
         if seq_len < max_len:
             P = max_len - seq_len
-            # repeat this amount at the beginning 
+            # repeat this amount at the beginning
             rep = int(math.ceil(P / seq_len))
             if rep > 1:
                 ft = torch.cat((ft.repeat(1, rep), ft), dim=1)
@@ -139,7 +139,7 @@ def ft2spk_collater(batch):
 
 class WavDataset(Dataset):
 
-    def __init__(self, data_root, data_cfg_file, split, 
+    def __init__(self, data_root, data_cfg_file, split,
                  transform=None, sr=None,
                  return_spk=False,
                  preload_wav=False,
@@ -205,7 +205,6 @@ class WavDataset(Dataset):
                     nwname = os.path.join(noise_folder, uttname)
                     self.retrieve_cache(nwname, self.noise_cache)
 
-
     def __len__(self):
         return len(self.wavs)
 
@@ -230,9 +229,9 @@ class WavDataset(Dataset):
             rets = rets + [uttname]
         if self.return_spk:
             rets = rets + [self.spk2idx[self.wavs[index]['speaker']]]
-        if len(rets) == 1: 
+        if len(rets) == 1:
             return rets[0]
-        else: 
+        else:
             return rets
 
 
@@ -240,7 +239,8 @@ class PairWavDataset(WavDataset):
     """ Return paired wavs, one is current wav and the other one is a randomly
         chosen one.
     """
-    def __init__(self, data_root, data_cfg_file, split, 
+
+    def __init__(self, data_root, data_cfg_file, split,
                  transform=None, sr=None, verbose=True,
                  return_uttname=False,
                  transforms_cache=None,
@@ -250,7 +250,7 @@ class PairWavDataset(WavDataset):
                  cache_on_load=False,
                  distortion_probability=0.4,
                  preload_wav=False):
-        super().__init__(data_root, data_cfg_file, split, transform=transform, 
+        super().__init__(data_root, data_cfg_file, split, transform=transform,
                          sr=sr, preload_wav=preload_wav,
                          return_uttname=return_uttname,
                          transforms_cache=transforms_cache,
@@ -274,7 +274,7 @@ class PairWavDataset(WavDataset):
         rwname = os.path.join(self.data_root, self.wavs[rindex]['filename'])
         rwav = self.retrieve_cache(rwname, self.wav_cache)
         pkg = {'raw': wav, 'raw_rand': rwav,
-               'uttname':uttname, 'split':self.split}
+               'uttname': uttname, 'split': self.split}
         # Apply the set of 'target' transforms on the clean data
         if self.transform is not None:
             pkg = self.transform(pkg)
@@ -285,8 +285,8 @@ class PairWavDataset(WavDataset):
             do_whisper = random.random() <= self.distortion_probability
             if do_whisper:
                 dwname = os.path.join(self.whisper_folder, uttname)
-                #print('getting whisper file: ', dwname)
-                dwav = self.retrieve_cache(dwname, 
+                # print('getting whisper file: ', dwname)
+                dwav = self.retrieve_cache(dwname,
                                            self.whisper_cache)
                 pkg['raw'] = torch.tensor(dwav)
         # Check if additive noise to be added
@@ -294,7 +294,7 @@ class PairWavDataset(WavDataset):
             do_addnoise = random.random() <= self.distortion_probability
             if do_addnoise:
                 nwname = os.path.join(self.noise_folder, uttname)
-                #print('getting noise file: ', nwname)
+                # print('getting noise file: ', nwname)
                 noise = self.retrieve_cache(nwname,
                                             self.noise_cache)
                 if noise.shape[0] < pkg['raw'].size(0):
@@ -325,16 +325,18 @@ class PairWavDataset(WavDataset):
             # otherwise return the full package
             return pkg
 
+
 class LibriSpeechSegTupleWavDataset(PairWavDataset):
     """ Return three wavs, one is current wav, another one is
         the continuation of a pre-chunked utterance following the name
-        pattern <prefix>-<utt_id>.wav. So for example for file 
+        pattern <prefix>-<utt_id>.wav. So for example for file
         1001-134707-0001-2.wav we have to get its paired wav as
         1001-134707-0001-0.wav for instance, which is a neighbor within
-        utterance level. Finally, another random and different utterance 
+        utterance level. Finally, another random and different utterance
         following the filename is returned too as random context.
     """
-    def __init__(self, data_root, data_cfg_file, split, 
+
+    def __init__(self, data_root, data_cfg_file, split,
                  transform=None, sr=None, verbose=True,
                  return_uttname=False,
                  transforms_cache=None,
@@ -344,7 +346,7 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
                  cache_on_load=False,
                  distortion_probability=0.4,
                  preload_wav=False):
-        super().__init__(data_root, data_cfg_file, split, transform=transform, 
+        super().__init__(data_root, data_cfg_file, split, transform=transform,
                          sr=sr, preload_wav=preload_wav,
                          return_uttname=return_uttname,
                          transforms_cache=transforms_cache,
@@ -362,10 +364,9 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
             prefix = self.rec.sub('', fname)
             if prefix not in self.neighbor_prefixes:
                 self.neighbor_prefixes[prefix] = []
-            self.neighbor_prefixes[prefix].append(fname) 
+            self.neighbor_prefixes[prefix].append(fname)
         print('Found {} prefixes in '
               'utterances'.format(len(self.neighbor_prefixes)))
-            
 
     def __getitem__(self, index):
         uttname = self.wavs[index]['filename']
@@ -377,11 +378,11 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
         # no other sub-index is found, the same as current wav is returned
         prefix = self.rec.sub('', uttname)
         neighbors = self.neighbor_prefixes[prefix]
-        #print('Wname: ', wname)
+        # print('Wname: ', wname)
         # delete current file
-        #print('Found nehg: ', neighbors)
+        # print('Found nehg: ', neighbors)
         neighbors.remove(uttname)
-        #print('Found nehg: ', neighbors)
+        # print('Found nehg: ', neighbors)
         # pick random one if possible, otherwise it will be empty
         if len(neighbors) > 0:
             cwname = os.path.join(self.data_root, random.choice(neighbors))
@@ -396,7 +397,7 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
         rwname = os.path.join(self.data_root, self.wavs[rindex]['filename'])
         rwav = self.retrieve_cache(rwname, self.wav_cache)
         pkg = {'raw': wav, 'raw_rand': rwav, 'raw_ctxt': cwav,
-               'uttname':uttname, 'split':self.split}
+               'uttname': uttname, 'split': self.split}
         # Apply the set of 'target' transforms on the clean data
         if self.transform is not None:
             pkg = self.transform(pkg)
@@ -407,8 +408,8 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
             do_whisper = random.random() <= self.distortion_probability
             if do_whisper:
                 dwname = os.path.join(self.whisper_folder, uttname)
-                #print('getting whisper file: ', dwname)
-                dwav = self.retrieve_cache(dwname, 
+                # print('getting whisper file: ', dwname)
+                dwav = self.retrieve_cache(dwname,
                                            self.whisper_cache)
                 pkg['raw'] = torch.tensor(dwav)
         # Check if additive noise to be added
@@ -416,7 +417,7 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
             do_addnoise = random.random() <= self.distortion_probability
             if do_addnoise:
                 nwname = os.path.join(self.noise_folder, uttname)
-                #print('getting noise file: ', nwname)
+                # print('getting noise file: ', nwname)
                 noise = self.retrieve_cache(nwname,
                                             self.noise_cache)
                 if noise.shape[0] < pkg['raw'].size(0):
@@ -439,9 +440,9 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
 
         if self.distortion_transforms:
             pkg = self.distortion_transforms(pkg)
-        #sf.write('/tmp/ex_chunk.wav', pkg['chunk'], 16000)
-        #sf.write('/tmp/ex_cchunk.wav', pkg['cchunk'], 16000)
-        #raise NotImplementedError
+        # sf.write('/tmp/ex_chunk.wav', pkg['chunk'], 16000)
+        # sf.write('/tmp/ex_cchunk.wav', pkg['cchunk'], 16000)
+        # raise NotImplementedError
         if self.transform is None:
             # if no transforms happened do not send a package
             return pkg['chunk'], pkg['raw_rand']
@@ -449,9 +450,9 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
             # otherwise return the full package
             return pkg
 
-        
+
 class FeatsClassDataset(Dataset):
-    def __init__(self, data_root, utt2class, split_list, 
+    def __init__(self, data_root, utt2class, split_list,
                  stats=None, verbose=True, ext='fb.npy'):
         self.data_root = data_root
         self.ext = ext
@@ -498,10 +499,12 @@ class FeatsClassDataset(Dataset):
         spk_id = self.utt2class[item]
         return ft, torch.LongTensor([spk_id])
 
+
 class WavClassDataset(Dataset):
     """ Simple Wav -> classID dataset """
-    def __init__(self, data_root, utt2class, split_list, 
-                 chunker=None, 
+
+    def __init__(self, data_root, utt2class, split_list,
+                 chunker=None,
                  verbose=True):
         self.data_root = data_root
         if not isinstance(utt2class, str):
@@ -537,46 +540,11 @@ class WavClassDataset(Dataset):
         wav = torch.FloatTensor(wav)
         if self.chunker is not None:
             if len(wav) < self.chunker.chunk_size + 1:
-                P = self.chunker.chunk_size  + 1 - len(wav)
-                wav = torch.cat((wav, 
+                P = self.chunker.chunk_size + 1 - len(wav)
+                wav = torch.cat((wav,
                                  torch.zeros(P)),
                                 dim=0)
             wav = self.chunker(wav)
             wav = wav['chunk']
         spk_id = self.utt2class[item]
         return wav, torch.LongTensor([spk_id])
-
-if __name__ == '__main__':
-    """
-    print('WavDataset')
-    print('-' * 30)
-    dset = WavDataset('/veu/spascual/DB/VCTK', '../data/vctk_data.cfg', 'train')
-    print(dset[0])
-    print(dset[0].shape)
-    print('=' * 30)
-
-    dset = PairWavDataset('/veu/spascual/DB/VCTK', '../data/vctk_data.cfg', 'train')
-    print('PairWavDataset')
-    print('-' * 30)
-    wav, rwav = dset[0]
-    print('({}, {})'.format(wav.shape, rwav.shape))
-    print('=' * 30)
-    """
-#    from torch.utils.data import DataLoader
-#    dset = FbankSpkDataset('../data/LibriSpeech/Fbanks24', 
-#                           '../data/LibriSpeech/libri_dict.npy',
-#                           '../data/LibriSpeech/libri_tr.scp')
-#    x, y = dset[0]
-#    print(x.shape)
-#    print(y.shape)
-#    dloader = DataLoader(dset, batch_size=10, shuffle=True,
-#                         collate_fn=ft2spk_collater)
-#    x = next(dloader.__iter__())
-#    print(x[0].shape)
-#    print(x[1].shape)
-#    print(x[2])
-    dset = \
-    LibriSpeechSegTupleWavDataset('../data/LibriSpeech_50h/all',
-                                  '../data/librispeech_data_50h.cfg',
-                                  'train')
-    dset[0]
