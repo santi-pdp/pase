@@ -12,7 +12,7 @@ python -u  train.py --batch_size 5 --epoch 50 --save_path /export/team-mic/zhong
        --num_workers 8 --warmup 10000000 --net_cfg cfg/workers_overlap.cfg \
        --fe_cfg cfg/PASE_dense_QRNN.cfg --do_eval --data_cfg /export/corpora/LibriSpeech_50h/librispeech_data_50h.cfg \
        --min_lr 0.0005 --fe_lr 0.0005 --data_root /export/corpora/LibriSpeech_50h/wav_sel \
-       --dtrans_cfg cfg/distortions/all.cfg \
+       --dtrans_cfg cfg/distortions/overlap.cfg \
        --stats data/librispeech_50h_stats.pkl --lrdec_step 30 --lrdecay 0.5 \
        --chunk_size 16000 \
        --random_scale True \

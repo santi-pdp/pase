@@ -95,13 +95,9 @@ class pase_attention(Model):
         for worker in self.classification_workers:
             hidden, mask = new_hidden[worker.name]
             h = [hidden, h[1] * mask, h[2] * mask]
-            print(worker.name)
-            print(hidden.size())
             if worker.name == "spc":
-                print(worker)
-                y, label = worker(hidden)
+                y, label = worker(hidden, device)
             elif worker.name == "overlap":
-                print(worker)
                 y = worker(hidden)
                 label = x[worker.name].to(device).detach()
             else:

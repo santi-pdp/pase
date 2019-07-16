@@ -451,12 +451,7 @@ class Reverb(object):
         #rev = rev / np.max(np.abs(rev))
         # IR delay compensation
         rev = self.shift(rev, -p_max)
-        if Er > 0:
-            Eratio = np.sqrt(Ex / Er)
-        else:
-            Eratio = 1.0
-            rev = rev / np.max(np.abs(rev))
-
+        Eratio = np.sqrt(Ex / Er)
         # Trim rev signal to match clean length
         rev = rev[:wav.shape[0]]
         rev = Eratio * rev
@@ -473,194 +468,6 @@ class Reverb(object):
             attrs = '(ir_files={} ...)'.format(self.ir_files[:3])
         else:
             attrs = '(ir_files={})'.format(self.ir_files)
-        return self.__class__.__name__ + attrs
-
-
-class Downsample(object):
-
-    def __init__(self, filt_files, report=False, filt_fmt='npy',
-                 data_root='.'):
-        self.filt_files = filt_files
-        assert isinstance(filt_files, list), type(filt_files)
-        assert len(filt_files) > 0, len(filt_files)
-        self.filt_idxs = list(range(len(filt_files)))
-        self.filt_fmt = filt_fmt
-        self.report = report
-        self.data_root = data_root
-
-
-    def load_filter(self, filt_file, filt_fmt):
-        
-        filt_file = os.path.join(self.data_root, filt_file)
-
-        if filt_fmt == 'mat':
-            filt_coeff = loadmat(filt_file, squeeze_me=True, struct_as_record=False)
-            filt_coeff= filt_coeff['filt_coeff']
-            
-        elif filt_fmt == 'imp' or filt_fmt == 'txt':
-            filt_coeff= np.loadtxt(filt_file)
-        elif filt_fmt == 'npy':
-            filt_coeff = np.load(filt_file)
-        else:
-            raise TypeError('Unrecognized filter format: ', filt_fmt)
-
-        filt_coeff = filt_coeff / np.abs(np.max(filt_coeff))
-
-        return filt_coeff
-
-    def shift(self, xs, n):
-        e = np.empty_like(xs)
-        if n >= 0:
-            e[:n] = 0.0
-            e[n:] = xs[:-n]
-        else:
-            e[n:] = 0.0
-            e[:n] = xs[-n:]
-        return e
-
-    def sample_filt(self):
-        if len(self.filt_files) == 0:
-            return self.filt_files[0]
-        else:
-            idx = random.choice(self.filt_idxs)
-            return self.filt_files[idx]
-
-    ##@profile
-    def __call__(self, pkg):
-        pkg = format_package(pkg)
-        wav = pkg['chunk']
-        # sample a filter
-        filt_file = self.sample_filt()
-        filt_coeff = self.load_filter(filt_file, self.filt_fmt)
-        filt_coeff = filt_coeff.astype(np.float32)
-        wav = wav.data.numpy().reshape(-1)
-        Ex = np.dot(wav, wav)
-        wav = wav.astype(np.float32).reshape(-1)
-
-        sig_filt = signal.convolve(wav, filt_coeff, mode='full').reshape(-1)
-        
-        sig_filt = self.shift(sig_filt, -round(filt_coeff.shape[0]/2))
-
-        sig_filt=sig_filt[:wav.shape[0]]
-
-        #sig_filt=sig_filt/np.max(np.abs(sig_filt))
-
-        Efilt = np.dot(sig_filt, sig_filt)
-        #Ex = np.dot(wav, wav)
-        
-        if Efilt>0:
-            Eratio = np.sqrt(Ex / Efilt)
-        else:
-            Eratio = 1.0
-            sig_filt = wav
-        
-        sig_filt = Eratio * sig_filt
-        sig_filt = torch.FloatTensor(sig_filt)
-        if self.report:
-            if 'report' not in pkg:
-                pkg['report'] = {}
-            pkg['report']['filt_file'] = filt_file
-        pkg['chunk'] = sig_filt
-        return pkg
-    
-    def __repr__(self):
-        if len(self.filt_files) > 3:
-            attrs = '(filt_files={} ...)'.format(self.filt_files[:3])
-        else:
-            attrs = '(filt_files={})'.format(self.filt_files)
-        return self.__class__.__name__ + attrs
-
-class BandDrop(object):
-
-    def __init__(self, filt_files, report=False, filt_fmt='npy',
-                 data_root='.'):
-        self.filt_files = filt_files
-        assert isinstance(filt_files, list), type(filt_files)
-        assert len(filt_files) > 0, len(filt_files)
-        self.filt_idxs = list(range(len(filt_files)))
-        self.filt_fmt = filt_fmt
-        self.report = report
-        self.data_root = data_root
-
-
-    def load_filter(self, filt_file, filt_fmt):
-        
-        filt_file = os.path.join(self.data_root, filt_file)
-
-        if filt_fmt == 'mat':
-            filt_coeff = loadmat(filt_file, squeeze_me=True, struct_as_record=False)
-            filt_coeff= filt_coeff['filt_coeff']
-            
-        elif filt_fmt == 'imp' or filt_fmt == 'txt':
-            filt_coeff= np.loadtxt(filt_file)
-        elif filt_fmt == 'npy':
-            filt_coeff = np.load(filt_file)
-        else:
-            raise TypeError('Unrecognized filter format: ', filt_fmt)
-
-        filt_coeff = filt_coeff / np.abs(np.max(filt_coeff))
-
-        return filt_coeff
-
-    def shift(self, xs, n):
-        e = np.empty_like(xs)
-        if n >= 0:
-            e[:n] = 0.0
-            e[n:] = xs[:-n]
-        else:
-            e[n:] = 0.0
-            e[:n] = xs[-n:]
-        return e
-
-    def sample_filt(self):
-        if len(self.filt_files) == 0:
-            return self.filt_files[0]
-        else:
-            idx = random.choice(self.filt_idxs)
-            return self.filt_files[idx]
-
-    ##@profile
-    def __call__(self, pkg):
-        pkg = format_package(pkg)
-        wav = pkg['chunk']
-        # sample a filter
-        filt_file = self.sample_filt()
-        filt_coeff = self.load_filter(filt_file, self.filt_fmt)
-        filt_coeff = filt_coeff.astype(np.float32)
-        wav = wav.data.numpy().reshape(-1)
-        Ex = np.dot(wav, wav)
-        wav = wav.astype(np.float32).reshape(-1)
-
-        sig_filt = signal.convolve(wav, filt_coeff, mode='full').reshape(-1)
-        
-        sig_filt = self.shift(sig_filt, -round(filt_coeff.shape[0]/2))
-
-        sig_filt=sig_filt[:wav.shape[0]]
-
-        #sig_filt=sig_filt/np.max(np.abs(sig_filt))
-
-        Efilt = np.dot(sig_filt, sig_filt)
-        #Ex = np.dot(wav, wav)
-        if Efilt>0:
-            Eratio = np.sqrt(Ex / Efilt)
-        else:
-            Eratio = 1.0
-            sig_filt=wav
-
-        sig_filt = Eratio * sig_filt
-        sig_filt = torch.FloatTensor(sig_filt)
-        if self.report:
-            if 'report' not in pkg:
-                pkg['report'] = {}
-            pkg['report']['filt_file'] = filt_file
-        pkg['chunk'] = sig_filt
-        return pkg
-    
-    def __repr__(self):
-        if len(self.filt_files) > 3:
-            attrs = '(filt_files={} ...)'.format(self.filt_files[:3])
-        else:
-            attrs = '(filt_files={})'.format(self.filt_files)
         return self.__class__.__name__ + attrs
 
 class Scale(object):
@@ -947,10 +754,7 @@ class SimpleAdditive(object):
     def compute_SNR_K(self, signal, noise, snr):
         Ex = np.dot(signal, signal)
         En = np.dot(noise, noise)
-        if En > 0 :
-            K = np.sqrt(Ex / ((10 ** (snr / 10.)) * En))
-        else:
-            K = 1.0
+        K = np.sqrt(Ex / ((10 ** (snr / 10.)) * En))
         return K, Ex, En
 
     def norm_energy(self, osignal, ienergy, eps=1e-14):
@@ -987,12 +791,8 @@ class SimpleAdditive(object):
         snr = random.choice(self.snr_levels)
         K, Ex, En = self.compute_SNR_K(wav, noise, snr)
         scaled_noise = K * noise
-        if En > 0 :
-            noisy = wav + scaled_noise
-            noisy = self.norm_energy(noisy, Ex)
-        else:
-            noisy = wav
-
+        noisy = wav + scaled_noise
+        noisy = self.norm_energy(noisy, Ex)
         x_ = torch.FloatTensor(noisy)
         if self.report:
             if 'report' not in pkg:

@@ -20,6 +20,7 @@ class DictCollater(object):
                                       'chunk',
                                       'chunk_ctxt',
                                       'chunk_rand',
+                                      'overlap',
                                       'lps',
                                       'mfcc',
                                       'prosody'],
@@ -39,6 +40,7 @@ class DictCollater(object):
                 if len(lab_batches) == 0:
                     for lab in labs:
                         lab_batches.append([])
+            print("sample", sample.keys())
             for k, v in sample.items():
                 if k not in self.batching_keys:
                     continue
@@ -55,6 +57,7 @@ class DictCollater(object):
             if labs is not None:
                 for lab_i, lab in enumerate(labs):
                     lab_batches[lab_i].append(lab)
+        print("batches", batches.keys())
         for k in batches.keys():
             batches[k] = torch.cat(batches[k], dim=0)
         if labs is not None:
