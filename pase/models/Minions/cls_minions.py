@@ -21,7 +21,7 @@ def cls_worker_maker(cfg, emb_dim):
         return SPC(cfg, emb_dim)
 
     else:
-        raise TypeError('Unrecognized minion type {}'.format(mtype))
+        raise TypeError('Unrecognized minion type {}'.format(cfg["name"]))
 
     return Regress_minion
 

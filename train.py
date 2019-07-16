@@ -6,7 +6,7 @@ from pase.models.WorkerScheduler.trainer import trainer
 #from torchvision.transforms import Compose
 from pase.transforms import *
 from pase.losses import *
-from pase.utils import pase_parser
+from pase.utils import pase_parser, worker_parser
 import pase
 from torch.utils.data import DataLoader
 import torch
@@ -23,40 +23,42 @@ import random
 def str2bool(v):
   return v.lower() in ("yes", "true", "t", "1")
 
-def make_transforms(opts, minions_cfg):
+def make_transforms(opts, workers_cfg):
     trans = [ToTensor()]
     keys = ['totensor']
     # go through all minions first to check whether
     # there is MI or not to make chunker
     mi = False
-    for minion in minions_cfg:
-        if 'mi' in minion['name']:
-            mi = True
-    if mi:
-        trans.append(MIChunkWav(opts.chunk_size, random_scale=opts.random_scale))
-    else:
-        trans.append(SingleChunkWav(opts.chunk_size, random_scale=opts.random_scale))
+    for type, minions_cfg in workers_cfg.items():
+        for minion in minions_cfg:
+            if 'mi' in minion['name']:
+                mi = True
+        if mi:
+            trans.append(MIChunkWav(opts.chunk_size, random_scale=opts.random_scale))
+        else:
+            trans.append(SingleChunkWav(opts.chunk_size, random_scale=opts.random_scale))
 
     znorm = False
-    for minion in minions_cfg:
-        name = minion['name']
-        if name == 'mi' or name == 'cmi' or name == 'spc':
-            continue
-        elif name == 'lps':
-            znorm = True
-            trans.append(LPS(opts.nfft, hop=160, win=400))
-        elif name == 'mfcc':
-            znorm = True
-            trans.append(MFCC(hop=160))
-        elif name == 'prosody':
-            znorm = True
-            trans.append(Prosody(hop=160, win=400))
-        elif name == 'chunk' or name == 'cchunk':
-            znorm = True
-        else:
-            raise TypeError('Unrecognized module \"{}\"'
-                            'whilst building transfromations'.format(name))
-        keys.append(name)
+    for type, minions_cfg in workers_cfg.items():
+        for minion in minions_cfg:
+            name = minion['name']
+            if name == 'mi' or name == 'cmi' or name == 'spc':
+                continue
+            elif name == 'lps':
+                znorm = True
+                trans.append(LPS(opts.nfft, hop=160, win=400))
+            elif name == 'mfcc':
+                znorm = True
+                trans.append(MFCC(hop=160))
+            elif name == 'prosody':
+                znorm = True
+                trans.append(Prosody(hop=160, win=400))
+            elif name == 'chunk' or name == 'cchunk':
+                znorm = True
+            else:
+                raise TypeError('Unrecognized module \"{}\"'
+                                'whilst building transfromations'.format(name))
+            keys.append(name)
     if znorm:
         trans.append(ZNorm(opts.stats))
         keys.append('znorm')
@@ -167,7 +169,7 @@ def train(opts):
             print(fe_cfg)
     else:
         fe_cfg = None
-    minions_cfg = pase_parser(opts.net_cfg)
+    minions_cfg = worker_parser(opts.net_cfg)
     #make_transforms(opts, minions_cfg)
     opts.random_scale = str2bool(opts.random_scale)
     trans = make_transforms(opts, minions_cfg)
