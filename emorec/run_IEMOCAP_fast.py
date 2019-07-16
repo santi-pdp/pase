@@ -93,16 +93,8 @@ if not os.path.exists(dname):
 text_file=open(output_file, "w")
 
 # Loading pase
-with open(pase_cfg, 'r') as cfg_f:
-    cfg = json.load(cfg_f)
-
-if"name" in cfg.keys() and cfg['name'] == "asppRes":
-    pase = aspp_res_encoder(**cfg)
-    pase.load_pretrained(pase_model, load_last=True, verbose=False)
-else:
-    pase = encoder(wf_builder(pase_cfg))
-    pase.load_pretrained(pase_model, load_last=True, verbose=False)
-    pase = pase.frontend
+pase=wf_builder(pase_cfg)
+pase.load_pretrained(pase_model, load_last=True, verbose=False)
 pase.to(device)
 pase.eval()
 
@@ -132,10 +124,7 @@ print('Computing PASE features...')
 fea_pase={}
 for snt_id in fea.keys():
     pase.eval()
-    if "name" in cfg.keys() and cfg['name'] == "asppRes":
-        fea_pase[snt_id]=pase(fea[snt_id], device).to('cpu').detach()
-    else:
-        fea_pase[snt_id]=pase(fea[snt_id]).to('cpu').detach()
+    fea_pase[snt_id]=pase(fea[snt_id], device).to('cpu').detach()
     fea_pase[snt_id]=fea_pase[snt_id].view(fea_pase[snt_id].shape[1],fea_pase[snt_id].shape[2]).transpose(0,1)
 
 inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
@@ -143,10 +132,7 @@ inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
 # Computing pase features for test
 fea_pase_dev={}
 for snt_id in fea_dev.keys():
-    if "name" in cfg.keys() and cfg['name'] == "asppRes":
-        fea_pase_dev[snt_id]=pase(fea_dev[snt_id], device).detach()
-    else:
-        fea_pase_dev[snt_id]=pase(fea_dev[snt_id]).detach()
+    fea_pase_dev[snt_id]=pase(fea_dev[snt_id], device).detach()
     fea_pase_dev[snt_id]=fea_pase_dev[snt_id].view(fea_pase_dev[snt_id].shape[1],fea_pase_dev[snt_id].shape[2]).transpose(0,1)
 
   

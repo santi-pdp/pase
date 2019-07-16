@@ -21,9 +21,8 @@ def cls_worker_maker(cfg, emb_dim):
         return SPC(cfg, emb_dim)
 
     else:
-        raise TypeError('Unrecognized minion type {}'.format(cfg["name"]))
+        return minion_maker(cfg)
 
-    return Regress_minion
 
 def make_samples(x):
     x_pos = torch.cat((x[0], x[1]), dim=1)

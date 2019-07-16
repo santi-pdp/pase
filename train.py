@@ -237,7 +237,7 @@ def train(opts):
                       lr_mode=opts.lr_mode,
                       tensorboard=str2bool(opts.tensorboard),
                       device=device)
-    print(Trainer.model)
+    # print(Trainer.model)
     print('Frontend params: ', Trainer.model.frontend.describe_params())
 
     Trainer.model.to(device)
