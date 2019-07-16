@@ -812,6 +812,8 @@ class SimpleAdditiveShift(SimpleAdditive):
     def __init__(self, noises_dir, snr_levels=[5, 10], 
                  noise_transform=None,
                  noises_list=None,
+                 overlap_flag=True,
+                 flag_decimation=160,
                  report=False):
         if noises_list is None:
             super().__init__(noises_dir, snr_levels, report)
@@ -824,6 +826,8 @@ class SimpleAdditiveShift(SimpleAdditive):
                 for nel in nf:
                     nel = nel.rstrip()
                     self.noises.append(os.path.join(noises_dir, nel))
+        self.overlap_flag = overlap_flag
+        self.flag_decimation = flag_decimation
         self.noises_dir = noises_dir
         self.noises_list = noises_list
         self.snr_levels = snr_levels
@@ -858,9 +862,20 @@ class SimpleAdditiveShift(SimpleAdditive):
         if self.noise_transform is not None:
             noise = self.noise_transform({'chunk':torch.FloatTensor(noise)})['chunk']
             noise = noise.data.numpy()
+        pad_len = len(wav) - len(noise)
+        if self.overlap_flag:
+            # anotate a mask of overlapped samples
+            pkg['overlap'] = torch.cat(torch.zeros(pad_len),
+                                       torch.ones(len(noise)),
+                                       dim=0).float()
+            if self.flag_decimation > 1:
+                pkg['overlap'] = F.adaptive_avg_pool1d(pkg['overlap'].view(1,1,-1), 
+                                                       len(x) // self.flag_decimation)
+
+
         # apply padding to equal length now
         noise = F.pad(torch.tensor(noise).view(1, 1, -1),
-                      (len(wav) - len(noise), 0),
+                      (pad_len, 0),
                       mode='constant').view(-1).data.numpy()
         # randomly sample the SNR level
         snr = random.choice(self.snr_levels)

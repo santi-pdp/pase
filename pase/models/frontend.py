@@ -126,7 +126,11 @@ class WaveFe(Model):
         dfactor = skip.shape[2] // input_.shape[2]
         if dfactor > 1:
             # downsample skips
-            skip = F.adaptive_avg_pool1d(skip, input_.shape[2])
+            # [B, F, T]
+            bsz, feats, slen = skip.shape
+            skip_re = skip.view(bsz, feats, slen // dfactor, dfactor)
+            skip = torch.mean(skip_re, dim=3)
+            #skip = F.adaptive_avg_pool1d(skip, input_.shape[2])
         if self.densemerge == 'concat':
             return torch.cat((input_, skip), dim=1)
         elif self.densemerge == 'sum':
