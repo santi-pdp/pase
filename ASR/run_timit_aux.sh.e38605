@@ -1,8 +1,0 @@
-Traceback (most recent call last):
-  File "run_TIMIT_fast.py", line 95, in <module>
-    pase.load_pretrained(pase_model, load_last=True, verbose=False)
-  File "/home/zhong/anaconda3/lib/python3.7/site-packages/PASE-0.1.1.dev0-py3.7.egg/pase/models/modules.py", line 265, in load_pretrained
-  File "/home/zhong/anaconda3/lib/python3.7/site-packages/PASE-0.1.1.dev0-py3.7.egg/pase/models/modules.py", line 194, in load_pretrained_ckpt
-  File "/home/zhong/anaconda3/lib/python3.7/site-packages/torch/serialization.py", line 366, in load
-    f = open(f, 'rb')
-FileNotFoundError: [Errno 2] No such file or directory: '..//export/team-mic/zhong/test/wf_res2d/FE_e1.ckpt'
