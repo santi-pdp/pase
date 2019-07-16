@@ -20,6 +20,7 @@ class DictCollater(object):
                                       'chunk',
                                       'chunk_ctxt',
                                       'chunk_rand',
+                                      'overlap',
                                       'lps',
                                       'mfcc',
                                       'prosody'],
