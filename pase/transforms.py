@@ -451,7 +451,7 @@ class Reverb(object):
         #rev = rev / np.max(np.abs(rev))
         # IR delay compensation
         rev = self.shift(rev, -p_max)
-        Eratio = np.sqrt(Ex / Er)
+        Eratio = np.sqrt(Ex / (Er + 10e-10))
         # Trim rev signal to match clean length
         rev = rev[:wav.shape[0]]
         rev = Eratio * rev
