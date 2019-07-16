@@ -119,7 +119,7 @@ class WaveFe(Model):
         #print('skip shape: ', skip.shape)
         dfactor = skip.shape[2] // input_.shape[2]
         if dfactor > 1:
-            print('dfactor: ', dfactor)
+            #print('dfactor: ', dfactor)
             # downsample skips
             # [B, F, T]
             maxlen = input_.shape[2] * dfactor
