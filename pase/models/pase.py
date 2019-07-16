@@ -1,6 +1,7 @@
 from .Minions.minions import *
 from .Minions.cls_minions import *
 from .attention_block import attention_block
+from .frontend import wf_builder
 from .WorkerScheduler.encoder import *
 import numpy as np
 import torch
@@ -27,10 +28,7 @@ class pase_attention(Model):
 
         # init frontend
         print(frontend_cfg)
-        if 'name' in frontend_cfg.keys() and frontend_cfg['name'] == 'asppRes':
-            self.frontend = aspp_res_encoder(**frontend_cfg)
-        else:
-            self.frontend = encoder(WaveFe(**frontend_cfg))
+        self.frontend = wf_builder(frontend_cfg)
 
         # init all workers
         # putting them into two lists
@@ -47,17 +45,19 @@ class pase_attention(Model):
         # auto infer the output dim of first nn layer
         att_cfg['dnn_lay'] += "," + str(ninp)
 
-        for cfg in minions_cfg:
+        for type, cfg_lst in minions_cfg.items():
+            for cfg in cfg_lst:
 
-            if cfg["name"] in self.cls_lst:
-                self.classification_workers.append(cls_worker_maker(cfg, ninp))
-                self.attention_blocks.append(attention_block(nn_input, cfg['name'], att_cfg, K))
+                if type == 'cls':
+                    cfg['num_inputs'] = ninp
+                    self.classification_workers.append(cls_worker_maker(cfg, ninp))
+                    self.attention_blocks.append(attention_block(nn_input, cfg['name'], att_cfg, K))
 
-            elif cfg["name"] in self.reg_lst:
-                cfg['num_inputs'] = ninp
-                minion = minion_maker(cfg)
-                self.regression_workers.append(minion)
-                self.attention_blocks.append(attention_block(nn_input, cfg['name'], att_cfg, K))
+                elif type == 'regr':
+                    cfg['num_inputs'] = ninp
+                    minion = minion_maker(cfg)
+                    self.regression_workers.append(minion)
+                    self.attention_blocks.append(attention_block(nn_input, cfg['name'], att_cfg, K))
 
         if pretrained_ckpt is not None:
             self.load_pretrained(pretrained_ckpt, load_last=True)
@@ -95,10 +95,17 @@ class pase_attention(Model):
         for worker in self.classification_workers:
             hidden, mask = new_hidden[worker.name]
             h = [hidden, h[1] * mask, h[2] * mask]
+            print(worker.name)
+            print(hidden.size())
             if worker.name == "spc":
-                y, label = worker(hidden, device)
+                print(worker)
+                y, label = worker(hidden)
+            elif worker.name == "overlap":
+                print(worker)
+                y = worker(hidden)
+                label = x[worker.name].to(device).detach()
             else:
-                y, label = worker(h, device)
+                y, label = worker(h, device=device)
             preds[worker.name] = y
             labels[worker.name] = label
 
@@ -243,10 +250,8 @@ class pase(Model):
                              'GIMME SOMETHING TO DO.')
 
         # init frontend
-        if 'name' in frontend_cfg.keys() and frontend_cfg['name'] == 'asppRes':
-            self.frontend = aspp_res_encoder(**frontend_cfg)
-        else:
-            self.frontend = encoder(WaveFe(**frontend_cfg))
+        print("pase config ==>", frontend_cfg)
+        self.frontend = wf_builder(frontend_cfg)
 
         # init all workers
         # putting them into two lists
@@ -262,6 +267,7 @@ class pase(Model):
             for cfg in cfg_lst:
 
                 if type == 'cls':
+                    cfg['num_inputs'] = ninp
                     self.classification_workers.append(cls_worker_maker(cfg, ninp))
 
                 elif type == 'regr':
@@ -296,10 +302,10 @@ class pase(Model):
         # h => y, label
 
         for worker in self.classification_workers:
-            if worker.name == "spc":
-                y, label = worker(chunk, device)
+            if worker.name == "spc" or worker.name == "overlap":
+                y, label = worker(chunk, device=device)
             else:
-                y, label = worker(h, device)
+                y, label = worker(h, device=device)
             preds[worker.name] = y
             labels[worker.name] = label
 

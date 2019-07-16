@@ -32,7 +32,7 @@ class MLPBlock(NeuralBlock):
         self.act = nn.PReLU(fmaps)
         self.dout = nn.Dropout(dout)
 
-    def forward(self, x):
+    def forward(self, x, device=None):
         return self.dout(self.act(self.W(x)))
 
 
@@ -82,7 +82,7 @@ class DecoderMinion(Model):
             ninp = hidden_size
         self.W = nn.Conv1d(hidden_size, num_outputs, 1)
 
-    def forward(self, x):
+    def forward(self, x, device=None):
         h = x
         for bi, block in enumerate(self.blocks, start=1):
             h_ = h
@@ -129,7 +129,7 @@ class MLPMinion(Model):
             ninp = hidden_size
         self.W = nn.Conv1d(hidden_size, num_outputs, 1)
 
-    def forward(self, x):
+    def forward(self, x, device=None):
         h = x
         for bi, block in enumerate(self.blocks, start=1):
             h = block(h)
@@ -172,7 +172,7 @@ class GRUMinion(Model):
                           dropout=dropout)
         self.W = nn.Conv1d(hidden_size, num_outputs, 1)
 
-    def forward(self, x):
+    def forward(self, x, device=None):
         h, _ = self.rnn(x.transpose(1, 2))
         h = h.transpose(1, 2)
         y = self.W(h)
@@ -215,7 +215,7 @@ class SPCMinion(MLPMinion):
         self.ctxt_frames = ctxt_frames
         self.seq_pad = seq_pad
 
-    def forward(self, x):
+    def forward(self, x, device=None):
         # x is a batch of sequences
         # of dims [B, channels, time]
         # first select a "central" time-step

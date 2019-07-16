@@ -42,7 +42,8 @@ def make_transforms(opts, workers_cfg):
     for type, minions_cfg in workers_cfg.items():
         for minion in minions_cfg:
             name = minion['name']
-            if name == 'mi' or name == 'cmi' or name == 'spc':
+            if name == 'mi' or name == 'cmi' or name == 'spc' or \
+               name == 'overlap':
                 continue
             elif name == 'lps':
                 znorm = True
