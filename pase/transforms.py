@@ -25,13 +25,15 @@ def norm_and_scale(wav):
     wav = wav / torch.max(torch.abs(wav))
     return wav * torch.rand(1)
 
+
 def format_package(x):
     if not isinstance(x, dict):
-        return {'raw':x}
+        return {'raw': x}
     else:
         if 'chunk' not in x:
             x['chunk'] = x['raw']
     return x
+
 
 class ToTensor(object):
 
@@ -47,6 +49,7 @@ class ToTensor(object):
     def __repr__(self):
         return self.__class__.__name__ + '()'
 
+
 class ZNorm(object):
 
     def __init__(self, stats):
@@ -54,11 +57,11 @@ class ZNorm(object):
         with open(stats, 'rb') as stats_f:
             self.stats = pickle.load(stats_f)
 
-    #@profile
+    # @profile
     def __call__(self, pkg, ignore_keys=[]):
         pkg = format_package(pkg)
         for k, st in self.stats.items():
-            #assert k in pkg, '{} != {}'.format(list(pkg.keys()),
+            # assert k in pkg, '{} != {}'.format(list(pkg.keys()),
             #                                   list(self.stats.keys()))
             if k in ignore_keys:
                 continue
@@ -71,6 +74,7 @@ class ZNorm(object):
     def __repr__(self):
         return self.__class__.__name__ + '({})'.format(self.stats_name)
 
+
 class PCompose(object):
 
     def __init__(self, transforms, probs=0.4, report=False):
@@ -80,8 +84,8 @@ class PCompose(object):
         self.report = report
         if isinstance(probs, list):
             assert len(transforms) == len(probs), \
-                    '{} != {}'.format(len(transforms),
-                                      len(probs))
+                '{} != {}'.format(len(transforms),
+                                  len(probs))
 
     ##@profile
     def __call__(self, tensor):
@@ -98,6 +102,9 @@ class PCompose(object):
                     # get the report
                     x, report = x
                     reports.append(report)
+            else:
+                if isinstance(transf, SimpleAdditiveShift) and transf.overlap_flag:
+                    x['overlap'] = torch.zeros(len(x['chunk'])//transf.flag_decimation).float()
         if self.report:
             return x, reports
         else:
@@ -115,6 +122,7 @@ class PCompose(object):
             format_string += ' >> p={}'.format(prob)
         format_string += '\n)'
         return format_string
+
 
 class CachedCompose(Compose):
 
@@ -156,7 +164,7 @@ class CachedCompose(Compose):
 
     def __repr__(self):
         return super().__repr__()
-        
+
 
 class SingleChunkWav(object):
 
@@ -167,7 +175,7 @@ class SingleChunkWav(object):
     def assert_format(self, x):
         # assert it is a waveform and pytorch tensor
         assert isinstance(x, torch.Tensor), type(x)
-        #assert x.dim() == 1, x.size()
+        # assert x.dim() == 1, x.size()
 
     ##@profile
     def select_chunk(self, wav, ret_bounds=False):
@@ -179,8 +187,8 @@ class SingleChunkWav(object):
             chk = F.pad(wav.view(1, 1, -1), (0, P), mode='reflect').view(-1)
             idx = 0
         else:
-            #idxs = list(range(wav.size(0) - chksz))
-            #idx = random.choice(idxs)
+            # idxs = list(range(wav.size(0) - chksz))
+            # idx = random.choice(idxs)
             idx = np.random.randint(0, wav.size(0) - chksz)
             chk = wav[idx:idx + chksz]
         if ret_bounds:
@@ -202,15 +210,16 @@ class SingleChunkWav(object):
 
     def __repr__(self):
         return self.__class__.__name__ + \
-                '({})'.format(self.chunk_size)
+               '({})'.format(self.chunk_size)
+
 
 class MIChunkWav(SingleChunkWav):
-
     """ Max-Information chunker expects 3 input wavs,
         and extract 3 chunks: (chunk, chunk_ctxt,
         and chunk_rand). The first two correspond to same
         context, the third one is sampled from the second wav
     """
+
     def __call__(self, pkg):
         pkg = format_package(pkg)
         if 'raw_rand' not in pkg:
@@ -239,17 +248,18 @@ class MIChunkWav(SingleChunkWav):
             pkg['chunk_rand'] = norm_and_scale(pkg['chunk_rand'])
         return pkg
 
+
 class LPS(object):
 
     def __init__(self, n_fft=2048, hop=80,
-                 win=320, 
+                 win=320,
                  device='cpu'):
         self.n_fft = n_fft
         self.hop = hop
         self.win = win
         self.device = device
 
-    #@profile
+    # @profile
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -276,16 +286,17 @@ class LPS(object):
         attrs += ', device={})'.format(self.device)
         return self.__class__.__name__ + attrs
 
+
 class MFCC(object):
 
-    def __init__(self, n_fft=2048, hop=80, 
+    def __init__(self, n_fft=2048, hop=80,
                  order=20, sr=16000):
         self.n_fft = n_fft
         self.hop = hop
         self.order = order
         self.sr = 16000
 
-    #@profile
+    # @profile
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -299,12 +310,12 @@ class MFCC(object):
             mfcc = mfcc[:, beg_i:end_i]
             pkg['mfcc'] = mfcc
         else:
-            #print(y.dtype)
+            # print(y.dtype)
             mfcc = librosa.feature.mfcc(y, sr=self.sr,
                                         n_mfcc=self.order,
                                         n_fft=self.n_fft,
                                         hop_length=self.hop
-                                       )[:, :max_frames]
+                                        )[:, :max_frames]
             pkg['mfcc'] = torch.tensor(mfcc.astype(np.float32))
         return pkg
 
@@ -312,6 +323,7 @@ class MFCC(object):
         attrs = '(order={}, sr={})'.format(self.order,
                                            self.sr)
         return self.__class__.__name__ + attrs
+
 
 class Prosody(object):
 
@@ -323,7 +335,7 @@ class Prosody(object):
         self.f0_max = f0_max
         self.sr = sr
 
-    #@profile
+    # @profile
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -338,7 +350,7 @@ class Prosody(object):
             pkg['prosody'] = proso
         else:
             # first compute logF0 and voiced/unvoiced flag
-            #f0 = pysptk.rapt(wav.astype(np.float32),
+            # f0 = pysptk.rapt(wav.astype(np.float32),
             #                 fs=self.sr, hopsize=self.hop,
             #                 min=self.f0_min, max=self.f0_max,
             #                 otype='f0')
@@ -347,8 +359,8 @@ class Prosody(object):
                               min=self.f0_min,
                               max=self.f0_max,
                               otype='f0')
-            #sound = pm.Sound(wav.astype(np.float32), self.sr)
-            #f0 = sound.to_pitch(self.hop / 16000).selected_array['frequency']
+            # sound = pm.Sound(wav.astype(np.float32), self.sr)
+            # f0 = sound.to_pitch(self.hop / 16000).selected_array['frequency']
             if len(f0) < max_frames:
                 pad = max_frames - len(f0)
                 f0 = np.concatenate((f0, f0[-pad:]), axis=0)
@@ -359,7 +371,7 @@ class Prosody(object):
             if torch.sum(uv) == 0:
                 # if frame is completely unvoiced, make lf0 min val
                 lf0 = torch.ones(uv.size()) * np.log(self.f0_min)
-            #assert lf0.min() > 0, lf0.data.numpy()
+            # assert lf0.min() > 0, lf0.data.numpy()
             # secondly obtain zcr
             zcr = librosa.feature.zero_crossing_rate(y=wav,
                                                      frame_length=self.win,
@@ -383,7 +395,8 @@ class Prosody(object):
                                                                self.f0_max)
         attrs += ', sr={})'.format(self.sr)
         return self.__class__.__name__ + attrs
-                
+
+
 class Reverb(object):
 
     def __init__(self, ir_files, report=False, ir_fmt='mat',
@@ -393,7 +406,7 @@ class Reverb(object):
         assert isinstance(ir_files, list), type(ir_files)
         assert len(ir_files) > 0, len(ir_files)
         self.ir_idxs = list(range(len(ir_files)))
-        #self.IR, self.p_max = self.load_IR(ir_file, ir_fmt)
+        # self.IR, self.p_max = self.load_IR(ir_file, ir_fmt)
         self.ir_fmt = ir_fmt
         self.report = report
         self.data_root = data_root
@@ -401,7 +414,7 @@ class Reverb(object):
 
     def load_IR(self, ir_file, ir_fmt):
         ir_file = os.path.join(self.data_root, ir_file)
-        #print('loading ir_file: ', ir_file)
+        # print('loading ir_file: ', ir_file)
         if ir_fmt == 'mat':
             IR = loadmat(ir_file, squeeze_me=True, struct_as_record=False)
             IR = IR['risp_imp']
@@ -444,14 +457,19 @@ class Reverb(object):
         wav = wav.data.numpy().reshape(-1)
         Ex = np.dot(wav, wav)
         wav = wav.astype(np.float32).reshape(-1)
-        #wav = wav / np.max(np.abs(wav))
-        #rev = signal.fftconvolve(wav, IR, mode='full')
+        # wav = wav / np.max(np.abs(wav))
+        # rev = signal.fftconvolve(wav, IR, mode='full')
         rev = signal.convolve(wav, IR, mode='full').reshape(-1)
         Er = np.dot(rev, rev)
-        #rev = rev / np.max(np.abs(rev))
+        # rev = rev / np.max(np.abs(rev))
         # IR delay compensation
         rev = self.shift(rev, -p_max)
-        Eratio = np.sqrt(Ex / (Er + 10e-10))
+        if Er > 0:
+            Eratio = np.sqrt(Ex / Er)
+        else:
+            Eratio = 1.0
+            rev = rev / np.max(np.abs(rev))
+
         # Trim rev signal to match clean length
         rev = rev[:wav.shape[0]]
         rev = Eratio * rev
@@ -462,7 +480,7 @@ class Reverb(object):
             pkg['report']['ir_file'] = ir_file
         pkg['chunk'] = rev
         return pkg
-    
+
     def __repr__(self):
         if len(self.ir_files) > 3:
             attrs = '(ir_files={} ...)'.format(self.ir_files[:3])
@@ -483,17 +501,16 @@ class Downsample(object):
         self.report = report
         self.data_root = data_root
 
-
     def load_filter(self, filt_file, filt_fmt):
-        
+
         filt_file = os.path.join(self.data_root, filt_file)
 
         if filt_fmt == 'mat':
             filt_coeff = loadmat(filt_file, squeeze_me=True, struct_as_record=False)
-            filt_coeff= filt_coeff['filt_coeff']
-            
+            filt_coeff = filt_coeff['filt_coeff']
+
         elif filt_fmt == 'imp' or filt_fmt == 'txt':
-            filt_coeff= np.loadtxt(filt_file)
+            filt_coeff = np.loadtxt(filt_file)
         elif filt_fmt == 'npy':
             filt_coeff = np.load(filt_file)
         else:
@@ -533,17 +550,21 @@ class Downsample(object):
         wav = wav.astype(np.float32).reshape(-1)
 
         sig_filt = signal.convolve(wav, filt_coeff, mode='full').reshape(-1)
-        
-        sig_filt = self.shift(sig_filt, -round(filt_coeff.shape[0]/2))
 
-        sig_filt=sig_filt[:wav.shape[0]]
+        sig_filt = self.shift(sig_filt, -round(filt_coeff.shape[0] / 2))
 
-        #sig_filt=sig_filt/np.max(np.abs(sig_filt))
+        sig_filt = sig_filt[:wav.shape[0]]
+
+        # sig_filt=sig_filt/np.max(np.abs(sig_filt))
 
         Efilt = np.dot(sig_filt, sig_filt)
-        #Ex = np.dot(wav, wav)
-        
-        Eratio = np.sqrt(Ex / Efilt)
+        # Ex = np.dot(wav, wav)
+
+        if Efilt > 0:
+            Eratio = np.sqrt(Ex / Efilt)
+        else:
+            Eratio = 1.0
+            sig_filt = wav
 
         sig_filt = Eratio * sig_filt
         sig_filt = torch.FloatTensor(sig_filt)
@@ -553,13 +574,14 @@ class Downsample(object):
             pkg['report']['filt_file'] = filt_file
         pkg['chunk'] = sig_filt
         return pkg
-    
+
     def __repr__(self):
         if len(self.filt_files) > 3:
             attrs = '(filt_files={} ...)'.format(self.filt_files[:3])
         else:
             attrs = '(filt_files={})'.format(self.filt_files)
         return self.__class__.__name__ + attrs
+
 
 class BandDrop(object):
 
@@ -573,17 +595,16 @@ class BandDrop(object):
         self.report = report
         self.data_root = data_root
 
-
     def load_filter(self, filt_file, filt_fmt):
-        
+
         filt_file = os.path.join(self.data_root, filt_file)
 
         if filt_fmt == 'mat':
             filt_coeff = loadmat(filt_file, squeeze_me=True, struct_as_record=False)
-            filt_coeff= filt_coeff['filt_coeff']
-            
+            filt_coeff = filt_coeff['filt_coeff']
+
         elif filt_fmt == 'imp' or filt_fmt == 'txt':
-            filt_coeff= np.loadtxt(filt_file)
+            filt_coeff = np.loadtxt(filt_file)
         elif filt_fmt == 'npy':
             filt_coeff = np.load(filt_file)
         else:
@@ -623,17 +644,20 @@ class BandDrop(object):
         wav = wav.astype(np.float32).reshape(-1)
 
         sig_filt = signal.convolve(wav, filt_coeff, mode='full').reshape(-1)
-        
-        sig_filt = self.shift(sig_filt, -round(filt_coeff.shape[0]/2))
 
-        sig_filt=sig_filt[:wav.shape[0]]
+        sig_filt = self.shift(sig_filt, -round(filt_coeff.shape[0] / 2))
 
-        #sig_filt=sig_filt/np.max(np.abs(sig_filt))
+        sig_filt = sig_filt[:wav.shape[0]]
+
+        # sig_filt=sig_filt/np.max(np.abs(sig_filt))
 
         Efilt = np.dot(sig_filt, sig_filt)
-        #Ex = np.dot(wav, wav)
-        
-        Eratio = np.sqrt(Ex / Efilt)
+        # Ex = np.dot(wav, wav)
+        if Efilt > 0:
+            Eratio = np.sqrt(Ex / Efilt)
+        else:
+            Eratio = 1.0
+            sig_filt = wav
 
         sig_filt = Eratio * sig_filt
         sig_filt = torch.FloatTensor(sig_filt)
@@ -643,13 +667,14 @@ class BandDrop(object):
             pkg['report']['filt_file'] = filt_file
         pkg['chunk'] = sig_filt
         return pkg
-    
+
     def __repr__(self):
         if len(self.filt_files) > 3:
             attrs = '(filt_files={} ...)'.format(self.filt_files[:3])
         else:
             attrs = '(filt_files={})'.format(self.filt_files)
         return self.__class__.__name__ + attrs
+
 
 class Scale(object):
     """Scale audio tensor from a 16-bit integer (represented as a FloatTensor)
@@ -659,7 +684,7 @@ class Scale(object):
         factor (int): maximum value of input tensor. default: 16-bit depth
     """
 
-    def __init__(self, factor=2**31):
+    def __init__(self, factor=2 ** 31):
         self.factor = factor
 
     def __call__(self, tensor):
@@ -674,10 +699,12 @@ class Scale(object):
 
         return tensor / self.factor
 
+
 class SimpleChopper(object):
     """ Do not use VAD to specify speech regions, just
-        cut randomly some number of regions randomly 
+        cut randomly some number of regions randomly
     """
+
     def __init__(self, chop_factors=[(0.05, 0.025), (0.1, 0.05)],
                  max_chops=5, report=False):
         self.chop_factors = chop_factors
@@ -685,7 +712,7 @@ class SimpleChopper(object):
         self.report = report
 
     def chop_wav(self, wav):
-        # TODO: finish this 
+        # TODO: finish this
         raise NotImplementedError('Need to be finished')
         chop_factors = self.chop_factors
         # get num of chops to make
@@ -694,12 +721,12 @@ class SimpleChopper(object):
         if chops == 1:
             chop_idxs = [0]
         else:
-            chop_idxs = np.random.choice(list(range(chops)), chops, 
+            chop_idxs = np.random.choice(list(range(chops)), chops,
                                          replace=False)
         chopped_wav = np.copy(wav)
         return None
 
-    #@profile
+    # @profile
     def __call__(self, pkg, srate=16000):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -721,6 +748,7 @@ class SimpleChopper(object):
             self.max_chops
         )
 
+
 class Chopper(object):
     def __init__(self, chop_factors=[(0.05, 0.025), (0.1, 0.05)],
                  max_chops=2, report=False):
@@ -735,15 +763,15 @@ class Chopper(object):
         self.normalizer = Scale((2 ** 15) - 1)
         self.report = report
 
-    #@profile
+    # @profile
     def vad_wav(self, wav, srate):
         """ Detect the voice activity in the 16-bit mono PCM wav and return
-            a list of tuples: (speech_region_i_beg_sample, center_sample, 
+            a list of tuples: (speech_region_i_beg_sample, center_sample,
             region_duration)
         """
         if srate != 16000:
             raise ValueError('Sample rate must be 16kHz')
-        window_size = 160 # samples
+        window_size = 160  # samples
         regions = []
         curr_region_counter = 0
         init = None
@@ -752,8 +780,8 @@ class Chopper(object):
         for beg_i in range(0, wav.shape[0], window_size):
             frame = wav[beg_i:beg_i + window_size]
             if frame.shape[0] >= window_size and \
-               vad.is_speech(struct.pack('{}i'.format(window_size), 
-                                         *frame), srate):
+                    vad.is_speech(struct.pack('{}i'.format(window_size),
+                                              *frame), srate):
                 curr_region_counter += 1
                 if init is None:
                     init = beg_i
@@ -763,16 +791,16 @@ class Chopper(object):
                     # close the region
                     end_sample = init + (curr_region_counter * window_size)
                     center_sample = init + (end_sample - init) / 2
-                    regions.append((init, center_sample, 
+                    regions.append((init, center_sample,
                                     curr_region_counter * window_size))
                 init = None
                 curr_region_counter = 0
         return regions
 
-    #@profile
+    # @profile
     def chop_wav(self, wav, srate, speech_regions):
         if len(speech_regions) == 0:
-            #print('Skipping no speech regions')
+            # print('Skipping no speech regions')
             return wav
         chop_factors = self.chop_factors
         # get num of chops to make
@@ -784,7 +812,7 @@ class Chopper(object):
         if chops == 1:
             chop_idxs = [0]
         else:
-            chop_idxs = np.random.choice(list(range(chops)), chops, 
+            chop_idxs = np.random.choice(list(range(chops)), chops,
                                          replace=False)
         chopped_wav = np.copy(wav)
         # make a chop per chosen region
@@ -803,13 +831,13 @@ class Chopper(object):
             chop_beg = max(int(reg_center - (chop_s_dur / 2)), reg_beg)
             chop_end = min(int(reg_center + (chop_s_dur / 2)), reg_beg +
                            reg_dur)
-            #print('chop_beg: ', chop_beg)
-            #print('chop_end: ', chop_end)
+            # print('chop_beg: ', chop_beg)
+            # print('chop_end: ', chop_end)
             # chop the selected region with computed dur
             chopped_wav[chop_beg:chop_end] = 0
         return chopped_wav
 
-    #@profile
+    # @profile
     def __call__(self, pkg, srate=16000):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -821,7 +849,7 @@ class Chopper(object):
             wav = wav.reshape((-1,))
         # get speech regions for proper chopping
         speech_regions = self.vad_wav(wav, srate)
-        chopped = self.chop_wav(wav, srate, 
+        chopped = self.chop_wav(wav, srate,
                                 speech_regions).astype(np.float32)
         chopped = self.normalizer(torch.FloatTensor(chopped))
         if self.report:
@@ -838,9 +866,10 @@ class Chopper(object):
         )
         return self.__class__.__name__ + attrs
 
+
 class Clipping(object):
 
-    def __init__(self, clip_factors = [0.3, 0.4, 0.5],
+    def __init__(self, clip_factors=[0.3, 0.4, 0.5],
                  report=False):
         self.clip_factors = clip_factors
         self.report = report
@@ -849,7 +878,7 @@ class Clipping(object):
         pkg = format_package(pkg)
         wav = pkg['chunk']
         wav = wav.data.numpy().astype(np.float32)
-        #cf = np.random.choice(self.clip_factors, 1)
+        # cf = np.random.choice(self.clip_factors, 1)
         cf = random.choice(self.clip_factors)
         clip = np.maximum(wav, cf * np.min(wav))
         clip = np.minimum(clip, cf * np.max(wav))
@@ -867,6 +896,7 @@ class Clipping(object):
         )
         return self.__class__.__name__ + attrs
 
+
 class Resample(object):
 
     def __init__(self, factors=[4], report=False):
@@ -880,7 +910,7 @@ class Resample(object):
         factor = random.choice(self.factors)
         x_lr = decimate(wav, factor).copy()
         x_lr = torch.FloatTensor(x_lr)
-        x_ = F.interpolate(x_lr.view(1, 1, -1), 
+        x_ = F.interpolate(x_lr.view(1, 1, -1),
                            scale_factor=factor,
                            align_corners=True,
                            mode='linear').view(-1)
@@ -898,10 +928,9 @@ class Resample(object):
         return self.__class__.__name__ + attrs
 
 
-
 class SimpleAdditive(object):
-    
-    def __init__(self, noises_dir, snr_levels=[0, 5, 10], 
+
+    def __init__(self, noises_dir, snr_levels=[0, 5, 10],
                  report=False):
         self.noises_dir = noises_dir
         self.snr_levels = snr_levels
@@ -925,7 +954,7 @@ class SimpleAdditive(object):
             return self.noises[0]
         else:
             idx = np.random.randint(0, len(self.noises))
-            #idx = random.choice(self.nidxs)
+            # idx = random.choice(self.nidxs)
             return self.noises[idx]
 
     def load_noise(self, filename):
@@ -935,14 +964,17 @@ class SimpleAdditive(object):
     def compute_SNR_K(self, signal, noise, snr):
         Ex = np.dot(signal, signal)
         En = np.dot(noise, noise)
-        K = np.sqrt(Ex / ((10 ** (snr / 10.)) * En))
+        if En > 0:
+            K = np.sqrt(Ex / ((10 ** (snr / 10.)) * En))
+        else:
+            K = 1.0
         return K, Ex, En
 
     def norm_energy(self, osignal, ienergy, eps=1e-14):
         oenergy = np.dot(osignal, osignal)
         return np.sqrt(ienergy / (oenergy + eps)) * osignal
 
-    #@profile
+    # @profile
     def __call__(self, pkg):
         """ Add noise to clean wav """
         pkg = format_package(pkg)
@@ -958,7 +990,7 @@ class SimpleAdditive(object):
         if len(sel_noise) < len(wav):
             # pad noise
             P = len(wav) - len(sel_noise)
-            sel_noise = F.pad(torch.tensor(sel_noise).view(1, 1, -1), 
+            sel_noise = F.pad(torch.tensor(sel_noise).view(1, 1, -1),
                               (0, P),
                               mode='reflect').view(-1).data.numpy()
         T = end_i - beg_i
@@ -972,8 +1004,12 @@ class SimpleAdditive(object):
         snr = random.choice(self.snr_levels)
         K, Ex, En = self.compute_SNR_K(wav, noise, snr)
         scaled_noise = K * noise
-        noisy = wav + scaled_noise
-        noisy = self.norm_energy(noisy, Ex)
+        if En > 0:
+            noisy = wav + scaled_noise
+            noisy = self.norm_energy(noisy, Ex)
+        else:
+            noisy = wav
+
         x_ = torch.FloatTensor(noisy)
         if self.report:
             if 'report' not in pkg:
@@ -988,11 +1024,14 @@ class SimpleAdditive(object):
         )
         return self.__class__.__name__ + attrs
 
+
 class SimpleAdditiveShift(SimpleAdditive):
-    
-    def __init__(self, noises_dir, snr_levels=[5, 10], 
+
+    def __init__(self, noises_dir, snr_levels=[5, 10],
                  noise_transform=None,
                  noises_list=None,
+                 overlap_flag=True,
+                 flag_decimation=160,
                  report=False):
         if noises_list is None:
             super().__init__(noises_dir, snr_levels, report)
@@ -1005,6 +1044,8 @@ class SimpleAdditiveShift(SimpleAdditive):
                 for nel in nf:
                     nel = nel.rstrip()
                     self.noises.append(os.path.join(noises_dir, nel))
+        self.overlap_flag = overlap_flag
+        self.flag_decimation = flag_decimation
         self.noises_dir = noises_dir
         self.noises_list = noises_list
         self.snr_levels = snr_levels
@@ -1017,7 +1058,7 @@ class SimpleAdditiveShift(SimpleAdditive):
         # additional out_transform to include potential distortions
         self.noise_transform = noise_transform
 
-    #@profile
+    # @profile
     def __call__(self, pkg):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -1029,7 +1070,7 @@ class SimpleAdditiveShift(SimpleAdditive):
         if len(sel_noise) < T:
             # pad noise
             P = T - len(sel_noise)
-            sel_noise = F.pad(torch.tensor(sel_noise).view(1, 1, -1), 
+            sel_noise = F.pad(torch.tensor(sel_noise).view(1, 1, -1),
                               (0, P),
                               mode='constant').view(-1).data.numpy()
             n_beg_i = 0
@@ -1037,11 +1078,21 @@ class SimpleAdditiveShift(SimpleAdditive):
             n_beg_i = np.random.randint(0, len(sel_noise) - T)
         noise = sel_noise[n_beg_i:n_beg_i + T].astype(np.float32)
         if self.noise_transform is not None:
-            noise = self.noise_transform({'chunk':torch.FloatTensor(noise)})['chunk']
+            noise = self.noise_transform({'chunk': torch.FloatTensor(noise)})['chunk']
             noise = noise.data.numpy()
+        pad_len = len(wav) - len(noise)
+        if self.overlap_flag:
+            # anotate a mask of overlapped samples
+            pkg['overlap'] = torch.cat((torch.zeros(pad_len),
+                                       torch.ones(len(noise))),
+                                       dim=0).float()
+            if self.flag_decimation > 1:
+                pkg['overlap'] = F.adaptive_avg_pool1d(pkg['overlap'].view(1, 1, -1),
+                                                       len(pkg['overlap']) // self.flag_decimation).view(1, -1)
+
         # apply padding to equal length now
         noise = F.pad(torch.tensor(noise).view(1, 1, -1),
-                      (len(wav) - len(noise), 0),
+                      (pad_len, 0),
                       mode='constant').view(-1).data.numpy()
         # randomly sample the SNR level
         snr = random.choice(self.snr_levels)
@@ -1065,11 +1116,12 @@ class SimpleAdditiveShift(SimpleAdditive):
         else:
             attrs = '(noises_dir={}, noises_list={}, ' \
                     'noise_transform={})'.format(
-                                self.noises_dir,
-                                self.noises_list,
-                                self.noise_transform.__repr__()
+                self.noises_dir,
+                self.noises_list,
+                self.noise_transform.__repr__()
             )
         return self.__class__.__name__ + attrs
+
 
 class Additive(object):
 
@@ -1087,10 +1139,10 @@ class Additive(object):
             print('[*] Found {} noise files'.format(len(noises)))
             self.noises = []
             for n_i, npath in enumerate(noises, start=1):
-                #nwav = wavfile.read(npath)[1]
+                # nwav = wavfile.read(npath)[1]
                 nwav = librosa.load(npath, sr=None)[0]
-                self.noises.append({'file':npath, 
-                                    'data':nwav.astype(np.float32)})
+                self.noises.append({'file': npath,
+                                    'data': nwav.astype(np.float32)})
                 log_noise_load = 'Loaded noise {:3d}/{:3d}: ' \
                                  '{}'.format(n_i, len(noises),
                                              npath)
@@ -1108,8 +1160,8 @@ class Additive(object):
         # print('Applying SNR: {} dB'.format(snr[0]))
         if wav.ndim > 1:
             wav = wav.reshape((-1,))
-        noisy, noise_bound = self.addnoise_asl(wav, noise, srate, 
-                                               nbits, snr, 
+        noisy, noise_bound = self.addnoise_asl(wav, noise, srate,
+                                               nbits, snr,
                                                do_IRS=self.do_IRS)
         # normalize to avoid clipping
         if np.max(noisy) >= 1 or np.min(noisy) < -1:
@@ -1119,10 +1171,9 @@ class Additive(object):
                 small = small + 0.1
         return torch.FloatTensor(noisy.astype(np.float32))
 
-
     def addnoise_asl(self, clean, noise, srate, nbits, snr, do_IRS=False):
         if do_IRS:
-            # Apply IRS filter simulating telephone 
+            # Apply IRS filter simulating telephone
             # handset BW [300, 3200] Hz
             clean = self.apply_IRS(clean, srate, nbits)
         Px, asl, c0 = self.asl_P56(clean, srate, nbits)
@@ -1149,11 +1200,11 @@ class Additive(object):
 
         Pn = np.dot(noise_segment.T, noise_segment) / x_len
 
-        # we need to scale the noise segment samples to obtain the 
+        # we need to scale the noise segment samples to obtain the
         # desired SNR = 10 * log10( Px / ((sf ** 2) * Pn))
         sf = np.sqrt(Px / Pn / (10 ** (snr / 10)))
         noise_segment = noise_segment * sf
-    
+
         noisy = x + noise_segment
 
         return noisy, noise_bounds
@@ -1167,13 +1218,13 @@ class Additive(object):
         pow_of_2 = 2 ** (np.ceil(np.log2(n)))
 
         align_filter_dB = np.array([[0, -200], [50, -40], [100, -20],
-                           [125, -12], [160, -6], [200, 0],
-                           [250, 4], [300, 6], [350, 8], [400, 10],
-                           [500, 11], [600, 12], [700, 12], [800, 12],
-                           [1000, 12], [1300, 12], [1600, 12], [2000, 12],
-                           [2500, 12], [3000, 12], [3250, 12], [3500, 4],
-                           [4000, -200], [5000, -200], [6300, -200], 
-                           [8000, -200]]) 
+                                    [125, -12], [160, -6], [200, 0],
+                                    [250, 4], [300, 6], [350, 8], [400, 10],
+                                    [500, 11], [600, 12], [700, 12], [800, 12],
+                                    [1000, 12], [1300, 12], [1600, 12], [2000, 12],
+                                    [2500, 12], [3000, 12], [3250, 12], [3500, 4],
+                                    [4000, -200], [5000, -200], [6300, -200],
+                                    [8000, -200]])
         print('align filter dB shape: ', align_filter_dB.shape)
         num_of_points, trivial = align_filter_dB.shape
         overallGainFilter = interp1d(align_filter_dB[:, 0], align_filter[:, 1],
@@ -1188,9 +1239,9 @@ class Additive(object):
 
         factorDb = interp1d(align_filter_dB[:, 0],
                             align_filter_dB[:, 1],
-                                           list(range(0, (pow_of_2 / 2) + 1) *\
-                                                freq_resolution)) - \
-                                           overallGainFilter
+                            list(range(0, (pow_of_2 / 2) + 1) * \
+                                 freq_resolution)) - \
+                   overallGainFilter
         factor = 10 ** (factorDb / 20)
 
         factor = [factor, np.fliplr(factor[1:(pow_of_2 / 2 + 1)])]
@@ -1201,26 +1252,25 @@ class Additive(object):
         data_filtered = y[:n]
         return data_filtered
 
-
     def asl_P56(self, x, srate, nbits):
         """ ITU P.56 method B. """
-        T = 0.03 # time constant of smoothing in seconds
-        H = 0.2 # hangover time in seconds
+        T = 0.03  # time constant of smoothing in seconds
+        H = 0.2  # hangover time in seconds
         M = 15.9
 
         # margin in dB of the diff b/w threshold and active speech level
-        thres_no = nbits - 1 # num of thresholds, for 16 bits it's 15
+        thres_no = nbits - 1  # num of thresholds, for 16 bits it's 15
 
-        I = np.ceil(srate * H) # hangover in samples
-        g = np.exp( -1 / (srate * T)) # smoothing factor in envelop detection
+        I = np.ceil(srate * H)  # hangover in samples
+        g = np.exp(-1 / (srate * T))  # smoothing factor in envelop detection
         c = 2. ** (np.array(list(range(-15, (thres_no + 1) - 16))))
         # array of thresholds from one quantizing level up to half the max
         # code, at a step of 2. In case of 16bit: from 2^-15 to 0.5
-        a = np.zeros(c.shape[0]) # activity counter for each level thres
-        hang = np.ones(c.shape[0]) * I # hangover counter for each level thres
+        a = np.zeros(c.shape[0])  # activity counter for each level thres
+        hang = np.ones(c.shape[0]) * I  # hangover counter for each level thres
 
         assert x.ndim == 1, x.shape
-        sq = np.dot(x, x) # long term level square energy of x
+        sq = np.dot(x, x)  # long term level square energy of x
         x_len = x.shape[0]
 
         # use 2nd order IIR filter to detect envelope q
@@ -1246,7 +1296,7 @@ class Additive(object):
         else:
             den = a[0] + self.eps
             AdB1 = 10 * np.log10(sq / a[0] + self.eps)
-        
+
         CdB1 = 20 * np.log10(c[0] + self.eps)
         if AdB1 - CdB1 < M:
             return asl_ms, asl, c0
@@ -1272,7 +1322,7 @@ class Additive(object):
                                                       CdB[j - 1],
                                                       M, 0.5)
                     asl_ms = 10 ** (asl_ms_log / 10)
-                    asl = (sq / x_len ) / asl_ms
+                    asl = (sq / x_len) / asl_ms
                     c0 = 10 ** (cl0 / 20)
                     break
         return asl_ms, asl, c0
@@ -1289,7 +1339,7 @@ class Additive(object):
             return asl_ms_log, cc
         if np.abs(lwcount - lwthr - Margin) < tol:
             asl_ms_log = lwcount
-            cc =lwthr
+            cc = lwthr
             return asl_ms_log, cc
 
         midcount = (upcount + lwcount) / 2
@@ -1329,13 +1379,14 @@ class Additive(object):
         )
         return self.__class__.__name__ + attrs
 
+
 class SpeedChange(object):
 
     def __init__(self, factor_range=(-0.15, 0.15), report=False):
         self.factor_range = factor_range
         self.report = report
 
-    #@profile
+    # @profile
     def __call__(self, pkg):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -1343,23 +1394,23 @@ class SpeedChange(object):
         warp_factor = random.random() * (self.factor_range[1] - \
                                          self.factor_range[0]) + \
                       self.factor_range[0]
-        samp_warp=wav.shape[0] + int(warp_factor*wav.shape[0])
+        samp_warp = wav.shape[0] + int(warp_factor * wav.shape[0])
         rwav = signal.resample(wav, samp_warp)
         if len(rwav) > len(wav):
             mid_i = (len(rwav) // 2) - len(wav) // 2
-            rwav = rwav[mid_i:mid_i +  len(wav)]
+            rwav = rwav[mid_i:mid_i + len(wav)]
         if len(rwav) < len(wav):
             diff = len(wav) - len(rwav)
             P = (len(wav) - len(rwav)) // 2
             if diff % 2 == 0:
-                rwav = np.concatenate((np.zeros(P,),
+                rwav = np.concatenate((np.zeros(P, ),
                                        wav,
-                                       np.zeros(P,)),
+                                       np.zeros(P, )),
                                       axis=0)
             else:
-                rwav = np.concatenate((np.zeros(P,),
+                rwav = np.concatenate((np.zeros(P, ),
                                        wav,
-                                       np.zeros(P + 1,)),
+                                       np.zeros(P + 1, )),
                                       axis=0)
         if self.report:
             if 'report' not in pkg:
@@ -1373,58 +1424,3 @@ class SpeedChange(object):
             self.factor_range
         )
         return self.__class__.__name__ + attrs
-
-
-
-if __name__ == '__main__':
-    import librosa
-    from torchvision.transforms import Compose
-    import soundfile as sf
-    wav, rate = librosa.load('test.wav', sr=None)
-    trans = Compose([
-        ToTensor(),
-        MIChunkWav(32000),
-        #Clipping()
-        #Reverb(['/tmp/IR_223971.imp',
-        #        '/tmp/IR_225824.imp',
-        #        '/tmp/IR_225825.imp'], report=False, ir_fmt='txt'),
-        #SimpleAdditiveShift('../data/LibriSpeech_50h/wav_sel_train',
-        #                    noise_transform=Reverb(['/tmp/IR_223971.imp',
-        #                                            '/tmp/IR_225824.imp'],
-        #                                           ir_fmt='txt'))
-        #SimpleAdditive(['../data/noise_non_stationary/wavs/',
-        #                '../data/noise_non_stationary/wavs_bg/'], [0])
-        Chopper()
-        #LPS(),
-        #MFCC(),
-        #Prosody(hop=160)
-    ])
-    print(trans)
-    x = trans({'raw':wav, 'raw_rand':wav})
-    print(list(x.keys()))
-    sf.write('/tmp/noisy.wav', x['chunk'], 16000)
-    beg_i = x['chunk_beg_i']
-    end_i = x['chunk_end_i']
-    sf.write('/tmp/clean.wav', wav[beg_i:end_i], 16000)
-    """
-    beg_i = x['chunk_beg_i']
-    end_i = x['chunk_end_i']
-    print(x['prosody'].shape)
-    lf0 = np.exp(x['prosody'][0, :].data.numpy())
-    uv = x['prosody'][1, :].data.numpy()
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    plt.subplot(3,1,1)
-    plt.plot(lf0)
-    plt.subplot(3,1,2)
-    plt.plot(uv)
-    plt.subplot(3,1,3)
-    plt.plot(x['chunk'].data.numpy())
-    plt.savefig('/tmp/lf0.png', dpi=200)
-    """
-    #x = trans({'raw':wav, 'raw_rand':wav})
-    #print(x['chunk'].shape)
-    #sf.write('/tmp/speed.wav', x['chunk'].data.numpy(), 16000)
-    #sf.write('/tmp/chunk_IR_223971.wav', x['cchunk'], 16000)
-

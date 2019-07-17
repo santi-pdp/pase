@@ -1,15 +1,15 @@
+# from pase.models.core import Waveminionet
 import librosa
-import torch
-from pase.models.core import Waveminionet
 from pase.models.modules import VQEMA
-from pase.models.frontend import wf_builder
-import pase
-from pase.dataset import PairWavDataset, LibriSpeechSegTupleWavDataset, DictCollater, MetaWavConcatDataset
+from pase.dataset import PairWavDataset, DictCollater, MetaWavConcatDataset
+from pase.models.WorkerScheduler.trainer import trainer
 #from torchvision.transforms import Compose
 from pase.transforms import *
 from pase.losses import *
-from pase.utils import pase_parser
+from pase.utils import pase_parser, worker_parser
+import pase
 from torch.utils.data import DataLoader
+import torch
 import pickle
 import torch.nn as nn
 import numpy as np
@@ -17,43 +17,49 @@ import argparse
 import os
 import json
 import random
-torch.backends.cudnn.benchmark = True
+# torch.backends.cudnn.benchmark = True
 
 
-def make_transforms(opts, minions_cfg):
+def str2bool(v):
+  return v.lower() in ("yes", "true", "t", "1")
+
+def make_transforms(opts, workers_cfg):
     trans = [ToTensor()]
     keys = ['totensor']
     # go through all minions first to check whether
     # there is MI or not to make chunker
     mi = False
-    for minion in minions_cfg:
-        if 'mi' in minion['name']:
-            mi = True
-    if mi:
-        trans.append(MIChunkWav(opts.chunk_size, random_scale=opts.random_scale))
-    else:
-        trans.append(SingleChunkWav(opts.chunk_size, random_scale=opts.random_scale))
+    for type, minions_cfg in workers_cfg.items():
+        for minion in minions_cfg:
+            if 'mi' in minion['name']:
+                mi = True
+        if mi:
+            trans.append(MIChunkWav(opts.chunk_size, random_scale=opts.random_scale))
+        else:
+            trans.append(SingleChunkWav(opts.chunk_size, random_scale=opts.random_scale))
 
     znorm = False
-    for minion in minions_cfg:
-        name = minion['name']
-        if name == 'mi' or name == 'cmi' or name == 'spc':
-            continue
-        elif name == 'lps':
-            znorm = True
-            trans.append(LPS(opts.nfft, hop=160, win=400))
-        elif name == 'mfcc':
-            znorm = True
-            trans.append(MFCC(hop=160))
-        elif name == 'prosody':
-            znorm = True
-            trans.append(Prosody(hop=160, win=400))
-        elif name == 'chunk' or name == 'cchunk':
-            znorm = True
-        else:
-            raise TypeError('Unrecognized module \"{}\"'
-                            'whilst building transfromations'.format(name))
-        keys.append(name)
+    for type, minions_cfg in workers_cfg.items():
+        for minion in minions_cfg:
+            name = minion['name']
+            if name == 'mi' or name == 'cmi' or name == 'spc' or \
+               name == 'overlap':
+                continue
+            elif name == 'lps':
+                znorm = True
+                trans.append(LPS(opts.nfft, hop=160, win=400))
+            elif name == 'mfcc':
+                znorm = True
+                trans.append(MFCC(hop=160))
+            elif name == 'prosody':
+                znorm = True
+                trans.append(Prosody(hop=160, win=400))
+            elif name == 'chunk' or name == 'cchunk':
+                znorm = True
+            else:
+                raise TypeError('Unrecognized module \"{}\"'
+                                'whilst building transfromations'.format(name))
+            keys.append(name)
     if znorm:
         trans.append(ZNorm(opts.stats))
         keys.append('znorm')
@@ -218,17 +224,11 @@ def train(opts):
 
     # ---------------------
     # Build Model
-    frontend = wf_builder(opts.fe_cfg)
-    minions_cfg = pase_parser(opts.net_cfg, batch_acum=opts.batch_acum,
-                              device=device,
-                              frontend=frontend)
-    model = Waveminionet(minions_cfg=minions_cfg,
-                         adv_loss=opts.adv_loss,
-                         num_devices=num_devices,
-                         frontend=frontend)
-    
-    print('Frontend params: ', model.frontend.describe_params())
-    model.to(device)
+
+    minions_cfg = worker_parser(opts.net_cfg)
+    #make_transforms(opts, minions_cfg)
+    opts.random_scale = str2bool(opts.random_scale)
+
     dset, va_dset = build_dataset_providers(opts, minions_cfg)
     dloader = DataLoader(dset, batch_size=opts.batch_size,
                          shuffle=True, collate_fn=DictCollater(),
@@ -253,7 +253,38 @@ def train(opts):
         va_dloader = None
     # fastet lr to MI
     #opts.min_lrs = {'mi':0.001}
-    model.train_(dloader, vars(opts), device=device, va_dloader=va_dloader)
+
+    if opts.fe_cfg is not None:
+        with open(opts.fe_cfg, 'r') as fe_cfg_f:
+            print(fe_cfg_f)
+            fe_cfg = json.load(fe_cfg_f)
+            print(fe_cfg)
+    else:
+        fe_cfg = None
+
+    # load config file for attention blocks
+    if opts.att_cfg:
+        with open(opts.att_cfg) as f:
+            att_cfg = json.load(f)
+            print(att_cfg)
+    else:
+        att_cfg = None
+
+    print(str2bool(opts.tensorboard))
+    Trainer = trainer(frontend_cfg=fe_cfg,
+                      att_cfg=att_cfg,
+                      minions_cfg=minions_cfg,
+                      cfg=vars(opts),
+                      backprop_mode=opts.backprop_mode,
+                      lr_mode=opts.lr_mode,
+                      tensorboard=str2bool(opts.tensorboard),
+                      device=device)
+    # print(Trainer.model)
+    print('Frontend params: ', Trainer.model.frontend.describe_params())
+
+    Trainer.model.to(device)
+
+    Trainer.train_(dloader, device=device, valid_dataloader=va_dloader)
 
 
 if __name__ == '__main__':
@@ -286,38 +317,27 @@ if __name__ == '__main__':
     parser.add_argument('--net_cfg', type=str,
                         default=None)
     parser.add_argument('--fe_cfg', type=str, default=None)
-    parser.add_argument('--sup_exec', type=str, default=None)
-    parser.add_argument('--sup_freq', type=int, default=1)
     parser.add_argument('--do_eval', action='store_true', default=False)
     parser.add_argument('--pretrained_ckpt', type=str, default=None)
     parser.add_argument('--save_path', type=str, default='ckpt')
     parser.add_argument('--max_ckpts', type=int, default=5)
     parser.add_argument('--trans_cache', type=str,
                         default=None)
-    parser.add_argument('--log_types', type=str, nargs='+', 
-                        default=['tensorboard', 'pkl'],
-                        help='Types of log writing interfaces to use: '
-                             '(1) tensorboard, (2) pkl (Def: tensorboard '
-                             'and pkl).')
     parser.add_argument('--num_workers', type=int, default=2)
     parser.add_argument('--seed', type=int, default=2)
-    parser.add_argument('--no-continue', action='store_true', default=False,
-                        help='Dump any existing ckpt in the folder and start '
-                             'training from scratch (Def: False)')
     parser.add_argument('--no-cuda', action='store_true', default=False)
-    parser.add_argument('--random_scale', action='store_true', default=False)
+    parser.add_argument('--random_scale', type=str, default='False', help="random scaling of noise")
     parser.add_argument('--chunk_size', type=int, default=16000)
     parser.add_argument('--log_freq', type=int, default=100)
     parser.add_argument('--epoch', type=int, default=1000)
     parser.add_argument('--nfft', type=int, default=2048)
     parser.add_argument('--batch_size', type=int, default=100)
-    parser.add_argument('--batch_acum', type=int, default=1)
     parser.add_argument('--hidden_size', type=int, default=256)
     parser.add_argument('--hidden_layers', type=int, default=2)
     parser.add_argument('--fe_opt', type=str, default='Adam')
     parser.add_argument('--min_opt', type=str, default='Adam')
-    parser.add_argument('--lrdec_step', type=int, default=15,
-                        help='Number of epochs to scale lr (Def: 15).')
+    parser.add_argument('--lrdec_step', type=int, default=30,
+                        help='Number of epochs to scale lr (Def: 30).')
     parser.add_argument('--lrdecay', type=float, default=0,
                         help='Learning rate decay factor with '
                              'cross validation. After patience '
@@ -345,6 +365,8 @@ if __name__ == '__main__':
     parser.add_argument('--vq', action='store_true', default=False,
                         help='Do VQ quantization of enc output (Def: False).')
     parser.add_argument('--cchunk_prior', action='store_true', default=False)
+    parser.add_argument('--sup_exec', type=str, default=None)
+    parser.add_argument('--sup_freq', type=int, default=1)
     parser.add_argument('--preload_wav', action='store_true', default=False,
                         help='Preload wav files in Dataset (Def: False).')
     parser.add_argument('--cache_on_load', action='store_true', default=False,
@@ -352,7 +374,7 @@ if __name__ == '__main__':
                              'for the wav files in datasets (Def: False).')
 
     opts = parser.parse_args()
-    opts.ckpt_continue = not opts.no_continue
+    opts.ckpt_continue = not str2bool(opts.no_continue)
     if opts.net_cfg is None:
         raise ValueError('Please specify a net_cfg file')
 
