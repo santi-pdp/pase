@@ -112,3 +112,5 @@ venv.bak/
 *.e*
 *.po*
 *.pe*
+
+*tmp
