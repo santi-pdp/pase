@@ -1,6 +1,6 @@
 import torch
-from torch.utils.data import DataLoader, ConcatDataset
-from pase.dataset import PairWavDataset, DictCollater
+from torch.utils.data import DataLoader
+from pase.dataset import PairWavDataset, DictCollater, MetaWavConcatDataset
 from torchvision.transforms import Compose
 from pase.transforms import *
 import argparse
@@ -25,27 +25,25 @@ def build_dataset_providers(opts):
     ])
 
     dsets = []
-    total_wav_dur = 0
     for idx in range(len(opts.data_root)):
         dset = PairWavDataset(opts.data_root[idx], opts.data_cfg[idx], 'train',
                          transform=trans)
         dsets.append(dset)
-        total_wav_dur += dset.total_wav_dur
 
     if len(dsets) > 1:
-        return ConcatDataset(dsets), total_wav_dur
+        return MetaWavConcatDataset(dsets)
     else:
-        return dsets[0], total_wav_dur
+        return dsets[0]
 
 def extract_stats(opts):
-    dset, total_wav_dur = build_dataset_providers(opts)
+    dset = build_dataset_providers(opts)
     dloader = DataLoader(dset, batch_size = 100,
                          shuffle=True, collate_fn=DictCollater(),
                          num_workers=opts.num_workers)
     # Compute estimation of bpe. As we sample chunks randomly, we
     # should say that an epoch happened after seeing at least as many
     # chunks as total_train_wav_dur // chunk_size
-    bpe = (total_wav_dur // opts.chunk_size) // 500
+    bpe = (dset.total_wav_dur // opts.chunk_size) // 500
     data = {}
     # run one epoch of training data to extract z-stats of minions
     for bidx, batch in enumerate(dloader, start=1):
