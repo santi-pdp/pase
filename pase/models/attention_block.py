@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class attention_block(Model):
 
-    def __init__(self, emb_dim, name, options, K, strides, chunksize, avg_factor=0.95, mode="concat",):
+    def __init__(self, emb_dim, name, options, K, strides, chunksize, avg_factor=0, mode="concat"):
         super().__init__(name=name)
         
         self.name = name
@@ -33,11 +33,10 @@ class attention_block(Model):
 
         distribution = self.mlp(hidden_att)
 
-        if self.mode == "running_avg":
-            if not self.running_dist:
-                self.running_dist = self.init_running_avg(batch_size)
-            self.running_dist = self.running_dist * self.avg_factor + distribution * (1 - self.avg_factor)
-            distribution = self.running_dist
+        if not self.running_dist:
+            self.running_dist = self.init_running_avg(batch_size).to(device).detach()
+        self.running_dist = self.running_dist * self.avg_factor + distribution * (1 - self.avg_factor)
+        distribution = self.running_dist
         
         # distribution = torch.sum(distribution, dim=1)
         _, indices = torch.topk(distribution, dim=1, k=self.K, largest=True, sorted=False)
