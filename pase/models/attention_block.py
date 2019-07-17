@@ -1,23 +1,26 @@
 from .modules import *
 from .neural_networks import MLP
 import torch
+import torch.nn.functional as F
 
 class attention_block(Model):
 
-    def __init__(self, emb_dim, name, options, K, strides, chunksize, mode="concat"):
+    def __init__(self, emb_dim, name, options, K, strides, chunksize, avg_factor=0.95, mode="concat",):
         super().__init__(name=name)
         
         self.name = name
         self.mode = mode
         self.emb_dim = emb_dim
+        self.avg_factor = avg_factor
         nn_input = self.cal_nn_input_dim(strides, chunksize)
 
         self.mlp = MLP(options=options, inp_dim= nn_input)
         self.K = K
+        self.running_dist = None
     
 
     def forward(self, hidden, device):
-
+        batch_size = hidden.shape[0]
         feature_length = hidden.shape[2]
         hidden = hidden.contiguous()
     
@@ -29,6 +32,12 @@ class attention_block(Model):
             hidden_att = hidden.mean(-1).mean(0).unsqueeze(0)
 
         distribution = self.mlp(hidden_att)
+
+        if self.mode == "running_avg":
+            if not self.running_dist:
+                self.running_dist = self.init_running_avg(batch_size)
+            self.running_dist = self.running_dist * self.avg_factor + distribution * (1 - self.avg_factor)
+            distribution = self.running_dist
         
         # distribution = torch.sum(distribution, dim=1)
         _, indices = torch.topk(distribution, dim=1, k=self.K, largest=True, sorted=False)
@@ -59,6 +68,14 @@ class attention_block(Model):
         if self.mode == "avg_time" or self.mode == "avg_time_batch":
 
             return self.emb_dim
+
+
+    def init_running_avg(self, batch_size):
+        dist = torch.randn((batch_size, self.emb_dim)).float()
+        dist = F.softmax(dist)
+        return dist
+
+
 
 
 
