@@ -1,13 +1,21 @@
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset
 from pase.dataset import PairWavDataset, DictCollater
 from torchvision.transforms import Compose
 from pase.transforms import *
 import argparse
 import pickle
 
+def build_dataset_providers(opts):
 
-def extract_stats(opts):
+    assert len(opts.data_root) > 0, (
+        "Expected at least one data_root argument"
+    )
+
+    assert len(opts.data_root) == len(opts.data_cfg), (
+        "Provide same number of data_root and data_cfg arguments"
+    )
+
     trans = Compose([
         ToTensor(),
         MIChunkWav(opts.chunk_size),
@@ -15,8 +23,20 @@ def extract_stats(opts):
         MFCC(hop=opts.hop_size),
         Prosody(hop=opts.hop_size)
     ])
-    dset = PairWavDataset(opts.data_root, opts.data_cfg, 'train',
+
+    dsets = []
+    for idx in range(len(opts.data_root)):
+        dset = PairWavDataset(opts.data_root[idx], opts.data_cfg[idx], 'train',
                          transform=trans)
+        dsets.append(dset)
+
+    if len(dsets) > 1:
+        return ConcatDataset(dsets)
+    else:
+        return dsets[0]
+
+def extract_stats(opts):
+    dset = build_dataset_providers(opts)
     dloader = DataLoader(dset, batch_size = 100,
                          shuffle=True, collate_fn=DictCollater(),
                          num_workers=opts.num_workers)
@@ -47,9 +67,9 @@ def extract_stats(opts):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_root', type=str, 
+    parser.add_argument('--data_root', action='append', 
                         default='data/LibriSpeech/Librispeech_spkid_sel')
-    parser.add_argument('--data_cfg', type=str, 
+    parser.add_argument('--data_cfg', action='append', 
                         default='data/librispeech_data.cfg')
     parser.add_argument('--exclude_keys', type=str, nargs='+', 
                         default=['chunk', 'chunk_rand', 'chunk_ctxt'])
