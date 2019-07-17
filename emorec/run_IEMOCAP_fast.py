@@ -79,7 +79,7 @@ options['dnn_use_laynorm_inp']='True'
 options['dnn_use_batchnorm_inp']='False'
 options['dnn_act']='relu,softmax'
 
-device=get_freer_gpu()
+device=0 #get_freer_gpu()
 
 dname=os.path.dirname(output_file)
 if dname == '':

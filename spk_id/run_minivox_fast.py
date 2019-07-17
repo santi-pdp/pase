@@ -68,7 +68,7 @@ dev_lst = [line.rstrip('\n') for line in open(dev_lst_file)]
 N_epochs=24
 seed=1234
 batch_size=128
-halving_factor=1.0
+halving_factor=0.5
 lr=0.12
 left=0
 right=0
@@ -83,7 +83,7 @@ options['dnn_use_laynorm_inp']='True'
 options['dnn_use_batchnorm_inp']='False'
 options['dnn_act']='relu,softmax'
 
-device=get_freer_gpu()
+device=0 #get_freer_gpu()
 
 
 # output file creation
