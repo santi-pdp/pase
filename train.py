@@ -9,7 +9,7 @@ from pase.dataset import PairWavDataset, LibriSpeechSegTupleWavDataset, DictColl
 from pase.transforms import *
 from pase.losses import *
 from pase.utils import pase_parser
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset
 import pickle
 import torch.nn as nn
 import numpy as np
@@ -98,46 +98,108 @@ def config_distortions(reverb_irfiles=[],
     # this can be shared in two different stages of the pipeline
     reverb = Reverb(reverb_irfiles, ir_fmt=reverb_fmt,
                     data_root=reverb_data_root)
-    if len(reverb_irfiles) > 0:
+    if reverb_p > 0. and len(reverb_irfiles) > 0:
         trans.append(reverb)
         probs.append(reverb_p)
-    if overlap_dir is not None:
+    if overlap_p > 0. and overlap_dir is not None:
         noise_trans = reverb if overlap_reverb else None
         trans.append(SimpleAdditiveShift(overlap_dir, overlap_snrs,
                                          noises_list=overlap_list,
                                          noise_transform=noise_trans))
         probs.append(overlap_p)
-    if noises_dir is not None:
+    if noises_p > 0. and noises_dir is not None:
         trans.append(SimpleAdditive(noises_dir, noises_snrs))
         probs.append(noises_p)
-    if speed_range is not None:
+    if speed_p > 0. and speed_range is not None:
         # speed changer
         trans.append(SpeedChange(speed_range))
         probs.append(speed_p)
-    if len(resample_factors) > 0:
+    if resample_p > 0. and len(resample_factors) > 0:
         trans.append(Resample(resample_factors))
         probs.append(resample_p)
-    if len(clip_factors) > 0:
+    if clip_p > 0. and len(clip_factors) > 0:
         trans.append(Clipping(clip_factors))
         probs.append(clip_p)
-    if len(chop_factors) > 0:
+    if chop_p > 0. and len(chop_factors) > 0:
         trans.append(Chopper(max_chops=max_chops,
                              chop_factors=chop_factors))
         probs.append(chop_p)
-    if len(bandrop_irfiles) > 0:
+    if bandrop_p > 0. and len(bandrop_irfiles) > 0:
         trans.append(BandDrop(bandrop_irfiles,filt_fmt=bandrop_fmt, data_root=bandrop_data_root))
         probs.append(bandrop_p)
 
-    if len(downsample_irfiles) > 0:
+    if downsample_p > 0. and len(downsample_irfiles) > 0:
         trans.append(Downsample(downsample_irfiles,filt_fmt=downsample_fmt, data_root=downsample_data_root))
         probs.append(downsample_p)
-
 
     if len(trans) > 0:
         return PCompose(trans, probs=probs)
     else:
         return None
 
+def build_dataset_providers(opts, minions_cfg):
+
+    dr = len(opts.data_root)
+    dc = len(opts.data_cfg)
+
+    if dr > 1 or dc > 1:
+        assert dr == dc, (
+            "Specced at least one repeated option for data_root or data_cfg."
+            "This assumes multiple datasets, and their resp configs should be matched."
+            "Currently got {} data_root and {} data_cfg options".format(dr, dc)
+        )
+        if opts.dtrans_cfg is not None and len(opts.dtrans_cfg) > 0:
+            assert dr == len(opts.dtrans_cfg), (
+                "Spec one dtrans_cfg per data_root (can be the same) or None"
+            )
+
+    #TODO: allow for different base transforms for different datasets
+    trans = make_transforms(opts, minions_cfg)
+    print(trans)
+
+    dsets, va_dsets = [], []
+    for idx in range(dr):
+        print ('Preparing dset for {}'.format(opts.data_root[idx]))
+        if opts.dtrans_cfg is not None:
+            with open(opts.dtrans_cfg[idx], 'r') as dtr_cfg:
+                dtr = json.load(dtr_cfg)
+                #dtr['trans_p'] = opts.distortion_p
+                dist_trans = config_distortions(**dtr)
+                print(dist_trans)
+        else:
+            dist_trans = None
+        # Build Dataset(s) and DataLoader(s)
+        dataset = getattr(pase.dataset, opts.dataset[idx])
+        dset = dataset(opts.data_root[idx], opts.data_cfg[idx], 'train',
+                   transform=trans,
+                   noise_folder=opts.noise_folder,
+                   whisper_folder=opts.whisper_folder,
+                   distortion_probability=opts.distortion_p,
+                   distortion_transforms=dist_trans,
+                   preload_wav=opts.preload_wav)
+
+        dsets.append(dset)
+
+        if opts.do_eval:
+            va_dset = dataset(opts.data_root, opts.data_cfg,
+                          'valid', transform=trans,
+                          noise_folder=opts.noise_folder,
+                          whisper_folder=opts.whisper_folder,
+                          distortion_probability=opts.distortion_p,
+                          distortion_transforms=dist_trans,
+                          preload_wav=opts.preload_wav)
+            va_dsets.append(va_dset)
+
+    ret = None
+    if len(dsets) > 1:
+        ret = (ConcatDataset(dsets), )
+        if opts.do_eval:
+            ret = ret + (ConcatDataset(va_dsets), )
+    else:
+        ret = (dsets[0], )
+        if opts.do_eval:
+            ret = ret + (va_dsets[0], )
+    return ret
 
 def train(opts):
     CUDA = True if torch.cuda.is_available() and not opts.no_cuda else False
@@ -167,25 +229,7 @@ def train(opts):
     
     print('Frontend params: ', model.frontend.describe_params())
     model.to(device)
-    trans = make_transforms(opts, minions_cfg)
-    print(trans)
-    if opts.dtrans_cfg is not None:
-        with open(opts.dtrans_cfg, 'r') as dtr_cfg:
-            dtr = json.load(dtr_cfg)
-            #dtr['trans_p'] = opts.distortion_p
-            dist_trans = config_distortions(**dtr)
-            print(dist_trans)
-    else:
-        dist_trans = None
-    # Build Dataset(s) and DataLoader(s)
-    dataset = getattr(pase.dataset, opts.dataset)
-    dset = dataset(opts.data_root, opts.data_cfg, 'train',
-                   transform=trans,
-                   noise_folder=opts.noise_folder,
-                   whisper_folder=opts.whisper_folder,
-                   distortion_probability=opts.distortion_p,
-                   distortion_transforms=dist_trans,
-                   preload_wav=opts.preload_wav)
+    dset, va_dset = build_dataset_providers(opts, minions_cfg)
     dloader = DataLoader(dset, batch_size=opts.batch_size,
                          shuffle=True, collate_fn=DictCollater(),
                          num_workers=opts.num_workers,
@@ -196,13 +240,9 @@ def train(opts):
     bpe = (dset.total_wav_dur // opts.chunk_size) // opts.batch_size
     opts.bpe = bpe
     if opts.do_eval:
-        va_dset = dataset(opts.data_root, opts.data_cfg,
-                          'valid', transform=trans,
-                          noise_folder=opts.noise_folder,
-                          whisper_folder=opts.whisper_folder,
-                          distortion_probability=opts.distortion_p,
-                          distortion_transforms=dist_trans,
-                          preload_wav=opts.preload_wav)
+        assert va_dset is not None, (
+            "Asked to do validation, but failed to build validation set"
+        )
         va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
                                 shuffle=False, collate_fn=DictCollater(),
                                 num_workers=opts.num_workers,
@@ -218,14 +258,28 @@ def train(opts):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_root', type=str, 
+    parser.add_argument('--data_root', action='append', 
                         default='data/LibriSpeech/Librispeech_spkid_sel')
-    parser.add_argument('--data_cfg', type=str, 
+    parser.add_argument('--data_cfg', action='append', 
                         default='data/librispeech_data.cfg')
+    parser.add_argument('--dtrans_cfg', action='append',
+                        help='Distortion transform to apply, note in case of'
+                              'mutliple datasets, provide config multiple times')
+    parser.add_argument('--stats', action='append', 
+                        default='data/librispeech_stats.pkl',
+                        help='Provide one file for each dataset')
+    parser.add_argument('--dataset', action='append',
+                        default='LibriSpeechSegTupleWavDataset',
+                        help='Dataset to be used: '
+                             '(1) PairWavDataset, '
+                             '(2) LibriSpeechSegTupleWavDataset, '
+                             '(Def: LibriSpeechSegTupleWavDataset.)'
+                             'When used multiple times, datasets get'
+                             'concatenated with ConcatDataset')
+
     parser.add_argument('--noise_folder', type=str, default=None)
     parser.add_argument('--whisper_folder', type=str, default=None)
     parser.add_argument('--distortion_p', type=float, default=0.4)
-    parser.add_argument('--dtrans_cfg', type=str, default=None)
     parser.add_argument('--net_ckpt', type=str, default=None,
                         help='Ckpt to initialize the full network '
                              '(Def: None).')
@@ -235,7 +289,6 @@ if __name__ == '__main__':
     parser.add_argument('--sup_exec', type=str, default=None)
     parser.add_argument('--sup_freq', type=int, default=1)
     parser.add_argument('--do_eval', action='store_true', default=False)
-    parser.add_argument('--stats', type=str, default='data/librispeech_stats.pkl')
     parser.add_argument('--pretrained_ckpt', type=str, default=None)
     parser.add_argument('--save_path', type=str, default='ckpt')
     parser.add_argument('--max_ckpts', type=int, default=5)
@@ -297,12 +350,6 @@ if __name__ == '__main__':
     parser.add_argument('--cache_on_load', action='store_true', default=False,
                         help='Argument to activate cache loading on the fly '
                              'for the wav files in datasets (Def: False).')
-    parser.add_argument('--dataset', type=str,
-                        default='LibriSpeechSegTupleWavDataset',
-                        help='Dataset to be used: '
-                             '(1) PairWavDataset, (2) '
-                             'LibriSpeechSegTupleWavDataset. '
-                             '(Def: LibriSpeechSegTupleWavDataset.')
 
     opts = parser.parse_args()
     opts.ckpt_continue = not opts.no_continue
