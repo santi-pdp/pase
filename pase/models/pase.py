@@ -41,7 +41,7 @@ class pase_attention(Model):
         self.classification_workers = nn.ModuleList()
         self.attention_blocks = nn.ModuleList()
 
-        nn_input = self.cal_nn_input_dim(frontend_cfg['strides'], chunk_size)
+        # nn_input = self.cal_nn_input_dim(frontend_cfg['strides'], chunk_size)
 
         # auto infer the output dim of first nn layer
         att_cfg['dnn_lay'] += "," + str(ninp)
