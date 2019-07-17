@@ -16,7 +16,7 @@ class attention_block(Model):
 
         self.mlp = MLP(options=options, inp_dim= nn_input)
         self.K = K
-        self.running_dist = None
+        self.avg_init=True
     
 
     def forward(self, hidden, device):
@@ -33,9 +33,13 @@ class attention_block(Model):
 
         distribution = self.mlp(hidden_att)
 
-        if not self.running_dist:
+        if self.avg_init:
             self.running_dist = self.init_running_avg(batch_size).to(device).detach()
-        self.running_dist = self.running_dist * self.avg_factor + distribution * (1 - self.avg_factor)
+            self.avg_init = False
+
+        self.running_dist = self.running_dist.detach() * self.avg_factor + distribution * (1 - self.avg_factor)
+        
+
         distribution = self.running_dist
         
         # distribution = torch.sum(distribution, dim=1)
@@ -70,8 +74,9 @@ class attention_block(Model):
 
 
     def init_running_avg(self, batch_size):
-        dist = torch.randn((batch_size, self.emb_dim)).float()
-        dist = F.softmax(dist)
+        dist = torch.randn(self.emb_dim).float()
+        dist = dist.unsqueeze(0).repeat(batch_size,1)
+        dist = F.softmax(dist,dim=1)
         return dist
 
 
