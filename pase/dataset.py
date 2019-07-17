@@ -585,10 +585,10 @@ class MetaWavConcatDataset(ConcatDataset):
             )
 
     @property
-    def tot_wav_dur(self):
+    def total_wav_dur(self):
         tot_dur = 0
         for d in self.datasets:
-            tot_dur += d.tot_wav_dur
+            tot_dur += d.total_wav_dur
         return tot_dur
 
 class FeatsClassDataset(Dataset):
