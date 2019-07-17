@@ -4,12 +4,12 @@ from pase.models.core import Waveminionet
 from pase.models.modules import VQEMA
 from pase.models.frontend import wf_builder
 import pase
-from pase.dataset import PairWavDataset, LibriSpeechSegTupleWavDataset, DictCollater
+from pase.dataset import PairWavDataset, LibriSpeechSegTupleWavDataset, DictCollater, MetaWavConcatDataset
 #from torchvision.transforms import Compose
 from pase.transforms import *
 from pase.losses import *
 from pase.utils import pase_parser
-from torch.utils.data import DataLoader, ConcatDataset
+from torch.utils.data import DataLoader
 import pickle
 import torch.nn as nn
 import numpy as np
@@ -181,7 +181,7 @@ def build_dataset_providers(opts, minions_cfg):
         dsets.append(dset)
 
         if opts.do_eval:
-            va_dset = dataset(opts.data_root, opts.data_cfg,
+            va_dset = dataset(opts.data_root[idx], opts.data_cfg[idx],
                           'valid', transform=trans,
                           noise_folder=opts.noise_folder,
                           whisper_folder=opts.whisper_folder,
@@ -192,9 +192,9 @@ def build_dataset_providers(opts, minions_cfg):
 
     ret = None
     if len(dsets) > 1:
-        ret = (ConcatDataset(dsets), )
+        ret = (MetaWavConcatDataset(dsets), )
         if opts.do_eval:
-            ret = ret + (ConcatDataset(va_dsets), )
+            ret = ret + (MetaWavConcatDataset(va_dsets), )
     else:
         ret = (dsets[0], )
         if opts.do_eval:
