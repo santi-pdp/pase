@@ -260,23 +260,23 @@ def train(opts):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_root', action='append', 
-                        default='data/LibriSpeech/Librispeech_spkid_sel')
+                        default=[])
     parser.add_argument('--data_cfg', action='append', 
-                        default='data/librispeech_data.cfg')
-    parser.add_argument('--dtrans_cfg', action='append',
+                        default=[])
+    parser.add_argument('--dtrans_cfg', action='append', default=[],
                         help='Distortion transform to apply, note in case of'
                               'mutliple datasets, provide config multiple times')
-    parser.add_argument('--stats', action='append', 
-                        default='data/librispeech_stats.pkl',
-                        help='Provide one file for each dataset')
     parser.add_argument('--dataset', action='append',
-                        default='LibriSpeechSegTupleWavDataset',
+                        default=['LibriSpeechSegTupleWavDataset'],
                         help='Dataset to be used: '
                              '(1) PairWavDataset, '
                              '(2) LibriSpeechSegTupleWavDataset, '
                              '(Def: LibriSpeechSegTupleWavDataset.)'
                              'When used multiple times, datasets get'
                              'concatenated with ConcatDataset')
+    arser.add_argument('--stats', type='str', 
+                        default='data/librispeech_stats.pkl',
+                        help='Provide one file for each dataset')
 
     parser.add_argument('--noise_folder', type=str, default=None)
     parser.add_argument('--whisper_folder', type=str, default=None)
