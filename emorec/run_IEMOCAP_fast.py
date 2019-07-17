@@ -189,7 +189,8 @@ dataset=np.concatenate([fea_conc,lab_conc.reshape(-1,1)],axis=1)
 # shuffling
 np.random.shuffle(dataset)
 
-dataset=torch.from_numpy(dataset).float().to(device)
+#dataset=torch.from_numpy(dataset).float().to(device)
+dataset=torch.from_numpy(dataset).float()
 
 # computing N_batches
 N_ex_tr=dataset.shape[0]
@@ -219,6 +220,7 @@ for ep in range(N_epochs):
         # Batch selection
         end_batch=beg_batch+batch_size
         batch=dataset[beg_batch:end_batch]
+        batch=batch.to(device)
         
         fea_batch=batch[:,:-1]
         lab_batch=batch[:,-1].long()

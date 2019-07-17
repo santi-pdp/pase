@@ -227,7 +227,6 @@ def train(opts):
                          num_devices=num_devices,
                          frontend=frontend)
     
-    print(model)
     print('Frontend params: ', model.frontend.describe_params())
     model.to(device)
     dset, va_dset = build_dataset_providers(opts, minions_cfg)
@@ -274,9 +273,9 @@ if __name__ == '__main__':
                              '(Def: LibriSpeechSegTupleWavDataset.)'
                              'When used multiple times, datasets get'
                              'concatenated with ConcatDataset')
-    arser.add_argument('--stats', type='str', 
+    parser.add_argument('--stats', type=str,
                         default='data/librispeech_stats.pkl',
-                        help='Provide one file for each dataset')
+                        help='Stats file')
 
     parser.add_argument('--noise_folder', type=str, default=None)
     parser.add_argument('--whisper_folder', type=str, default=None)
@@ -341,8 +340,11 @@ if __name__ == '__main__':
     parser.add_argument('--vq_K', type=int, default=50,
                         help='Number of K embeddings in VQ-enc. '
                              '(Def: 50).')
+    parser.add_argument('--log_grad_keys', type=str, nargs='+',
+                        default=[])
     parser.add_argument('--vq', action='store_true', default=False,
                         help='Do VQ quantization of enc output (Def: False).')
+    parser.add_argument('--cchunk_prior', action='store_true', default=False)
     parser.add_argument('--preload_wav', action='store_true', default=False,
                         help='Preload wav files in Dataset (Def: False).')
     parser.add_argument('--cache_on_load', action='store_true', default=False,

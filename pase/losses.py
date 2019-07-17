@@ -8,11 +8,16 @@ class RegressionLoss(object):
         loss = self.criterion(pred, gtruth)
         return loss
 
-class AdversarialLoss(object):
+
+class ZAdversarialLoss(object):
 
     def __init__(self, z_gen=torch.randn,
+                 batch_acum=1,
+                 grad_reverse=False,
                  loss='L2'):
         self.z_gen = z_gen
+        self.batch_acum = batch_acum
+        self.grad_reverse = grad_reverse
         self.loss = loss
         if loss == 'L2':
             self.criterion = nn.MSELoss()
@@ -24,32 +29,82 @@ class AdversarialLoss(object):
     def register_DNet(self, Dnet):
         self.Dnet = Dnet
 
-    def __call__(self, fake, optim):
+    def forward_grad_reverse(self, step, fake, optim, real,
+                             true_lab, fake_lab):
+        dreal = self.Dnet(real) 
+        dreal_loss = self.criterion(dreal, true_lab)
+
+        dfake = self.Dnet(fake)
+        dfake_loss = self.criterion(dfake, fake_lab)
+        d_loss = dreal_loss + dfake_loss
+        # backprops through whole structure (even G)
+        # reversing grads in the D -> G transition
+        d_loss.backward(retain_graph=True)
+        if step % self.batch_acum == 0:
+            # step D optimizer
+            optim.step()
+            optim.zero_grad()
+        # all fake and all real
+        return {'afake_loss':dfake_loss,
+                'areal_loss':dreal_loss}
+
+    def forward_alternate(self, step, fake, optim, real,
+                          true_lab, fake_lab, gfake_exists=False):
+        dreal = self.Dnet(real.detach()) 
+        dreal_loss = self.criterion(dreal, true_lab)
+
+        dfake = self.Dnet(fake.detach())
+        dfake_loss = self.criterion(dfake, fake_lab)
+        d_loss = dreal_loss + dfake_loss
+        # backprops through D only
+        d_loss.backward()
+        if step % self.batch_acum == 0:
+            # step D optimizer
+            optim.step()
+            optim.zero_grad()
+
+        greal = self.Dnet(fake)
+        greal_loss = self.criterion(greal, true_lab)
+        ret_losses = {'dfake_loss':dfake_loss,
+                      'dreal_loss':dreal_loss,
+                      'd_loss':d_loss,
+                      'greal_loss':greal_loss}
+        if gfake_exists:
+            gfake = self.Dnet(real)
+            gfake_loss = self.criterion(gfake, fake_lab)
+            g_loss = greal_loss + gfake_loss
+            ret_losses['gfake_loss'] = gfake_loss
+        else:
+            g_loss = greal_loss
+        ret_losses['g_loss'] = g_loss
+        return ret_losses
+
+
+    def __call__(self, step, fake, optim, z_true=None,
+                 z_true_trainable=False):
         if not hasattr(self, 'Dnet'):
             raise ValueError('Please register Dnet first '
                              'prior to using L2Adversarial Loss.')
-        optim.zero_grad()
-        real = self.z_gen(fake.size())
+        if z_true is None:
+            real = self.z_gen(fake.size())
+        else:
+            real = z_true
+
+        lab_1 = torch.ones(real.shape[0], 1, real.shape[2])
+        lab_0 = torch.zeros(lab_1.shape)
         if fake.is_cuda:
             real = real.to('cuda')
-        dreal = self.Dnet(real)
-        lab_1 = torch.ones(dreal.size())
-        if fake.is_cuda:
             lab_1 = lab_1.to('cuda')
-        dreal_loss = self.criterion(dreal, lab_1)
-
-        dfake = self.Dnet(fake.detach())
-        lab_0 = torch.zeros(dfake.size())
-        if fake.is_cuda:
             lab_0 = lab_0.to('cuda')
-        dfake_loss = self.criterion(dfake, lab_0)
-        d_loss = dreal_loss + dfake_loss
-        d_loss.backward()
-        optim.step()
 
-        greal = self.Dnet(fake)
-        greal_loss = self.criterion(greal, lab_1)
-        return dreal_loss, dfake_loss, greal_loss
+        if self.grad_reverse:
+            losses = self.forward_grad_reverse(step, fake, optim,
+                                               z_true, lab_1, lab_0)
+        else:
+            losses = self.forward_alternate(step, fake, optim,
+                                            z_true, lab_1, lab_0,
+                                            z_true_trainable)
+        return losses
 
 class WaveAdversarialLoss(nn.Module):
 
@@ -128,3 +183,4 @@ class WaveAdversarialLoss(nn.Module):
                     'd_fake_loss':d_fake_loss}
         else:
             return {'g_loss':g_real_loss}
+
