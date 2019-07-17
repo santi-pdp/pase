@@ -251,19 +251,18 @@ class backprop_scheduler(object):
             cls_optim[worker.name].zero_grad()
             loss = worker.loss(preds[worker.name], label[worker.name])
             losses[worker.name] = loss
-            loss_tmp.append(loss)
+            loss_tmp.append(loss.item() * temperture)
             # idx += 1
 
         for worker in self.model.regression_workers:
             regr_optim[worker.name].zero_grad()
             loss = worker.loss(preds[worker.name], label[worker.name])
             losses[worker.name] = loss
-            loss_tmp.append(loss)
+            loss_tmp.append(loss.item() * temperture)
             # idx += 1
 
-        with torch.no_grad():
-            loss_vec = torch.tensor(loss_tmp, requires_grad=False)
-            alpha = F.softmax(temperture * loss_vec, dim=0).cpu().detach().numpy().astype(np.float)
+
+        alpha = self._stable_softmax(loss_tmp)
 
         tot_loss = 0
         for worker in self.model.classification_workers:
@@ -406,6 +405,14 @@ class backprop_scheduler(object):
                 grads_ = params.grad.view(-1)
 
         return grads_ / grads_.norm()
+
+    def _stable_softmax(self, x):
+        z = np.asarray(x, np.float) - np.max(x)
+        numerator = np.exp(z)
+        denominator = np.sum(numerator)
+        softmax = numerator / denominator
+
+        return softmax
 
 
 

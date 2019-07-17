@@ -16,6 +16,7 @@ class pase_attention(Model):
                  cls_lst=["mi", "cmi", "spc"],
                  regr_lst=["chunk", "lps", "mfcc", "prosody"],
                  K=40,
+                 att_mode="concat",
                  chunk_size=16000,
                  pretrained_ckpt=None,
                  name="adversarial"):
@@ -51,13 +52,13 @@ class pase_attention(Model):
                 if type == 'cls':
                     cfg['num_inputs'] = ninp
                     self.classification_workers.append(cls_worker_maker(cfg, ninp))
-                    self.attention_blocks.append(attention_block(nn_input, cfg['name'], att_cfg, K))
+                    self.attention_blocks.append(attention_block(ninp, cfg['name'], att_cfg, K, att_mode))
 
                 elif type == 'regr':
                     cfg['num_inputs'] = ninp
                     minion = minion_maker(cfg)
                     self.regression_workers.append(minion)
-                    self.attention_blocks.append(attention_block(nn_input, cfg['name'], att_cfg, K))
+                    self.attention_blocks.append(attention_block(ninp, cfg['name'], att_cfg, K, att_mode))
 
         if pretrained_ckpt is not None:
             self.load_pretrained(pretrained_ckpt, load_last=True)
@@ -107,18 +108,6 @@ class pase_attention(Model):
 
         return h, chunk, preds, labels
 
-    def cal_nn_input_dim(self, strides, chunk_size):
-
-        compress_factor = 1
-        for s in strides:
-            compress_factor = compress_factor * s
-
-        if chunk_size % compress_factor != 0:
-            raise ValueError('chunk_size should be divisible by the product of the strides factors!')
-
-        nn_input = int(chunk_size // compress_factor) * self.frontend.emb_dim
-        print("input_dim of the attention blocks: {}".format(nn_input))
-        return nn_input
 
 class pase_chunking(Model):
 
