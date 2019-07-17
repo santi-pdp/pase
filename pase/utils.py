@@ -32,16 +32,52 @@ def pase_parser(cfg_fname, batch_acum=1, device='cpu', do_losses=True,
                         DNet =  RNNDiscriminator(**dnet_cfg)
                         if 'Dopt_cfg' in cfg_all[i]:
                             Dopt_cfg = cfg_all[i].pop('Dopt_cfg')
-                            Dopt = optim.RMSprop(DNet.parameters(),
+                            Dopt = optim.Adam(DNet.parameters(),
                                                  Dopt_cfg['lr'])
                         else:
-                            Dopt = optim.RMSprop(DNet.parameters(), 0.0005)
+                            Dopt = optim.Adam(DNet.parameters(), 0.0005)
                     Dloss = 'L2' if loss_name == 'LSGAN' else 'BCE'
                     cfg_all[i]['loss'] = WaveAdversarialLoss(DNet, Dopt,
                                                              loss=Dloss,
                                                              batch_acum=batch_acum,
                                                              device=device)
         return cfg_all
+
+def worker_parser(cfg_fname, batch_acum=1, device='cpu', do_losses=True,
+                frontend=None):
+    with open(cfg_fname, 'r') as cfg_f:
+        cfg_list = json.load(cfg_f)
+        if do_losses:
+            # change loss section
+            for type, cfg_all in cfg_list.items():
+
+                for i, cfg in enumerate(cfg_all):
+                    loss_name = cfg_all[i]['loss']
+                    if hasattr(nn, loss_name):
+                        # loss in nn Modules
+                        cfg_all[i]['loss'] = getattr(nn, loss_name)()
+                    else:
+                        if loss_name == 'LSGAN' or loss_name == 'GAN':
+                            dnet_cfg = {}
+                            if 'DNet_cfg' in cfg_all[i]:
+                                dnet_cfg = cfg_all[i].pop('DNet_cfg')
+                            dnet_cfg['frontend'] = frontend
+                            # make DNet
+                            DNet =  RNNDiscriminator(**dnet_cfg)
+                            if 'Dopt_cfg' in cfg_all[i]:
+                                Dopt_cfg = cfg_all[i].pop('Dopt_cfg')
+                                Dopt = optim.Adam(DNet.parameters(),
+                                                     Dopt_cfg['lr'])
+                            else:
+                                Dopt = optim.Adam(DNet.parameters(), 0.0005)
+                        Dloss = 'L2' if loss_name == 'LSGAN' else 'BCE'
+                        cfg_all[i]['loss'] = WaveAdversarialLoss(DNet, Dopt,
+                                                                 loss=Dloss,
+                                                                 batch_acum=batch_acum,
+                                                                 device=device)
+            cfg_list[type] = cfg_all
+        print(cfg_list)
+        return cfg_list
 
 
 def build_optimizer(opt_cfg, params):
@@ -155,4 +191,7 @@ def get_grad_norms(model, keys=[]):
             continue
         grads[k] = torch.norm(param.grad).cpu().item()
     return grads
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/dev

@@ -102,3 +102,15 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+.DS_Store
+
+*.res
+
+# SGE output stuff
+*.o*
+*.e*
+*.po*
+*.pe*
+
+*tmp

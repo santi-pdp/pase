@@ -14,6 +14,7 @@
 
 import sys
 import os
+import json
 from neural_networks import MLP,context_window
 import torch
 import numpy as np
@@ -22,6 +23,8 @@ import torch.optim as optim
 from pase.models.frontend import wf_builder
 # from waveminionet.models.frontend import wf_builder #old models
 import soundfile as sf
+from pase.models.WorkerScheduler.encoder import *
+
 
 def get_freer_gpu(trials=10):
 	for j in range(trials):
@@ -122,7 +125,7 @@ print('Computing PASE features...')
 fea_pase={}
 for snt_id in fea.keys():
     pase.eval()
-    fea_pase[snt_id]=pase(fea[snt_id]).to('cpu').detach()
+    fea_pase[snt_id] = pase(fea[snt_id], device).to('cpu').detach()
     fea_pase[snt_id]=fea_pase[snt_id].view(fea_pase[snt_id].shape[1],fea_pase[snt_id].shape[2]).transpose(0,1)
 
 inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
@@ -130,7 +133,8 @@ inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
 # Computing pase features for test
 fea_pase_dev={}
 for snt_id in fea_dev.keys():
-    fea_pase_dev[snt_id]=pase(fea_dev[snt_id]).detach()
+    fea_pase_dev[snt_id] = pase(fea_dev[snt_id], device).detach()
+    # fea_pase_dev[snt_id]=pase(fea_dev[snt_id]).detach()
     fea_pase_dev[snt_id]=fea_pase_dev[snt_id].view(fea_pase_dev[snt_id].shape[1],fea_pase_dev[snt_id].shape[2]).transpose(0,1)
 
 
@@ -169,6 +173,7 @@ mean=np.mean(fea_conc,axis=0)
 std=np.std(fea_conc,axis=0)
 
 # normalization
+
 fea_conc=(fea_conc-mean)/std
 
 mean=torch.from_numpy(mean).float().to(device)
@@ -261,7 +266,7 @@ for ep in range(N_epochs):
         N_dev_snt=len(list(fea_pase_dev.keys()))
         
         for dev_snt in fea_pase_dev.keys():
-            
+
              fea_dev_norm=(fea_pase_dev[dev_snt]-mean)/std
              out_dev=nnet(fea_dev_norm)
              lab_snt=torch.zeros(fea_pase_dev[dev_snt].shape[0])+lab[dev_snt]

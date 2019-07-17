@@ -20,6 +20,8 @@ def build_norm_layer(norm_type, param=None, num_feats=None):
     elif norm_type == 'bsnorm':
         spectral_norm(param)
         return nn.BatchNorm1d(num_feats)
+    elif norm_type == 'lnorm':
+        return nn.LayerNorm(num_feats)
     elif norm_type == 'inorm':
         return nn.InstanceNorm1d(num_feats, affine=False)
     elif norm_type == 'affinorm':
@@ -31,7 +33,12 @@ def build_norm_layer(norm_type, param=None, num_feats=None):
 
 def forward_norm(x, norm_layer):
     if norm_layer is not None:
-        return norm_layer(x)
+        if isinstance(norm_layer, nn.LayerNorm):
+            x = x.transpose(1, 2)
+        x = norm_layer(x)
+        if isinstance(norm_layer, nn.LayerNorm):
+            x = x.transpose(1, 2)
+        return x
     else:
         return x
 

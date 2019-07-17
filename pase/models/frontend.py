@@ -2,10 +2,12 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 import json
-if  __name__ == '__main__':
+from .aspp import aspp_resblock
+try:
     from modules import *
-else:
+except ImportError:
     from .modules import *
+
 
 
 def wf_builder(cfg_path):
@@ -13,13 +15,19 @@ def wf_builder(cfg_path):
         if isinstance(cfg_path, str):
             with open(cfg_path, 'r') as cfg_f:
                 cfg = json.load(cfg_f)
-                return WaveFe(**cfg)
+                if "name" in cfg.keys() and cfg['name'] == "asppRes":
+                    return aspp_res_encoder(**cfg)
+                else:
+                    return WaveFe(**cfg)
         elif isinstance(cfg_path, dict):
-            return WaveFe(**cfg_path)
+            if "name" in cfg_path.keys() and cfg_path['name'] == "asppRes":
+                return aspp_res_encoder(**cfg_path)
+            else:
+                return WaveFe(**cfg_path)
         else:
             TypeError('Unexpected config for WaveFe')
     else:
-        return WaveFe()
+        raise ValueError("cfg cannot be None!")
 
 class WaveFe(Model):
     """ Convolutional front-end to process waveforms
@@ -115,10 +123,19 @@ class WaveFe(Model):
         self.tanh_out = tanh_out
 
     def fuse_skip(self, input_, skip):
+        #print('input_ shape: ', input_.shape)
+        #print('skip shape: ', skip.shape)
         dfactor = skip.shape[2] // input_.shape[2]
         if dfactor > 1:
+            #print('dfactor: ', dfactor)
             # downsample skips
-            skip = F.adaptive_avg_pool1d(skip, input_.shape[2])
+            # [B, F, T]
+            maxlen = input_.shape[2] * dfactor
+            skip = skip[:, :, :maxlen]
+            bsz, feats, slen = skip.shape
+            skip_re = skip.view(bsz, feats, slen // dfactor, dfactor)
+            skip = torch.mean(skip_re, dim=3)
+            #skip = F.adaptive_avg_pool1d(skip, input_.shape[2])
         if self.densemerge == 'concat':
             return torch.cat((input_, skip), dim=1)
         elif self.densemerge == 'sum':
@@ -126,22 +143,35 @@ class WaveFe(Model):
         else:
             raise TypeError('Unknown densemerge: ', self.densemerge)
         
-    def forward(self, x):
+    def forward(self, batch, device=None):
+
+        if type(batch) == dict:
+            x = torch.cat((batch['chunk'],
+                           batch['chunk_ctxt'],
+                           batch['chunk_rand']),
+                          dim=0).to(device)
+        else:
+            x = batch
+
         h = x
         denseskips = hasattr(self, 'denseskips')
         if denseskips:
             dskips = None
+            dskips = []
         for n, block in enumerate(self.blocks):
             h = block(h)
             if denseskips and (n + 1) < len(self.blocks):
                 # denseskips happen til the last but one layer
                 # til the embedding one
                 proj = self.denseskips[n]
+                dskips.append(proj(h))
+                """
                 if dskips is None:
                     dskips = proj(h)
                 else:
                     h_proj = proj(h)
                     dskips = self.fuse_skip(h_proj, dskips)
+                """
         if self.rnn_pool:
             h = h.transpose(1, 2).transpose(0, 1)
             h, _ = self.rnn(h)
@@ -150,8 +180,9 @@ class WaveFe(Model):
         #else:
         y = self.W(h)
         if denseskips:
-            # sum all dskips contributions in the embedding
-            y = self.fuse_skip(y, dskips)
+            for dskip in dskips:
+                # sum all dskips contributions in the embedding
+                y = self.fuse_skip(y, dskip)
         if hasattr(self, 'norm_out'):
             y = self.norm_out(y)
         if self.tanh_out:
@@ -163,23 +194,82 @@ class WaveFe(Model):
                 return qloss, y, pp, enc
             else:
                 return y
-        return y
 
-if __name__ == '__main__':
-    from modules import *
-    wavefe = WaveFe(norm_type='bnorm')
-    print(wavefe)
-    wavefe.describe_params()
-    x = torch.randn(1, 1, 16000)
-    y = wavefe(x)
-    print(y.size())
-    vq = VQEMA(50, 20, 0.25, 0.99)
-    _, yq, _ , _ = vq(y)
-    print(yq.size())
-    qwavefe = WaveFe(norm_type='bnorm', emb_dim=20)
-    qwavefe.eval()
-    yq2 = qwavefe(x)
-    print(yq2.size())
-    # try builder
-    wfb = wf_builder('../../cfg/frontend_RF160ms_emb100.cfg')
-    print(wfb)
+        if type(batch) == dict:
+            embedding = torch.chunk(y, 3, dim=0)
+
+            chunk = embedding[0]
+            return embedding, chunk
+        else:
+            return y
+
+
+class aspp_res_encoder(Model):
+
+    def __init__(self, sinc_out, hidden_dim, kernel_sizes=[11, 11, 11, 11], strides=[10, 4, 2, 2], dilations=[1, 6, 12, 18], fmaps=48, name='aspp_encoder', pool2d=False, rnn_pool=False, dense=False):
+        super().__init__(name=name)
+        self.sinc = SincConv_fast(1, sinc_out, 251,
+                                  sample_rate=16000,
+                                  padding='SAME',
+                                  stride=1,
+                                  pad_mode='reflect'
+                                  )
+
+
+        self.ASPP_blocks = nn.ModuleList()
+
+        for i in range(len(kernel_sizes)):
+            if i == 0:
+                self.ASPP_blocks.append(aspp_resblock(sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps[i], pool2d[i], dense))
+            else:
+                self.ASPP_blocks.append(aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps[i], pool2d[i], dense))
+
+
+        self.rnn_pool = rnn_pool
+
+        if rnn_pool:
+            self.rnn = build_rnn_block(hidden_dim, hidden_dim // 2,
+                                       rnn_layers=1,
+                                       rnn_type='qrnn',
+                                       bidirectional=True,
+                                       dropout=0)
+            self.W = nn.Conv1d(hidden_dim, hidden_dim, 1)
+
+
+        self.emb_dim = hidden_dim
+
+
+
+    def forward(self, batch, device):
+
+        if type(batch) == dict:
+            x = torch.cat((batch['chunk'],
+                           batch['chunk_ctxt'],
+                           batch['chunk_rand']),
+                          dim=0).to(device)
+        else:
+            x = batch
+
+        sinc_out = self.sinc(x)
+
+        out = sinc_out
+        for block in self.ASPP_blocks:
+            out = block(out)
+
+        h = out
+
+        if self.rnn_pool:
+            h = h.transpose(1, 2).transpose(0, 1)
+            h, _ = self.rnn(h)
+            h = h.transpose(0, 1).transpose(1, 2)
+
+
+        if type(batch) == dict:
+            embedding = torch.chunk(h, 3, dim=0)
+
+            chunk = embedding[0]
+            return embedding, chunk
+        else:
+            return h
+
+
