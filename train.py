@@ -181,7 +181,7 @@ def build_dataset_providers(opts, minions_cfg):
         dsets.append(dset)
 
         if opts.do_eval:
-            va_dset = dataset(opts.data_root, opts.data_cfg,
+            va_dset = dataset(opts.data_root[idx], opts.data_cfg[idx],
                           'valid', transform=trans,
                           noise_folder=opts.noise_folder,
                           whisper_folder=opts.whisper_folder,
@@ -273,9 +273,9 @@ if __name__ == '__main__':
                              '(Def: LibriSpeechSegTupleWavDataset.)'
                              'When used multiple times, datasets get'
                              'concatenated with ConcatDataset')
-    arser.add_argument('--stats', type='str', 
+    parser.add_argument('--stats', type=str,
                         default='data/librispeech_stats.pkl',
-                        help='Provide one file for each dataset')
+                        help='Stats file')
 
     parser.add_argument('--noise_folder', type=str, default=None)
     parser.add_argument('--whisper_folder', type=str, default=None)
