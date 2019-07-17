@@ -17,6 +17,7 @@ class pase_attention(Model):
                  regr_lst=["chunk", "lps", "mfcc", "prosody"],
                  K=40,
                  att_mode="concat",
+                 avg_factor=0,
                  chunk_size=16000,
                  pretrained_ckpt=None,
                  name="adversarial"):
@@ -52,13 +53,13 @@ class pase_attention(Model):
                 if type == 'cls':
                     cfg['num_inputs'] = ninp
                     self.classification_workers.append(cls_worker_maker(cfg, ninp))
-                    self.attention_blocks.append(attention_block(ninp, cfg['name'], att_cfg, K, frontend_cfg['strides'], chunk_size, att_mode))
+                    self.attention_blocks.append(attention_block(ninp, cfg['name'], att_cfg, K, frontend_cfg['strides'], chunk_size, avg_factor,att_mode))
 
                 elif type == 'regr':
                     cfg['num_inputs'] = ninp
                     minion = minion_maker(cfg)
                     self.regression_workers.append(minion)
-                    self.attention_blocks.append(attention_block(ninp, cfg['name'], att_cfg, K, frontend_cfg['strides'], chunk_size, att_mode))
+                    self.attention_blocks.append(attention_block(ninp, cfg['name'], att_cfg, K, frontend_cfg['strides'], chunk_size, avg_factor,att_mode))
 
         if pretrained_ckpt is not None:
             self.load_pretrained(pretrained_ckpt, load_last=True)
