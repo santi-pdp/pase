@@ -55,6 +55,7 @@ class trainer(object):
                             att_cfg=att_cfg,
                             cls_lst=cls_lst, regr_lst=regr_lst,
                             K=cfg['att_K'],
+                            avg_factor=cfg['avg_factor'],
                             att_mode=cfg['att_mode'],
                             chunk_size=cfg['chunk_size'],
                             pretrained_ckpt=pretrained_ckpt,
