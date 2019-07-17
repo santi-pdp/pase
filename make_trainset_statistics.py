@@ -25,25 +25,27 @@ def build_dataset_providers(opts):
     ])
 
     dsets = []
+    total_wav_dur = 0
     for idx in range(len(opts.data_root)):
         dset = PairWavDataset(opts.data_root[idx], opts.data_cfg[idx], 'train',
                          transform=trans)
         dsets.append(dset)
+        total_wav_dur += dset.total_wav_dur
 
     if len(dsets) > 1:
-        return ConcatDataset(dsets)
+        return ConcatDataset(dsets), total_wav_dur
     else:
-        return dsets[0]
+        return dsets[0], total_wav_dur
 
 def extract_stats(opts):
-    dset = build_dataset_providers(opts)
+    dset, total_wav_dur = build_dataset_providers(opts)
     dloader = DataLoader(dset, batch_size = 100,
                          shuffle=True, collate_fn=DictCollater(),
                          num_workers=opts.num_workers)
     # Compute estimation of bpe. As we sample chunks randomly, we
     # should say that an epoch happened after seeing at least as many
     # chunks as total_train_wav_dur // chunk_size
-    bpe = (dset.total_wav_dur // opts.chunk_size) // 500
+    bpe = (total_wav_dur // opts.chunk_size) // 500
     data = {}
     # run one epoch of training data to extract z-stats of minions
     for bidx, batch in enumerate(dloader, start=1):
@@ -68,15 +70,15 @@ def extract_stats(opts):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_root', action='append', 
-                        default='data/LibriSpeech/Librispeech_spkid_sel')
+                        default=[])
     parser.add_argument('--data_cfg', action='append', 
-                        default='data/librispeech_data.cfg')
+                        default=[])
     parser.add_argument('--exclude_keys', type=str, nargs='+', 
                         default=['chunk', 'chunk_rand', 'chunk_ctxt'])
     parser.add_argument('--num_workers', type=int, default=1)
     parser.add_argument('--chunk_size', type=int, default=16000)
     parser.add_argument('--max_batches', type=int, default=20)
-    parser.add_argument('--out_file', type=str, default='data/librispeech_stats.pkl')
+    parser.add_argument('--out_file', type=str)
     parser.add_argument('--hop_size', type=int, default=160)
 
     opts = parser.parse_args()
