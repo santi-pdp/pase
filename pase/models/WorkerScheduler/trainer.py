@@ -54,7 +54,8 @@ class trainer(object):
                             minions_cfg=minions_cfg,
                             att_cfg=att_cfg,
                             cls_lst=cls_lst, regr_lst=regr_lst,
-                            K=cfg['attention_K'],
+                            K=cfg['att_K'],
+                            att_mode=cfg['att_mode'],
                             chunk_size=cfg['chunk_size'],
                             pretrained_ckpt=pretrained_ckpt,
                             name=name)
@@ -203,7 +204,7 @@ class trainer(object):
                     pbar.set_description("Epoch {}/{}".format(e, self.epoch))
                     try:
                         batch = next(iterator)
-                    except StopIteration:
+                    except RuntimeError:
                         iterator = iter(dataloader)
                         batch = next(iterator)
 
@@ -271,7 +272,7 @@ class trainer(object):
                     pbar.set_description("Eval: {}/{}".format(bidx, self.va_bpe+1))
                     try:
                         batch = next(iterator)
-                    except StopIteration:
+                    except RuntimeError:
                         iterator = iter(dataloader)
                         batch = next(iterator)
 
