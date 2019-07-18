@@ -12,6 +12,6 @@ tensorboardX==1.6
 torch==1.0.1.post2
 torchvision==0.2.2.post3
 webrtcvad==2.0.10
-cupy==7.0.0
+cupy==7.0.0b1
 pynvrtc==8.0
 git+https://github.com/salesforce/pytorch-qrnn
