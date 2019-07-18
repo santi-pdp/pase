@@ -326,7 +326,7 @@ if __name__ == '__main__':
     parser.add_argument('--no_continue', type=str, default="False",help="whether continue the training")
     parser.add_argument('--lr_mode', type=str, default='step', help='learning rate scheduler mode')
     parser.add_argument('--att_cfg', type=str, help='Path to the config file of attention blocks')
-    parser.add_argument('--avg_factor', type=str, help="running average factor for option running_avg for attention")
+    parser.add_argument('--avg_factor', type=float, default=0, help="running average factor for option running_avg for attention")
     parser.add_argument('--att_mode', type=str, help='options for attention block')
     parser.add_argument('--tensorboard', type=str, help='use tensorboard for logging')
     parser.add_argument('--backprop_mode', type=str, default='base',help='backprop policy can be choose from: [base, select_one, select_half]')
