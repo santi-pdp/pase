@@ -205,6 +205,10 @@ def build_dataset_providers(opts, minions_cfg):
         ret = (dsets[0], )
         if opts.do_eval:
             ret = ret + (va_dsets[0], )
+
+    if opts.do_eval is False or len(va_dsets) == 0:
+        ret = ret + (None, )
+
     return ret
 
 def train(opts):
@@ -378,7 +382,7 @@ if __name__ == '__main__':
     parser.add_argument('--att_cfg', type=str, help='Path to the config file of attention blocks')
     parser.add_argument('--avg_factor', type=float, default=0, help="running average factor for option running_avg for attention")
     parser.add_argument('--att_mode', type=str, help='options for attention block')
-    parser.add_argument('--tensorboard', type=str, default='False', help='use tensorboard for logging')
+    parser.add_argument('--tensorboard', type=str, default='True', help='use tensorboard for logging')
     parser.add_argument('--backprop_mode', type=str, default='base',help='backprop policy can be choose from: [base, select_one, select_half]')
     parser.add_argument('--dropout_rate', type=float, default=0.5, help="drop out rate for workers")
     parser.add_argument('--delta', type=float, help="delta for hyper volume loss scheduling")
