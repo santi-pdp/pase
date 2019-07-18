@@ -191,7 +191,4 @@ def get_grad_norms(model, keys=[]):
             continue
         grads[k] = torch.norm(param.grad).cpu().item()
     return grads
-<<<<<<< HEAD
 
-=======
->>>>>>> upstream/dev

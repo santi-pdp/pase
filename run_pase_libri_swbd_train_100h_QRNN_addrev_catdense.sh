@@ -12,7 +12,7 @@ python -u train.py --batch_size 20 --epoch 25 \
         --fe_cfg cfg/PASE_concatdense_QRNN.cfg --do_eval \
         --min_lr 0.0005 --fe_lr 0.0005  \
         --stats data/librispeech_swbd_100h_stats.pkl --lrdec_step 15 --lrdecay 0.5 \
-        --chunk_size 32000 --random_scale --log_grad_keys rnn \
+        --chunk_size 32000 --random_scale True --log_grad_keys rnn \
         --cchunk_prior \
         --data_root data/LibriSpeech_50h/wav_sel \
         --data_cfg data/LibriSpeech_50h/librispeech_data_50h.cfg \
