@@ -205,7 +205,7 @@ class trainer(object):
                     pbar.set_description("Epoch {}/{}".format(e, self.epoch))
                     try:
                         batch = next(iterator)
-                    except RuntimeError:
+                    except RuntimeError or StopIteration:
                         iterator = iter(dataloader)
                         batch = next(iterator)
 
@@ -273,7 +273,7 @@ class trainer(object):
                     pbar.set_description("Eval: {}/{}".format(bidx, self.va_bpe+1))
                     try:
                         batch = next(iterator)
-                    except RuntimeError:
+                    except RuntimeError or StopIteration:
                         iterator = iter(dataloader)
                         batch = next(iterator)
 
