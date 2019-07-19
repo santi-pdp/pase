@@ -273,7 +273,7 @@ class backprop_scheduler(object):
             idx += 1
 
         # tot_loss = torch.sum(alpha.detach() * loss_vec)
-        tot_loss.backward(retain_graph=True)
+        tot_loss.backward()
 
 
         for _, optim in cls_optim.items():
