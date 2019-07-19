@@ -373,7 +373,7 @@ class trainer(object):
             else:
                 pbar.write('%s, learning rate = %.8f, loss = %.4f' % (name, lrs[name], loss))
 
-            if name != "total" and self.writer:
+            if self.writer:
 
                 self.writer.add_scalar('train/{}_loss'.format(name),
                                   loss.item(),
