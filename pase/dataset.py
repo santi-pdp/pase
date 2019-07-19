@@ -9,6 +9,7 @@ import json
 import tqdm
 import pickle
 import os
+from utils import *
 import random
 import numpy as np
 from collections import defaultdict
@@ -150,6 +151,8 @@ class WavDataset(Dataset):
                  noise_folder=None,
                  cache_on_load=False,
                  distortion_probability=0.4,
+                 zero_speech_p=0,
+                 zero_speech_transform=None,
                  verbose=True):
         # sr: sampling rate, (Def: None, the one in the wav header)
         self.sr = sr
@@ -166,6 +169,8 @@ class WavDataset(Dataset):
         self.transform = transform
         self.transforms_cache = transforms_cache
         self.distortion_transforms = distortion_transforms
+        self.zero_speech_p = zero_speech_p
+        self.zero_speech_transform = zero_speech_transform
         self.whisper_folder = whisper_folder
         self.noise_folder = noise_folder
         self.preload_wav = preload_wav
@@ -219,11 +224,16 @@ class WavDataset(Dataset):
             return wav
 
     def __getitem__(self, index):
-        uttname = self.wavs[index]['filename']
-        wname = os.path.join(self.data_root, uttname)
-        wav = self.retrieve_cache(wname, self.wav_cache)
-        if self.transform is not None:
-            wav = self.transform(wav)
+        if sample_probable(self.zero_speech_p):
+            wav = np.zeros(int(5 * 16e3)).astype(np.float32)
+            if self.zero_speech_transform is not None:
+                wav = self.zero_speech_transform(wav)
+        else:
+            uttname = self.wavs[index]['filename']
+            wname = os.path.join(self.data_root, uttname)
+            wav = self.retrieve_cache(wname, self.wav_cache)
+            if self.transform is not None:
+                wav = self.transform(wav)
         rets = [wav]
         if self.return_uttname:
             rets = rets + [uttname]
@@ -249,6 +259,8 @@ class PairWavDataset(WavDataset):
                  noise_folder=None,
                  cache_on_load=False,
                  distortion_probability=0.4,
+                 zero_speech_p=0,
+                 zero_speech_transform=None,
                  preload_wav=False):
         super().__init__(data_root, data_cfg_file, split, transform=transform,
                          sr=sr, preload_wav=preload_wav,
@@ -259,64 +271,41 @@ class PairWavDataset(WavDataset):
                          noise_folder=noise_folder,
                          cache_on_load=cache_on_load,
                          distortion_probability=distortion_probability,
+                         zero_speech_p=zero_speech_p,
+                         zero_speech_transform=zero_speech_transform,
                          verbose=verbose)
         self.rwav_cache = {}
 
     def __getitem__(self, index):
-        uttname = self.wavs[index]['filename']
-        # Here we select two wavs, the current one and a randomly chosen one
-        wname = os.path.join(self.data_root, uttname)
-        wav = self.retrieve_cache(wname, self.wav_cache)
-        # create candidate indices without current index
+        # create candidate indices for random other wavs without current index
         indices = list(range(len(self.wavs)))
         indices.remove(index)
         rindex = random.choice(indices)
         rwname = os.path.join(self.data_root, self.wavs[rindex]['filename'])
         rwav = self.retrieve_cache(rwname, self.wav_cache)
+        # Load current wav or generate the zero-version
+        if sample_probable(self.zero_speech_p):
+            ZERO_SPEECH = True
+            wav = np.zeros(int(5 * 16e3)).astype(np.float32)
+        else:
+            ZERO_SPEECH = False
+            uttname = self.wavs[index]['filename']
+            # Here we select two wavs, the current one and a randomly chosen one
+            wname = os.path.join(self.data_root, uttname)
+            wav = self.retrieve_cache(wname, self.wav_cache)
         pkg = {'raw': wav, 'raw_rand': rwav,
                'uttname': uttname, 'split': self.split}
         # Apply the set of 'target' transforms on the clean data
         if self.transform is not None:
             pkg = self.transform(pkg)
-        do_addnoise = False
-        do_whisper = False
-        # Then select possibly a distorted version of the 'current' chunk
-        if hasattr(self, 'whisper_cache'):
-            do_whisper = random.random() <= self.distortion_probability
-            if do_whisper:
-                dwname = os.path.join(self.whisper_folder, uttname)
-                # print('getting whisper file: ', dwname)
-                dwav = self.retrieve_cache(dwname,
-                                           self.whisper_cache)
-                pkg['raw'] = torch.tensor(dwav)
-        # Check if additive noise to be added
-        if hasattr(self, 'noise_cache'):
-            do_addnoise = random.random() <= self.distortion_probability
-            if do_addnoise:
-                nwname = os.path.join(self.noise_folder, uttname)
-                # print('getting noise file: ', nwname)
-                noise = self.retrieve_cache(nwname,
-                                            self.noise_cache)
-                if noise.shape[0] < pkg['raw'].size(0):
-                    P_ = pkg['raw'].size(0) - noise.shape[0]
-                    noise_piece = noise[-P_:][::-1]
-                    noise = np.concatenate((noise, noise_piece), axis=0)
-                noise = torch.FloatTensor(noise)
-                pkg['raw'] = pkg['raw'] + noise
 
         pkg['cchunk'] = pkg['chunk'].squeeze(0)
 
-        if do_addnoise or do_whisper:
-            # re-chunk raw into chunk if boundaries available in pkg
-            if 'chunk_beg_i' in pkg and 'chunk_end_i' in pkg:
-                beg_i = pkg['chunk_beg_i']
-                end_i = pkg['chunk_end_i']
-                # separate clean chunk version
-                # make distorted chunk
-                pkg['chunk'] = pkg['raw'][beg_i:end_i]
-
-        if self.distortion_transforms:
+        if self.distortion_transforms and not ZERO_SPEECH:
             pkg = self.distortion_transforms(pkg)
+        
+        if self.zero_speech_transform and ZERO_SPEECH:
+            pkg = self.zero_speech_transform(pkg)
 
         if self.transform is None:
             # if no transforms happened do not send a package
@@ -345,6 +334,8 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
                  noise_folder=None,
                  cache_on_load=False,
                  distortion_probability=0.4,
+                 zero_speech_p=0,
+                 zero_speech_transform=None,
                  preload_wav=False):
         super().__init__(data_root, data_cfg_file, split, transform=transform,
                          sr=sr, preload_wav=preload_wav,
@@ -355,6 +346,8 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
                          noise_folder=noise_folder,
                          cache_on_load=cache_on_load,
                          distortion_probability=distortion_probability,
+                         zero_speech_p=zero_speech_p,
+                         zero_speech_transform=zero_speech_transform,
                          verbose=verbose)
         self.rec = re.compile(r'(\d+).wav')
         # pre-cache prefixes to load from dictionary quicker
@@ -369,26 +362,32 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
               'utterances'.format(len(self.neighbor_prefixes)))
 
     def __getitem__(self, index):
-        uttname = self.wavs[index]['filename']
-        # Here we select the three wavs.
-        # (1) Current wav selection
-        wname = os.path.join(self.data_root, uttname)
-        wav = self.retrieve_cache(wname, self.wav_cache)
-        # (2) Context wav selection by utterance name pattern. If
-        # no other sub-index is found, the same as current wav is returned
-        prefix = self.rec.sub('', uttname)
-        neighbors = self.neighbor_prefixes[prefix]
-        # print('Wname: ', wname)
-        # delete current file
-        # print('Found nehg: ', neighbors)
-        neighbors.remove(uttname)
-        # print('Found nehg: ', neighbors)
-        # pick random one if possible, otherwise it will be empty
-        if len(neighbors) > 0:
-            cwname = os.path.join(self.data_root, random.choice(neighbors))
-            cwav = self.retrieve_cache(cwname, self.wav_cache)
-        else:
+        # Load current wav or generate the zero-version
+        if sample_probable(self.zero_speech_p):
+            ZERO_SPEECH = True
+            wav = np.zeros(int(5 * 16e3)).astype(np.float32)
             cwav = wav
+        else:
+            uttname = self.wavs[index]['filename']
+            # Here we select the three wavs.
+            # (1) Current wav selection
+            wname = os.path.join(self.data_root, uttname)
+            wav = self.retrieve_cache(wname, self.wav_cache)
+            # (2) Context wav selection by utterance name pattern. If
+            # no other sub-index is found, the same as current wav is returned
+            prefix = self.rec.sub('', uttname)
+            neighbors = self.neighbor_prefixes[prefix]
+            # print('Wname: ', wname)
+            # delete current file
+            # print('Found nehg: ', neighbors)
+            neighbors.remove(uttname)
+            # print('Found nehg: ', neighbors)
+            # pick random one if possible, otherwise it will be empty
+            if len(neighbors) > 0:
+                cwname = os.path.join(self.data_root, random.choice(neighbors))
+                cwav = self.retrieve_cache(cwname, self.wav_cache)
+            else:
+                cwav = wav
         # (2) Random wav selection for out of context sample
         # create candidate indices without current index
         indices = list(range(len(self.wavs)))
@@ -401,45 +400,15 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
         # Apply the set of 'target' transforms on the clean data
         if self.transform is not None:
             pkg = self.transform(pkg)
-        do_addnoise = False
-        do_whisper = False
-        # Then select possibly a distorted version of the 'current' chunk
-        if hasattr(self, 'whisper_cache'):
-            do_whisper = random.random() <= self.distortion_probability
-            if do_whisper:
-                dwname = os.path.join(self.whisper_folder, uttname)
-                # print('getting whisper file: ', dwname)
-                dwav = self.retrieve_cache(dwname,
-                                           self.whisper_cache)
-                pkg['raw'] = torch.tensor(dwav)
-        # Check if additive noise to be added
-        if hasattr(self, 'noise_cache'):
-            do_addnoise = random.random() <= self.distortion_probability
-            if do_addnoise:
-                nwname = os.path.join(self.noise_folder, uttname)
-                # print('getting noise file: ', nwname)
-                noise = self.retrieve_cache(nwname,
-                                            self.noise_cache)
-                if noise.shape[0] < pkg['raw'].size(0):
-                    P_ = pkg['raw'].size(0) - noise.shape[0]
-                    noise_piece = noise[-P_:][::-1]
-                    noise = np.concatenate((noise, noise_piece), axis=0)
-                noise = torch.FloatTensor(noise)
-                pkg['raw'] = pkg['raw'] + noise
 
         pkg['cchunk'] = pkg['chunk'].squeeze(0)
 
-        if do_addnoise or do_whisper:
-            # re-chunk raw into chunk if boundaries available in pkg
-            if 'chunk_beg_i' in pkg and 'chunk_end_i' in pkg:
-                beg_i = pkg['chunk_beg_i']
-                end_i = pkg['chunk_end_i']
-                # separate clean chunk version
-                # make distorted chunk
-                pkg['chunk'] = pkg['raw'][beg_i:end_i]
-
-        if self.distortion_transforms:
+        if self.distortion_transforms and not ZERO_SPEECH:
             pkg = self.distortion_transforms(pkg)
+        
+        if self.zero_speech_transform and ZERO_SPEECH:
+            pkg = self.zero_speech_transform(pkg)
+
         # sf.write('/tmp/ex_chunk.wav', pkg['chunk'], 16000)
         # sf.write('/tmp/ex_cchunk.wav', pkg['cchunk'], 16000)
         # raise NotImplementedError
