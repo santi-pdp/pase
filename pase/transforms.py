@@ -465,7 +465,7 @@ class Reverb(object):
         # IR delay compensation
         rev = self.shift(rev, -p_max)
         if Er > 0:
-            Eratio = np.sqrt(Ex / Er)
+            Eratio = np.sqrt(Ex / Er) 
         else:
             Eratio = 1.0
             rev = rev / np.max(np.abs(rev))
