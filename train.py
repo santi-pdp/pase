@@ -232,7 +232,7 @@ def train(opts):
     dset, va_dset = build_dataset_providers(opts, minions_cfg)
     dloader = DataLoader(dset, batch_size=opts.batch_size,
                          shuffle=True, collate_fn=DictCollater(),
-                         num_workers=opts.num_workers,drop_last=True,
+                         num_workers=opts.num_workers,
                          pin_memory=CUDA)
     # Compute estimation of bpe. As we sample chunks randomly, we
     # should say that an epoch happened after seeing at least as many
@@ -244,8 +244,8 @@ def train(opts):
             "Asked to do validation, but failed to build validation set"
         )
         va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
-                                shuffle=True, collate_fn=DictCollater(),
-                                num_workers=opts.num_workers,drop_last=True,
+                                shuffle=False, collate_fn=DictCollater(),
+                                num_workers=opts.num_workers,
                                 pin_memory=CUDA)
         va_bpe = (va_dset.total_wav_dur // opts.chunk_size) // opts.batch_size
         opts.va_bpe = va_bpe
