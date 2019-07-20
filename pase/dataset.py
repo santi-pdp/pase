@@ -9,7 +9,10 @@ import json
 import tqdm
 import pickle
 import os
-from utils import *
+try:
+    from .utils import *
+except ImportError:
+    from utils import *
 import random
 import numpy as np
 from collections import defaultdict
@@ -225,7 +228,7 @@ class WavDataset(Dataset):
 
     def __getitem__(self, index):
         if sample_probable(self.zero_speech_p):
-            wav = np.zeros(int(5 * 16e3)).astype(np.float32)
+            wav = zerospeech(int(5 * 16e3))
             if self.zero_speech_transform is not None:
                 wav = self.zero_speech_transform(wav)
         else:
@@ -286,7 +289,8 @@ class PairWavDataset(WavDataset):
         # Load current wav or generate the zero-version
         if sample_probable(self.zero_speech_p):
             ZERO_SPEECH = True
-            wav = np.zeros(int(5 * 16e3)).astype(np.float32)
+            wav = zerospeech(int(5 * 16e3))
+            uttname = 'zerospeech.wav'
         else:
             ZERO_SPEECH = False
             uttname = self.wavs[index]['filename']
@@ -365,9 +369,11 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
         # Load current wav or generate the zero-version
         if sample_probable(self.zero_speech_p):
             ZERO_SPEECH = True
-            wav = np.zeros(int(5 * 16e3)).astype(np.float32)
+            wav = zerospeech(int(5 * 16e3))
             cwav = wav
+            uttname = 'zerospeech.wav'
         else:
+            ZERO_SPEECH = False
             uttname = self.wavs[index]['filename']
             # Here we select the three wavs.
             # (1) Current wav selection

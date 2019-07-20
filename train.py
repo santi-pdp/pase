@@ -207,7 +207,7 @@ def build_dataset_providers(opts, minions_cfg):
                               whisper_folder=opts.whisper_folder,
                               distortion_probability=opts.distortion_p,
                               distortion_transforms=dist_trans,
-                              zero_speech_p=opts.zero_speech_p,
+                              zero_speech_p=opts.zero_speech_p[idx],
                               zero_speech_transform=zp_trans,
                               preload_wav=opts.preload_wav)
             va_dsets.append(va_dset)
@@ -312,7 +312,7 @@ if __name__ == '__main__':
     parser.add_argument('--dtrans_cfg', action='append', default=[],
                         help='Distortion transform to apply, note in case of'
                               'mutliple datasets, provide config multiple times')
-    parser.add_argument('--zerospeech_cfg', action='append', default=[])
+    parser.add_argument('--zerospeech_cfg', action='append', default=None)
     parser.add_argument('--zero_speech_p', action='append', type=float,
                         default=[0.1])
     parser.add_argument('--dataset', action='append',
