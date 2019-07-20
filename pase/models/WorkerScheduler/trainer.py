@@ -33,7 +33,7 @@ class trainer(object):
                  regr_lst=None,
                  pretrained_ckpt=None,
                  tensorboard=None,
-                 backprop_mode = None,
+                 backprop_mode=None,
                  lr_mode = 'step',
                  name='Pase_base',
                  device=None):
@@ -301,7 +301,7 @@ class trainer(object):
                         else:
                             running_loss[worker.name].append(loss.item())
 
-                    losses["total"] = tot_loss
+                    running_loss["total"].append(tot_loss.item())
 
                     if bidx % self.log_freq == 0 or bidx >= self.bpe:
                         pbar.write('-' * 50)
@@ -378,15 +378,17 @@ class trainer(object):
                 self.writer.add_scalar('train/{}_loss'.format(name),
                                   loss.item(),
                                   global_step=step)
-                self.writer.add_histogram('train/{}'.format(name),
-                                     preds[name].data,
-                                     bins='sturges',
-                                     global_step=step)
 
-                self.writer.add_histogram('train/gtruth_{}'.format(name),
-                                     labels[name].data,
-                                     bins='sturges',
-                                     global_step=step)
+                if name != "total":
+                    self.writer.add_histogram('train/{}'.format(name),
+                                         preds[name].data,
+                                         bins='sturges',
+                                         global_step=step)
+
+                    self.writer.add_histogram('train/gtruth_{}'.format(name),
+                                         labels[name].data,
+                                         bins='sturges',
+                                         global_step=step)
 
         grads = get_grad_norms(self.model)
         for kgrad, vgrad in grads.items():
