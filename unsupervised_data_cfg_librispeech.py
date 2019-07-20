@@ -12,7 +12,7 @@ def get_file_dur(fname):
 
 def main(opts):
     random.seed(opts.seed)
-    spk2idx = np.load(opts.libri_dict, allow_pickle=True)
+    spk2idx = np.load(opts.libri_dict)
     spk2idx = dict(spk2idx.any())
     data_cfg = {'train':{'data':[],
                          'speakers':[]},
