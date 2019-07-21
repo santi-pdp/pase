@@ -116,9 +116,15 @@ class WaveFe(Model):
 
     def fuse_skip(self, input_, skip):
         dfactor = skip.shape[2] // input_.shape[2]
+
         if dfactor > 1:
             # downsample skips
-            skip = F.adaptive_avg_pool1d(skip, input_.shape[2])
+            # [B, F, T]
+            maxlen = input_.shape[2] * dfactor
+            skip = skip[:, :, :maxlen]
+            bsz, feats, slen = skip.shape
+            skip_re = skip.view(bsz, feats, slen // dfactor, dfactor)
+            skip = torch.mean(skip_re, dim=3)
         if self.densemerge == 'concat':
             return torch.cat((input_, skip), dim=1)
         elif self.densemerge == 'sum':
@@ -130,18 +136,22 @@ class WaveFe(Model):
         h = x
         denseskips = hasattr(self, 'denseskips')
         if denseskips:
-            dskips = None
+            #dskips = None
+            dskips = []
         for n, block in enumerate(self.blocks):
             h = block(h)
             if denseskips and (n + 1) < len(self.blocks):
                 # denseskips happen til the last but one layer
                 # til the embedding one
                 proj = self.denseskips[n]
+                dskips.append(proj(h))
+                """
                 if dskips is None:
                     dskips = proj(h)
                 else:
                     h_proj = proj(h)
                     dskips = self.fuse_skip(h_proj, dskips)
+                """
         if self.rnn_pool:
             h = h.transpose(1, 2).transpose(0, 1)
             h, _ = self.rnn(h)
@@ -150,8 +160,10 @@ class WaveFe(Model):
         #else:
         y = self.W(h)
         if denseskips:
-            # sum all dskips contributions in the embedding
-            y = self.fuse_skip(y, dskips)
+            for dskip in dskips:
+                # sum all dskips contributions in the embedding
+                y = self.fuse_skip(y, dskip)
+            #y = self.fuse_skip(y, dskips)
         if hasattr(self, 'norm_out'):
             y = self.norm_out(y)
         if self.tanh_out:

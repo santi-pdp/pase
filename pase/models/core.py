@@ -317,7 +317,11 @@ class Waveminionet(Model):
                 if self.mi_fwd:
                     fe_forwards.extend([batch['chunk_ctxt'],
                                        batch['chunk_rand']])
-                fe_forwards.append(batch['cchunk'])
+                fwd_cchunk = (epoch_ + 1) >= warmup_epoch and \
+                        hasattr(self, 'z_minion') and \
+                        cfg['cchunk_prior']
+                if fwd_cchunk:
+                    fe_forwards.append(batch['cchunk'])
                 # build triplet batch and forward it too
                 fe_forwards_b = torch.cat(fe_forwards, dim=0)
                 if self.vq:
@@ -329,7 +333,8 @@ class Waveminionet(Model):
                 # slice the tensor back in batch dimension
                 all_feh = torch.chunk(fe_h['all'], len(fe_forwards), dim=0)
                 fe_h['chunk'] = all_feh[0]
-                fe_h['cchunk'] = all_feh[-1]
+                if fwd_cchunk:
+                    fe_h['cchunk'] = all_feh[-1]
                 min_h = {}
                 h = fe_h['chunk']
                 skip_acum = None
