@@ -17,7 +17,7 @@ import argparse
 import os
 import json
 import random
-# torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.benchmark = True
 
 
 def str2bool(v):
