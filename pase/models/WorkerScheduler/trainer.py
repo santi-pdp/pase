@@ -300,8 +300,10 @@ class trainer(object):
                             running_loss[worker.name] = [loss.item()]
                         else:
                             running_loss[worker.name].append(loss.item())
-
-                    running_loss["total"].append(tot_loss.item())
+                    if 'total' not in running_loss:
+                        running_loss["total"] = [tot_loss.item()]
+                    else:
+                        running_loss["total"].append(tot_loss.item())
 
                     if bidx % self.log_freq == 0 or bidx >= self.bpe:
                         pbar.write('-' * 50)
