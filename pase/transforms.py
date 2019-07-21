@@ -1076,6 +1076,8 @@ class SimpleAdditiveShift(SimpleAdditive):
             n_beg_i = 0
         elif len(sel_noise) > T:
             n_beg_i = np.random.randint(0, len(sel_noise) - T)
+        else:
+            n_beg_i = 0
         noise = sel_noise[n_beg_i:n_beg_i + T].astype(np.float32)
         if self.noise_transform is not None:
             noise = self.noise_transform({'chunk': torch.FloatTensor(noise)})['chunk']

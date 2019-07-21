@@ -4,7 +4,10 @@ import subprocess
 import random
 import torch
 import torch.nn as nn
-from .losses import *
+try:
+    from .losses import *
+except ImportError:
+    from losses import *
 import random
 from random import shuffle
 from pase.models.discriminator import *
@@ -191,3 +194,11 @@ def get_grad_norms(model, keys=[]):
             continue
         grads[k] = torch.norm(param.grad).cpu().item()
     return grads
+
+def sample_probable(p):
+    return random.random() < p
+
+def zerospeech(shape, eps=1e-14):
+    S = np.random.randn(shape) * eps
+    return S.astype(np.float32)
+
