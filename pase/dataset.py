@@ -549,18 +549,18 @@ class AmiSegTupleWavDataset(PairWavDataset):
             return pkg
 
 class MetaWavConcatDataset(ConcatDataset):
-    """This dataset class abstracts pool of several different datasets, each having possibly
-    a different sets of transform / distortion stacks. 
-
-    We abstract pytorch's ConcatDataset as the code relies on several dataset specific
-    attributes (like tot_wav_dur) that are assumed to exist
+    """This dataset class abstracts pool of several different datasets, 
+    each having possibly a different sets of transform / distortion stacks. 
+    We abstract pytorch's ConcatDataset as the code relies on several 
+    dataset specific attributes (like tot_wav_dur) that are assumed to exist
     """
     def __init__(self, datasets=[]):
         super(MetaWavConcatDataset, self).__init__(datasets)
     
         for dset in self.datasets:
             assert isinstance(dset, WavDataset), (
-                "{} is expected to work with WavDataset instances only.".format(__class__)
+                "{} is expected to work with WavDataset "
+                "instances only.".format(__class__)
             )
 
     @property
