@@ -181,6 +181,7 @@ class trainer(object):
             self.aux_sup = AuxiliarSuperviser(cfg['sup_exec'], aux_save_path)
         self.sup_freq = cfg['sup_freq']
 
+    #@profile
     def train_(self, dataloader, valid_dataloader, device):
 
         print('=' * 50)
