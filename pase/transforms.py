@@ -19,7 +19,6 @@ from scipy.interpolate import interp1d
 from torchvision.transforms import Compose
 from ahoproc_tools.interpolate import interpolation
 
-
 def norm_and_scale(wav):
     assert isinstance(wav, torch.Tensor), type(wav)
     wav = wav / torch.max(torch.abs(wav))
@@ -96,15 +95,12 @@ class PCompose(object):
                 prob = self.probs[ti]
             else:
                 prob = self.probs
-            if random.random() <= prob:
+            if random.random() < prob:
                 x = transf(x)
                 if len(x) == 2:
                     # get the report
                     x, report = x
                     reports.append(report)
-            else:
-                if isinstance(transf, SimpleAdditiveShift) and transf.overlap_flag:
-                    x['overlap'] = torch.zeros(len(x['chunk'])//transf.flag_decimation).float()
         if self.report:
             return x, reports
         else:
@@ -206,6 +202,8 @@ class SingleChunkWav(object):
         pkg['chunk_end_i'] = end_i
         if self.random_scale:
             pkg['chunk'] = norm_and_scale(pkg['chunk'])
+        # specify decimated resolution to be 1 (no decimation) so far
+        pkg['dec_resolution'] = 1
         return pkg
 
     def __repr__(self):
@@ -246,6 +244,8 @@ class MIChunkWav(SingleChunkWav):
             pkg['chunk'] = norm_and_scale(pkg['chunk'])
             pkg['chunk_ctxt'] = norm_and_scale(pkg['chunk_ctxt'])
             pkg['chunk_rand'] = norm_and_scale(pkg['chunk_rand'])
+        # specify decimated resolution to be 1 (no decimation) so far
+        pkg['dec_resolution'] = 1
         return pkg
 
 
@@ -277,6 +277,8 @@ class LPS(object):
                            self.hop, self.win)
             X = torch.norm(X, 2, dim=2).cpu()[:, :max_frames]
             pkg['lps'] = 10 * torch.log10(X ** 2 + 10e-20).cpu()
+        # Overwrite resolution to hop length
+        pkg['dec_resolution'] = self.hop
         return pkg
 
     def __repr__(self):
@@ -317,6 +319,8 @@ class MFCC(object):
                                         hop_length=self.hop
                                         )[:, :max_frames]
             pkg['mfcc'] = torch.tensor(mfcc.astype(np.float32))
+        # Overwrite resolution to hop length
+        pkg['dec_resolution'] = self.hop
         return pkg
 
     def __repr__(self):
@@ -386,6 +390,8 @@ class Prosody(object):
             egy = egy[:, :max_frames]
             proso = torch.cat((lf0, uv, egy, zcr), dim=0)
             pkg['prosody'] = proso
+        # Overwrite resolution to hop length
+        pkg['dec_resolution'] = self.hop
         return pkg
 
     def __repr__(self):
@@ -1030,8 +1036,6 @@ class SimpleAdditiveShift(SimpleAdditive):
     def __init__(self, noises_dir, snr_levels=[5, 10],
                  noise_transform=None,
                  noises_list=None,
-                 overlap_flag=True,
-                 flag_decimation=160,
                  report=False):
         if noises_list is None:
             super().__init__(noises_dir, snr_levels, report)
@@ -1044,8 +1048,6 @@ class SimpleAdditiveShift(SimpleAdditive):
                 for nel in nf:
                     nel = nel.rstrip()
                     self.noises.append(os.path.join(noises_dir, nel))
-        self.overlap_flag = overlap_flag
-        self.flag_decimation = flag_decimation
         self.noises_dir = noises_dir
         self.noises_list = noises_list
         self.snr_levels = snr_levels
@@ -1058,7 +1060,7 @@ class SimpleAdditiveShift(SimpleAdditive):
         # additional out_transform to include potential distortions
         self.noise_transform = noise_transform
 
-    # @profile
+    #@profile
     def __call__(self, pkg):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -1076,19 +1078,24 @@ class SimpleAdditiveShift(SimpleAdditive):
             n_beg_i = 0
         elif len(sel_noise) > T:
             n_beg_i = np.random.randint(0, len(sel_noise) - T)
+        else:
+            n_beg_i = 0
         noise = sel_noise[n_beg_i:n_beg_i + T].astype(np.float32)
         if self.noise_transform is not None:
             noise = self.noise_transform({'chunk': torch.FloatTensor(noise)})['chunk']
             noise = noise.data.numpy()
         pad_len = len(wav) - len(noise)
-        if self.overlap_flag:
+        if 'overlap' in pkg:
             # anotate a mask of overlapped samples
+            dec_res = pkg['dec_resolution'] 
+            dec_len = len(wav) // dec_res
+            #assert dec_len == len(pkg['overlap']), dec_len
             pkg['overlap'] = torch.cat((torch.zeros(pad_len),
                                        torch.ones(len(noise))),
                                        dim=0).float()
-            if self.flag_decimation > 1:
-                pkg['overlap'] = F.adaptive_avg_pool1d(pkg['overlap'].view(1, 1, -1),
-                                                       len(pkg['overlap']) // self.flag_decimation).view(1, -1)
+            if dec_res > 1:
+                to_dec = pkg['overlap'].view(-1, dec_res)
+                pkg['overlap'] = torch.mean(to_dec, dim=1)
 
         # apply padding to equal length now
         noise = F.pad(torch.tensor(noise).view(1, 1, -1),
