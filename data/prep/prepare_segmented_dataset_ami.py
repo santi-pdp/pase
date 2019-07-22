@@ -30,7 +30,7 @@ def handle_multichannel_wav(wav, channel):
     return wav, suffixes[channel]
 
 def segment_signal(args):
-    data_root, wav_file, channel = args
+    data_root, meetpath, wav_file = args
     wlen = 3200
     wshift = 80
     en_th = 0.3
@@ -38,11 +38,11 @@ def segment_signal(args):
     smooth_th_low = 0.25
     smooth_th_high = 0.6
     avoid_sentences_less_that = 24000
-    wav_path = os.path.join(data_root, wav_file)
+    wav_path = os.path.join(data_root, meetpath, wav_file)
     #signal, fs = sf.read(data_folder+wav_file)
     signal, fs = sf.read(wav_path)
 
-    signal, side = handle_multichannel_wav(signal, channel)
+    signal, side = handle_multichannel_wav(signal, 0)
 
     signal = signal / np.max(np.abs(signal))
     
@@ -120,73 +120,119 @@ def segment_signal(args):
         #    count_short = count_short + 1
     return out_buffer
 
-def extract_segment_from_wav():
-    signal, fs = sf.read(os.path.join(opts.data_root, wav_file))
-    signal, side = handle_multichannel_wav(signal, opts.channel)
-    signal = signal / np.max(np.abs(signal))
-    signal = signal[int(float(beg_samp)):int(float(end_samp))]
-    path_out = os.path.join(opts.out_root, wav_file)
-    path_out = path_out.replace('.sph', '-' + str(side) + '-' + str(seg_id) + '.wav')
-    sf.write(path_out, signal, fs)
+def mk_mic_path(meetid, chan, cond='ihm'):
+    assert cond in ['ihm', 'sdm'], (
+        "For AMI, cond shoud be in ihm or sdm, got {}".format(cond)
+    )
+    meetpath = "{}/audio".format(meetid)
+    if cond == 'ihm':
+        return meetpath, "{}.Headset-{}.wav".format(meetid, chan)
+    return meetpath, "{}.Array1-0{}.wav".format(meetid, chan)
 
 def main(opts):
-    data_folder = opts.data_root
-    file_lst = opts.file_list
-    file_out = opts.file_out
-    save_path = opts.out_root
-
     # copy folder structure
     copy_folder(opts.data_root, opts.out_root)
     
-    if not os.path.exists(file_out):
-        print('VADing signals to build {} list...'.format(file_out))
-        pool = mp.Pool(opts.num_workers)
+    headsets = [0, 1, 2, 3] #there is one extra headset in one meeting, but ignore it
+    meetings = []
+    with open(opts.ami_meeting_ids, 'r') as f:
+        for meetid in f:
+            meetings.append(meetid.strip()) 
 
-        with open(file_out, 'w') as f:
-            # Paramters for Voice Activity Detection
+    assert len(meetings) > 0, (
+        "Looks like meeting list is empty"
+    )
 
-            # Readline all the files
-            with open(file_lst, 'r') as lst_f:
-                wav_lst = [(data_folder, line.rstrip(), opts.channel) for line in lst_f]
+    sdms = []
+    if len(opts.map_ihm2sdm) > 0:
+        sdms = opts.map_ihm2sdm.split(",")
+        for sdm in sdms:
+            assert sdm in [0,1,2,3,4,5,6,7], (
+                "There are only 8 distant mics in AMI (0...7)"
+                "Pick one of them instead {}".format(sdm)
+            )
 
-                count=1
-                count_seg_tot=0
-                count_short=0
+    print ("Preparing AMI for {} meetings,"
+            " headset plus {} sdms channels".format(len(meetings), len(sdms)))
 
-                wi = 1
+    for meeting in meetings:
+        print ("Processing meeting {}".format(meeting))
+        file_out = "{%s}/{%s}.Headset.vad".format(opts.out_root, meeting)
+        if not os.path.exists(file_out):
+            print('VADing signals to build {} list...'.format(file_out))
+            with open(file_out, 'w') as f:
+                # Paramters for Voice Activity Detection
+                wav_lst = []
+                for headset in headsets:
+                    meetpath, headset_file = mk_mic_path(meeting, headset, 'ihm')
+                    wav_lst.append((opts.data_root, meetpath, headset_file))
+                
+                pool = mp.Pool(opts.num_workers)
                 for annotations in tqdm.tqdm(pool.imap(segment_signal, wav_lst), 
                                              total=len(wav_lst)):
                     for annotation in annotations:
                         f.write(annotation)
-    else:
-        print('[!] Found existing {} file, proceeding with it'.format(file_out))
+        else:
+            print('[!] Found existing {} file, proceeding with it'.format(file_out))
     
-    
+        # now read the list back to create the output chunks
+        with open(file_out, 'r') as f:
+            fnames = [l.rstrip() for l in f]
+            print('Producing segments out of VAD list for ihms...')
+            beg_t = timer()
+            
+            for headset in headsets:
+                meetpath, headset_file = mk_mic_path(meeting, headset, 'ihm')
+                print ('Working on {}'.format(headset_file))
+                signal, fs = sf.read(os.path.join(opts.data_root, meetpath, headset_file))
+                signal, side = handle_multichannel_wav(signal, opts.channel)
+                signal = signal / np.max(np.abs(signal))
+                for li, line in tqdm.tqdm(enumerate(fnames, start=1), total=len(fnames)):
+                    wav_file, beg_samp, end_samp, seg_id = line.split(' ')
+                    if wav_file != headset_file:
+                        # we have joint vad file for all headsets, so its handier for sdms
+                        continue
+                    segment = signal[int(float(beg_samp)):int(float(end_samp))]
+                    out_wav = wav_file.replace('.wav',  '-' + str(seg_id) + '.wav')
+                    path_out = os.path.join(opts.out_root, meetpath, out_wav)
+                    print ('\tExporting IHM segment {}'.format(path_out))
+                    sf.write(path_out, segment, fs)
 
-    # now read the list back to create the output chunks
-    with open(file_out, 'r') as f:
-        fnames = [l.rstrip() for l in f]
-        print('Producing segments out of VAD list...')
-        beg_t = timer()
-        for li, line in tqdm.tqdm(enumerate(fnames, start=1), total=len(fnames)):
-            wav_file, beg_samp, end_samp, seg_id = line.split(' ')
-            for channel in 
-                
-        end_t = timer()
-        print('Finalized segments production to output path: '
-              '{}'.format(opts.out_root))
-        print('Production time: {:.1f} s'.format(end_t - beg_t))
+            if len(sdms) > 0:
+                print('Producing segments out of VAD list for sdms...')
+                for sdm in sdms:
+                    meetpath, sdm_file = mk_mic_path(meeting, sdm, 'sdm')
+                    path_in = os.path.join(opts.data_root, meetpath, sdm_file)
+                    if not os.path.exists(path_in):
+                        print ('File {} not found. Skipping.'.format(path_in))
+                        continue
+
+                    signal, fs = sf.read(path_in)
+                    signal = signal / np.max(np.abs(signal))
+
+                    for li, line in tqdm.tqdm(enumerate(fnames, start=1), total=len(fnames)):
+                        wav_file, beg_samp, end_samp, seg_id = line.split(' ')
+                        segment = signal[int(float(beg_samp)):int(float(end_samp))]
+                        path_out = os.path.join(opts.out_root, meetpath, wav_file)
+                        wav_out = "-{}.Arr1-0{}.wav".format(seg_id, sdm)
+                        path_out = path_out.replace('.wav', wav_out)
+                        print ('\tExporting SDM segment {}'.format(path_out))
+                        sf.write(path_out, segment, fs)
+
+            end_t = timer()
+            print('Finalized segments production to output path: '
+                '{}'.format(opts.out_root))
+            print('Production time: {:.1f} s'.format(end_t - beg_t))
            
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--ami_meeting_ids', type=str, default='ami_split_train.list')
     parser.add_argument('--data_root', type=str, default=None)
-    parser.add_argument('--file_list', type=str, default='data/libri_all_tr.lst')
-    parser.add_argument('--file_out', type=str, default='data/libri_snt_vad.lst')
     parser.add_argument('--num_workers', type=int, default=5)
     parser.add_argument('--out_root', type=str, default=None,
                         help='Directory where files will be stored '
                              '(Def: None).')
-    parser.add_argument('--map_ihm_vads_to_sdms', type=str, default="1,3,5,7",
+    parser.add_argument('--map_ihm2sdm', type=str, default="1,3,5,7",
                         help='Extract VAD segments for these distant channels, on top of close-talk one')
     parser.add_argument('--channel', type=int, default=0,
                         help="In case of multi channel file, pick this channel")

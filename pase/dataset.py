@@ -455,7 +455,7 @@ class AmiSegTupleWavDataset(PairWavDataset):
     1st is IHM chunk, 2nd is continuation chunk
     3rd is a corresponding to ihm distant channel (random one from the mic array)
     4th is a random (ideally) non-related chunk 
-    Note, this can also only work with only ihms (when pair_sdms=False)
+    Note, this can also only work with only ihms (when pair_sdms=None)
     """
     def __init__(self, data_root, data_cfg_file, split, 
                  transform=None, sr=None, verbose=True,
@@ -467,7 +467,7 @@ class AmiSegTupleWavDataset(PairWavDataset):
                  cache_on_load=False,
                  distortion_probability=0.4,
                  preload_wav=False,
-                 pair_sdms=True):
+                 pair_sdms=[0,2,4,7]]):
         super().__init__(data_root, data_cfg_file, split, transform=transform, 
                          sr=sr, preload_wav=preload_wav,
                          return_uttname=return_uttname,
