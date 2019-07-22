@@ -288,7 +288,7 @@ class pase(Model):
         # h => y, label
 
         for worker in self.classification_workers:
-            if worker.name == "spc":
+            if worker.name == "spc" or worker.name == "gap":
                 y, label = worker(chunk, device=device)
             elif worker.name == "overlap":
                 y = worker(chunk)
