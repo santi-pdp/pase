@@ -15,6 +15,8 @@ def minion_maker(cfg):
         minion = DecoderMinion(**cfg)
     elif mtype == 'spc':
         minion = SPCMinion(**cfg)
+    elif mtype == 'gap':
+        minion = GapMinion(**cfg)
     elif mtype == 'gru':
         minion = GRUMinion(**cfg)
     else:
@@ -255,3 +257,56 @@ class SPCMinion(MLPMinion):
             return y, h
         else:
             return y
+
+class GapMinion(MLPMinion):
+
+    def __init__(self, num_inputs,
+                 num_outputs,
+                 dropout, hidden_size=256,
+                 hidden_layers=2,
+                 skip=True,
+                 loss=None,
+                 loss_weight=1.,
+                 keys=None,
+                 name='GapMinion'):
+        super().__init__(num_inputs=num_inputs,
+                         num_outputs=num_outputs,
+                         dropout=dropout,
+                         hidden_size=hidden_size,
+                         hidden_layers=hidden_layers,
+                         skip=skip,
+                         loss=loss,
+                         loss_weight=loss_weight,
+                         keys=keys,
+                         name=name)
+
+    def forward(self, x, device=None):
+        # x is a batch of sequences
+        # of dims [B, channels, time]
+        # Select randomly two chunks out of T possible
+        T = x.shape[2]
+        aidx = torch.LongTensor(np.random.randint(0, T, size=x.shape[0]))
+        bidx = torch.LongTensor(np.random.randint(0, T, size=x.shape[0]))
+        x_a = []
+        x_b = []
+        dists = []
+        for i_, (aidx_, bidx_) in enumerate(zip(aidx, bidx)):
+            x_a.append(x[i_, :, aidx_].unsqueeze(0))
+            x_b.append(x[i_, :, bidx_].unsqueeze(0))
+            dist = torch.abs(aidx_ - bidx_) / (T - 1)
+            dists.append(dist)
+        x_a = torch.cat(x_a, dim=0)
+        x_b = torch.cat(x_b, dim=0)
+        x_full = torch.cat((x_a, x_b), dim=1).unsqueeze(2)
+        dists = torch.LongTensor(dists)
+        dists = dists.view(-1, 1, 1)
+        
+        h = x_full
+        for bi, block in enumerate(self.blocks, start=1):
+            h = block(h)
+        y = self.W(h)
+        # concat groundtruth to preds
+        if self.skip:
+            return y, h, dists
+        else:
+            return y, dists

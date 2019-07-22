@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 import json
 from .aspp import aspp_resblock
+from pase.models.WorkerScheduler.encoder import encoder
 try:
     from modules import *
 except ImportError:
@@ -206,12 +207,12 @@ class WaveFe(Model):
 
 class aspp_res_encoder(Model):
 
-    def __init__(self, sinc_out, hidden_dim, kernel_sizes=[11, 11, 11, 11], strides=[10, 4, 2, 2], dilations=[1, 6, 12, 18], fmaps=48, name='aspp_encoder', pool2d=False, rnn_pool=False, dense=False):
+    def __init__(self, sinc_out, hidden_dim, kernel_sizes=[11, 11, 11, 11], sinc_stride=1,strides=[10, 4, 2, 2], dilations=[1, 6, 12, 18], fmaps=48, name='aspp_encoder', pool2d=False, rnn_pool=False, rnn_add=False, rnn_conv=False, dense=False):
         super().__init__(name=name)
         self.sinc = SincConv_fast(1, sinc_out, 251,
                                   sample_rate=16000,
                                   padding='SAME',
-                                  stride=1,
+                                  stride=sinc_stride,
                                   pad_mode='reflect'
                                   )
 
@@ -226,6 +227,11 @@ class aspp_res_encoder(Model):
 
 
         self.rnn_pool = rnn_pool
+        self.rnn_add = rnn_add
+        self.rnn_conv = rnn_conv
+        assert (self.rnn_pool and (self.rnn_add or self.rnn_conv)) or not self.rnn_pool
+
+        self.conv1 = nn.Conv1d(2 * hidden_dim, hidden_dim, 1, bias=False)
 
         if rnn_pool:
             self.rnn = build_rnn_block(hidden_dim, hidden_dim // 2,
@@ -256,13 +262,20 @@ class aspp_res_encoder(Model):
         for block in self.ASPP_blocks:
             out = block(out)
 
-        h = out
-
         if self.rnn_pool:
-            h = h.transpose(1, 2).transpose(0, 1)
-            h, _ = self.rnn(h)
-            h = h.transpose(0, 1).transpose(1, 2)
+            rnn_out = out.transpose(1, 2).transpose(0, 1)
+            rnn_out, _ = self.rnn(rnn_out)
+            rnn_out = rnn_out.transpose(0, 1).transpose(1, 2)
 
+        if self.rnn_pool and self.rnn_add and not self.rnn_conv:
+            h = out + rnn_out
+        elif self.rnn_pool and not self.rnn_add and self.rnn_conv:
+            h = torch.cat((out, rnn_out), dim=1)
+            h = self.conv1(h)
+        elif self.rnn_pool and not self.rnn_add and not self.rnn_conv:
+            h = rnn_out
+        else:
+            h = out
 
         if type(batch) == dict:
             embedding = torch.chunk(h, 3, dim=0)

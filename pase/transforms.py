@@ -431,7 +431,8 @@ class Reverb(object):
         else:
             raise TypeError('Unrecognized IR format: ', ir_fmt)
         IR = IR[:self.max_reverb_len]
-        IR = IR / np.abs(np.max(IR))
+        if np.max(IR)>0:
+            IR = IR / np.abs(np.max(IR))
         p_max = np.argmax(np.abs(IR))
         return IR, p_max
 
@@ -474,7 +475,7 @@ class Reverb(object):
             Eratio = np.sqrt(Ex / Er) 
         else:
             Eratio = 1.0
-            rev = rev / np.max(np.abs(rev))
+            #rev = rev / np.max(np.abs(rev))
 
         # Trim rev signal to match clean length
         rev = rev[:wav.shape[0]]
