@@ -155,6 +155,8 @@ def main(opts):
     print ("Preparing AMI for {} meetings,"
             " headset plus {} sdms channels".format(len(meetings), len(sdms)))
 
+    file2spkidx = {}
+
     for meeting in meetings:
         print ("Processing meeting {}".format(meeting))
         file_out = "{%s}/{%s}.Headset.vad".format(opts.out_root, meeting)
@@ -197,12 +199,14 @@ def main(opts):
                     path_out = os.path.join(opts.out_root, meetpath, out_wav)
                     print ('\tExporting IHM segment {}'.format(path_out))
                     sf.write(path_out, segment, fs)
+                    file2spkidx[out_wav] = wav_file.replace('.wav', '')
 
             if len(sdms) > 0:
                 print('Producing segments out of VAD list for sdms...')
                 for sdm in sdms:
                     meetpath, sdm_file = mk_mic_path(meeting, sdm, 'sdm')
                     path_in = os.path.join(opts.data_root, meetpath, sdm_file)
+
                     if not os.path.exists(path_in):
                         print ('File {} not found. Skipping.'.format(path_in))
                         continue
@@ -213,16 +217,22 @@ def main(opts):
                     for li, line in tqdm.tqdm(enumerate(fnames, start=1), total=len(fnames)):
                         wav_file, beg_samp, end_samp, seg_id = line.split(' ')
                         segment = signal[int(float(beg_samp)):int(float(end_samp))]
-                        path_out = os.path.join(opts.out_root, meetpath, wav_file)
-                        wav_out = "-{}.Arr1-0{}.wav".format(seg_id, sdm)
-                        path_out = path_out.replace('.wav', wav_out)
+                        wav_file_basename = wav_file.replace('.wav','')
+                        wav_out = "{}-{}.Arr1-0{}.wav".format(wav_file_basename, seg_id, sdm)
+                        path_out = os.path.join(opts.out_root, meetpath, wav_out)
                         print ('\tExporting SDM segment {}'.format(path_out))
                         sf.write(path_out, segment, fs)
-
+                        file2spkidx[wav_out] = wav_file_basename
             end_t = timer()
-            print('Finalized segments production to output path: '
-                '{}'.format(opts.out_root))
+
+            print('Finalized segments production for meeting : '
+                '{}'.format(meeting))
             print('Production time: {:.1f} s'.format(end_t - beg_t))
+
+    np.save(os.path.join(opts.out_root, opts.utt2spk_dict),
+            file2spkidx, allow_pickle=True)
+
+    print ('Finished all stuff')
            
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -234,6 +244,7 @@ if __name__ == '__main__':
                              '(Def: None).')
     parser.add_argument('--map_ihm2sdm', type=str, default="1,3,5,7",
                         help='Extract VAD segments for these distant channels, on top of close-talk one')
+    parser.add_argument('--utt2spk_dict', type=str, default='utt2spk.npy')
     parser.add_argument('--channel', type=int, default=0,
                         help="In case of multi channel file, pick this channel")
     opts = parser.parse_args()
