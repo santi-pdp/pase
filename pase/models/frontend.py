@@ -266,11 +266,13 @@ class aspp_res_encoder(Model):
             rnn_out, _ = self.rnn(rnn_out)
             rnn_out = rnn_out.transpose(0, 1).transpose(1, 2)
 
-        if self.rnn_add and self.rnn_pool and not self.rnn_conv:
+        if self.rnn_pool and self.rnn_add and not self.rnn_conv:
             h = out + rnn_out
         elif self.rnn_pool and not self.rnn_add and self.rnn_conv:
             h = torch.cat((out, rnn_out), dim=1)
             h = self.conv1(h)
+        elif self.rnn_pool and not self.rnn_add and not self.rnn_conv:
+            h = rnn_out
         else:
             h = out
 
