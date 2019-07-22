@@ -17,7 +17,7 @@ import argparse
 import os
 import json
 import random
-# torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.benchmark = True
 
 
 def str2bool(v):
@@ -143,6 +143,11 @@ def config_distortions(reverb_irfiles=[],
     else:
         return None
 
+def config_zerospeech(noises_dir=None,
+                      noises_snrs=[0, 5, 10]):
+    trans = SimpleAdditive(noises_dir, noises_snrs)
+    return trans
+
 def build_dataset_providers(opts, minions_cfg):
 
     dr = len(opts.data_root)
@@ -174,26 +179,37 @@ def build_dataset_providers(opts, minions_cfg):
                 print(dist_trans)
         else:
             dist_trans = None
+        if opts.zerospeech_cfg is not None and opts.zero_speech_p[idx] > 0:
+            with open(opts.zerospeech_cfg[idx], 'r') as zsp_cfg:
+                ztr = json.load(zsp_cfg)
+                zp_trans = config_zerospeech(**ztr)
+                print(zp_trans)
+        else:
+            zp_trans = None
         # Build Dataset(s) and DataLoader(s)
         dataset = getattr(pase.dataset, opts.dataset[idx])
         dset = dataset(opts.data_root[idx], opts.data_cfg[idx], 'train',
-                   transform=trans,
-                   noise_folder=opts.noise_folder,
-                   whisper_folder=opts.whisper_folder,
-                   distortion_probability=opts.distortion_p,
-                   distortion_transforms=dist_trans,
-                   preload_wav=opts.preload_wav)
+                       transform=trans,
+                       noise_folder=opts.noise_folder,
+                       whisper_folder=opts.whisper_folder,
+                       distortion_probability=opts.distortion_p,
+                       distortion_transforms=dist_trans,
+                       zero_speech_p=opts.zero_speech_p[idx],
+                       zero_speech_transform=zp_trans,
+                       preload_wav=opts.preload_wav)
 
         dsets.append(dset)
 
         if opts.do_eval:
             va_dset = dataset(opts.data_root[idx], opts.data_cfg[idx],
-                          'valid', transform=trans,
-                          noise_folder=opts.noise_folder,
-                          whisper_folder=opts.whisper_folder,
-                          distortion_probability=opts.distortion_p,
-                          distortion_transforms=dist_trans,
-                          preload_wav=opts.preload_wav)
+                              'valid', transform=trans,
+                              noise_folder=opts.noise_folder,
+                              whisper_folder=opts.whisper_folder,
+                              distortion_probability=opts.distortion_p,
+                              distortion_transforms=dist_trans,
+                              zero_speech_p=opts.zero_speech_p[idx],
+                              zero_speech_transform=zp_trans,
+                              preload_wav=opts.preload_wav)
             va_dsets.append(va_dset)
 
     ret = None
@@ -300,6 +316,9 @@ if __name__ == '__main__':
     parser.add_argument('--dtrans_cfg', action='append', default=[],
                         help='Distortion transform to apply, note in case of'
                               'mutliple datasets, provide config multiple times')
+    parser.add_argument('--zerospeech_cfg', action='append', default=None)
+    parser.add_argument('--zero_speech_p', action='append', type=float,
+                        default=[0.1])
     parser.add_argument('--dataset', action='append',
                         default=['LibriSpeechSegTupleWavDataset'],
                         help='Dataset to be used: '
