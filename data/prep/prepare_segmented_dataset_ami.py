@@ -1,3 +1,4 @@
+
 import soundfile as sf
 import sys
 import tqdm
@@ -16,7 +17,7 @@ def copy_folder(in_folder, out_folder):
         shutil.copytree(in_folder, out_folder, ignore=ig_f)
         end_t = timer()
         print('Replicated structure in {:.1f} s'.format(end_t - beg_t))
-  
+
 def ig_f(dir, files):
     return [f for f in files if os.path.isfile(os.path.join(dir, f))]
 
@@ -26,7 +27,7 @@ def handle_multichannel_wav(wav, channel):
         assert wav.ndim > 1 and channel < wav.shape[1], (
             "Asked to extract {} channel but file has only sinlge channel".format(channel)
         )
-    wav = wav[:, channel]
+    #wav = wav[:, channel]
     return wav, suffixes[channel]
 
 def segment_signal(args):
@@ -132,7 +133,7 @@ def mk_mic_path(meetid, chan, cond='ihm'):
 def main(opts):
     # copy folder structure
     copy_folder(opts.data_root, opts.out_root)
-    
+
     headsets = [0, 1, 2, 3] #there is one extra headset in one meeting, but ignore it
     meetings = []
     with open(opts.ami_meeting_ids, 'r') as f:
@@ -147,7 +148,7 @@ def main(opts):
     if len(opts.map_ihm2sdm) > 0:
         sdms = opts.map_ihm2sdm.split(",")
         for sdm in sdms:
-            assert sdm in [0,1,2,3,4,5,6,7], (
+            assert sdm in ['0', '1', '2', '3', '4', '5', '6', '7'], (
                 "There are only 8 distant mics in AMI (0...7)"
                 "Pick one of them instead {}".format(sdm)
             )
@@ -159,7 +160,7 @@ def main(opts):
 
     for meeting in meetings:
         print ("Processing meeting {}".format(meeting))
-        file_out = "{%s}/{%s}.Headset.vad".format(opts.out_root, meeting)
+        file_out = "{}/{}.Headset.vad".format(opts.out_root, meeting)
         if not os.path.exists(file_out):
             print('VADing signals to build {} list...'.format(file_out))
             with open(file_out, 'w') as f:
@@ -169,11 +170,17 @@ def main(opts):
                     meetpath, headset_file = mk_mic_path(meeting, headset, 'ihm')
                     wav_lst.append((opts.data_root, meetpath, headset_file))
                 
-                pool = mp.Pool(opts.num_workers)
-                for annotations in tqdm.tqdm(pool.imap(segment_signal, wav_lst), 
-                                             total=len(wav_lst)):
-                    for annotation in annotations:
-                        f.write(annotation)
+		#commented as it does not work well with aws nfs jsalt stuff
+                #pool = mp.Pool(opts.num_workers)
+                #for annotations in tqdm.tqdm(pool.imap(segment_signal, wav_lst), 
+                #                             total=len(wav_lst)):
+		# 
+                #    for annotation in annotations:
+                #        f.write(annotation)
+                for wav_entry in wav_lst:
+                   annotations = segment_signal(wav_entry)
+                   for annotation in annotations:
+                       f.write(annotation)
         else:
             print('[!] Found existing {} file, proceeding with it'.format(file_out))
     
@@ -197,7 +204,7 @@ def main(opts):
                     segment = signal[int(float(beg_samp)):int(float(end_samp))]
                     out_wav = wav_file.replace('.wav',  '-' + str(seg_id) + '.wav')
                     path_out = os.path.join(opts.out_root, meetpath, out_wav)
-                    print ('\tExporting IHM segment {}'.format(path_out))
+                    #print ('\tExporting IHM segment {}'.format(path_out))
                     sf.write(path_out, segment, fs)
                     file2spkidx[out_wav] = wav_file.replace('.wav', '')
 
@@ -220,7 +227,7 @@ def main(opts):
                         wav_file_basename = wav_file.replace('.wav','')
                         wav_out = "{}-{}.Arr1-0{}.wav".format(wav_file_basename, seg_id, sdm)
                         path_out = os.path.join(opts.out_root, meetpath, wav_out)
-                        print ('\tExporting SDM segment {}'.format(path_out))
+                        #print ('\tExporting SDM segment {}'.format(path_out))
                         sf.write(path_out, segment, fs)
                         file2spkidx[wav_out] = wav_file_basename
             end_t = timer()
@@ -238,7 +245,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--ami_meeting_ids', type=str, default='ami_split_train.list')
     parser.add_argument('--data_root', type=str, default=None)
-    parser.add_argument('--num_workers', type=int, default=5)
+    parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--out_root', type=str, default=None,
                         help='Directory where files will be stored '
                              '(Def: None).')

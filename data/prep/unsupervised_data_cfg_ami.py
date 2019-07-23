@@ -68,7 +68,7 @@ def parse_list(file_in, opts):
 
 def mk_ami_path(utt):
     bsn = os.path.basename(utt)
-    match = re.match(r'(.*)\..*', bsn)
+    match = re.match(r'(.*)\.Headset.*', bsn)
     meetid = None
     if match is not None:
         meetid = match.group(1)
@@ -100,7 +100,7 @@ def main(opts):
                 'speakers':[]}
 
     # get train / valid keys split
-    keys = utt2spk.keys()
+    keys = list(utt2spk.keys())
     shuffle(keys)
     N_valid_files = int(len(keys) * opts.val_ratio)
     valid_keys = keys[:N_valid_files]
@@ -124,7 +124,7 @@ def main(opts):
         data_cfg['train']['data'].append(entry)
 
         train_dur += get_file_dur(os.path.join(opts.data_root,
-                                                   ihm_utt))
+                                                   mk_ami_path(ihm_utt)))
     data_cfg['train']['total_wav_dur'] = train_dur
     print()
 
@@ -146,7 +146,7 @@ def main(opts):
         data_cfg['valid']['data'].append(entry)
         
         valid_dur += get_file_dur(os.path.join(opts.data_root,
-                                                   ihm_utt))
+                                                   mk_ami_path(ihm_utt)))
     data_cfg['valid']['total_wav_dur'] = valid_dur
     print()
 
@@ -169,7 +169,7 @@ def main(opts):
         data_cfg['test']['data'].append(entry)
         
         test_dur += get_file_dur(os.path.join(opts.data_root,
-                                                   ihm_utt))
+                                                   mk_ami_path(ihm_utt)))
     data_cfg['test']['total_wav_dur'] = test_dur
     print()
 
