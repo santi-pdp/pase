@@ -231,7 +231,10 @@ class aspp_res_encoder(Model):
         self.rnn_conv = rnn_conv
         assert (self.rnn_pool and (self.rnn_add or self.rnn_conv)) or not self.rnn_pool
 
-        self.conv1 = nn.Conv1d(2 * hidden_dim, hidden_dim, 1, bias=False)
+        if self.rnn_conv:
+            self.conv1 = nn.Sequential(nn.Conv1d(2 * hidden_dim, hidden_dim, 1, bias=False),
+                                       nn.BatchNorm1d(hidden_dim),
+                                       nn.ReLU(hidden_dim))
 
         if rnn_pool:
             self.rnn = build_rnn_block(hidden_dim, hidden_dim // 2,
