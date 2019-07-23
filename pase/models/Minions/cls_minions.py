@@ -20,6 +20,9 @@ def cls_worker_maker(cfg, emb_dim):
     elif cfg["name"] == "spc":
         return SPC(cfg, emb_dim)
 
+    elif cfg["name"] == "gap":
+        return Gap(cfg, emb_dim)
+
     else:
         return minion_maker(cfg)
 
@@ -85,4 +88,19 @@ class SPC(Model):
         y = self.minion(x)
         label = make_labels(y).to(device)
         return  y, label
+
+class Gap(Model):
+
+    def __init__(self, cfg, emb_dim):
+        super().__init__(name=cfg['name'])
+
+        cfg['num_inputs'] = 2 * emb_dim
+
+        self.minion = minion_maker(cfg)
+        self.loss = self.minion.loss
+
+    def forward(self, x, device):
+        y, label = self.minion(x)
+        label = label.float().to(device)
+        return y, label
 

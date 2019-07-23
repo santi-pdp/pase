@@ -1,5 +1,4 @@
 import torch.nn as nn
-from ..frontend import WaveFe
 from ..modules import *
 from ..aspp import ASPP, aspp_resblock
 import torch.nn.functional as F
