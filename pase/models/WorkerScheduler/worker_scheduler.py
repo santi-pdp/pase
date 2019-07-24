@@ -67,7 +67,7 @@ class backprop_scheduler(object):
         frontend_optim.step()
         losses["total"] = tot_loss
 
-        return losses
+        return losses, 1
 
 
     def _select_one(self, preds, label, cls_optim, regr_optim, frontend_optim, device):
@@ -101,7 +101,7 @@ class backprop_scheduler(object):
         frontend_optim.step()
         losses["total"] = tot_loss
 
-        return losses
+        return losses, 1
 
     def _select_half(self, preds, label, cls_optim, regr_optim, frontend_optim, device):
         num_worker = len(self.model.regression_workers) + len(self.model.classification_workers)
@@ -144,7 +144,7 @@ class backprop_scheduler(object):
         frontend_optim.step()
         losses["total"] = tot_loss
 
-        return losses
+        return losses, 1
 
     def _drop_out(self, preds, label, cls_optim, regr_optim, frontend_optim, dropout_rate, device):
         loss_tmp = torch.zeros(7, requires_grad=True).to(device)
@@ -195,7 +195,7 @@ class backprop_scheduler(object):
         frontend_optim.step()
         losses["total"] = tot_loss
 
-        return losses
+        return losses, 1
 
     def _hyper_volume(self, preds, label, cls_optim, regr_optim, frontend_optim, delta ,device):
         assert delta > 1
@@ -223,7 +223,9 @@ class backprop_scheduler(object):
 
         #sum up losses
         eta = delta * torch.max(loss_tmp.detach()).item()
-        hyper_votolume = - torch.sum(torch.log(eta - loss_tmp + 1e-6))
+        hyper_votolume = torch.sum(loss_tmp)
+
+        alpha = 1 / (eta - loss_tmp + 1e-6)
 
         hyper_votolume.backward()
 
@@ -236,7 +238,7 @@ class backprop_scheduler(object):
         frontend_optim.step()
         losses["total"] = hyper_votolume
 
-        return losses
+        return losses, alpha
 
     def _softmax(self, preds, label, cls_optim, regr_optim, frontend_optim, temperture, device):
         assert temperture > 0
@@ -266,10 +268,12 @@ class backprop_scheduler(object):
 
         tot_loss = 0
         for worker in self.model.classification_workers:
-            tot_loss += alpha[idx] * losses[worker.name]
+            # tot_loss += alpha[idx] * losses[worker.name]
+            tot_loss += losses[worker.name]
             idx += 1
         for worker in self.model.regression_workers:
-            tot_loss += alpha[idx] * losses[worker.name]
+            # tot_loss += alpha[idx] * losses[worker.name]
+            tot_loss += losses[worker.name]
             idx += 1
 
         # tot_loss = torch.sum(alpha.detach() * loss_vec)
@@ -285,7 +289,7 @@ class backprop_scheduler(object):
         frontend_optim.step()
         losses["total"] = tot_loss
 
-        return losses
+        return losses, alpha
 
     def _online_adaptive(self, preds, label, cls_optim, regr_optim, frontend_optim, temperture, alpha, device):
 
@@ -319,7 +323,7 @@ class backprop_scheduler(object):
             self.pi = F.softmax(temperture * Q_t, dim=0)
 
 
-        tot_loss = torch.sum(-R_t * self.pi)
+        tot_loss = torch.sum(loss_tmp)
         tot_loss.backward()
 
         self.last_loss = loss_tmp.detach()
@@ -334,7 +338,7 @@ class backprop_scheduler(object):
         frontend_optim.step()
         losses["total"] = tot_loss
 
-        return losses
+        return losses, self.pi
 
     def _MGDA(self, preds, label, cls_optim, regr_optim, frontend_optim, batch, device):
         frontend_optim.zero_grad()
@@ -343,7 +347,7 @@ class backprop_scheduler(object):
         grads = {}
         for worker in self.model.classification_workers:
             self.model.zero_grad()
-            h, chunk, preds, labels = self.model.forward(batch, device)
+            h, chunk, preds, labels = self.model.forward(batch, 1, device)
             # print(worker.name)
             loss = worker.loss(preds[worker.name], label[worker.name])
             losses[worker.name] = loss
@@ -351,7 +355,7 @@ class backprop_scheduler(object):
 
         for worker in self.model.regression_workers:
             self.model.zero_grad()
-            h, chunk, preds, labels = self.model.forward(batch, device)
+            h, chunk, preds, labels = self.model.forward(batch, 1, device)
             # print(worker.name)
             loss = worker.loss(preds[worker.name], label[worker.name])
             losses[worker.name] = loss
@@ -360,22 +364,27 @@ class backprop_scheduler(object):
 
 
         sol, min_norm = MinNormSolver.find_min_norm_element([grads[worker].unsqueeze(0) for worker, _ in grads.items()])
+        alpha = sol
 
         tot_loss = 0
-        idx = 0
+        # idx = 0
 
         self.model.zero_grad()
-        h, chunk, preds, labels = self.model.forward(batch, device)
+        h, chunk, preds, labels = self.model.forward(batch, 1, device)
         for worker in self.model.classification_workers:
             loss = worker.loss(preds[worker.name], label[worker.name])
             losses[worker.name] = loss
-            tot_loss += sol[idx] * loss
+            tot_loss += loss
+            # tot_loss += sol[idx] * loss
 
 
         for worker in self.model.regression_workers:
             loss = worker.loss(preds[worker.name], label[worker.name])
             losses[worker.name] = loss
-            tot_loss += sol[idx] * loss
+            tot_loss += loss
+            # tot_loss += sol[idx] * loss
+
+
 
 
         tot_loss.backward()
@@ -390,7 +399,7 @@ class backprop_scheduler(object):
         frontend_optim.step()
         losses["total"] = tot_loss
 
-        return losses
+        return losses, alpha
 
     def _get_gen_grads(self, loss_):
         # grads = torch.autograd.grad(outputs=loss_, inputs=self.model.frontend.parameters())

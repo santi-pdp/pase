@@ -12,6 +12,7 @@ import random
 from random import shuffle
 from pase.models.discriminator import *
 import torch.optim as optim
+from torch.autograd import Function
 
 
 def pase_parser(cfg_fname, batch_acum=1, device='cpu', do_losses=True,
@@ -201,4 +202,20 @@ def sample_probable(p):
 def zerospeech(shape, eps=1e-14):
     S = np.random.randn(shape) * eps
     return S.astype(np.float32)
+
+
+class ScaleGrad(Function):
+
+    @staticmethod
+    def forward(ctx, x, alpha):
+        ctx.alpha = alpha
+
+        return x
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        output = grad_output * ctx.alpha
+
+        return output, None
+
 
