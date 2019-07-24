@@ -174,7 +174,7 @@ class SingleChunkWav(object):
         # assert x.dim() == 1, x.size()
 
     ##@profile
-    def select_chunk(self, wav, ret_bounds=False):
+    def select_chunk(self, wav, ret_bounds=False, reuse_bounds=None):
         # select random index
         chksz = self.chunk_size
         if len(wav) <= chksz:
@@ -182,6 +182,16 @@ class SingleChunkWav(object):
             P = chksz - len(wav)
             chk = F.pad(wav.view(1, 1, -1), (0, P), mode='reflect').view(-1)
             idx = 0
+        elif reuse_bounds is not None:
+            idx, end_i = reuse_bounds
+            assert idx >= 0 and \
+                   idx < end_i and \
+                   wav.shape[0] >= end_i and \
+                   chksz == end_i - idx, (
+               "Cannot reuse_bounds {} for chksz {} and wav of shape {}"\
+                         .format(reuse_bounds, chksz, wav.shape)
+            )
+            chk = wav[idx:idx + chksz]
         else:
             # idxs = list(range(wav.size(0) - chksz))
             # idx = random.choice(idxs)
@@ -204,7 +214,8 @@ class SingleChunkWav(object):
         #its backward compatible with single chan
         if 'raw_clean' in pkg and pkg['raw_clean'] is not None:
             raw_clean = pkg['raw_clean']
-            pkg['cchunk'] = raw_clean[beg_i:end_i]
+            pkg['cchunk'] = self.select_chunk(raw_clean,\
+                                    reuse_bounds=(beg_i, end_i))
         if self.random_scale:
             pkg['chunk'] = norm_and_scale(pkg['chunk'])
             if 'cchunk' in pkg:
@@ -244,7 +255,7 @@ class MIChunkWav(SingleChunkWav):
         # script
         if 'raw_clean' in pkg and pkg['raw_clean'] is not None:
             raw_clean = pkg['raw_clean']
-            pkg['cchunk'] = raw_clean[beg_i:end_i]
+            pkg['cchunk'] = self.select_chunk(raw_clean, reuse_bounds=(beg_i, end_i))
         if 'raw_ctxt' in pkg and pkg['raw_ctxt'] is not None:
             raw_ctxt = pkg['raw_ctxt']
         else:

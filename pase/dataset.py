@@ -349,6 +349,7 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
             neighbors = self.neighbor_prefixes[prefix]
             # print('Wname: ', wname)
             # delete current file
+            # print ('Uttn {}, Pref {}'.format(uttname, prefix))
             # print('Found nehg: ', neighbors)
             neighbors.remove(uttname)
             # print('Found nehg: ', neighbors)
@@ -398,19 +399,34 @@ class AmiSegTupleWavDataset(PairWavDataset):
     4th is a random (ideally) non-related chunk 
     Note, this can also only work with only ihms (when pair_sdms=None)
     """
-    def __init__(self, ihm2sdm=['1','3','5','7'], *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert self.zero_speech_p == 0, (
             "Zero speech mode is not supported for AMI as of now"
         )
-        self.rec = re.compile(r'.*Headset\-\d\-(\d+).wav')
-        self.ihm2sdm = ihm2sdm
+        assert 'ihm2sdm' in kwargs, (
+            "Need to provide ihm2sdm for AMI dataset"
+        )
+        self.rec = re.compile(r'(\d+).wav')
+        self.ihm2sdm = kwargs['ihm2sdm'].split(',')
         if self.ihm2sdm is not None and len(self.ihm2sdm) > 0:
             print ('Parallel mode enabled, will pair ihm with sdms: {}'.format(self.ihm2sdm))
         else:
             print ('Single channel mode enabled, will feed only ihm data')
         # pre-cache prefixes to load from dictionary quicker
         self.neighbor_prefixes = {}
+        lost_segs, lost_indices = [], []
+
+        if len(self.ihm2sdm) > 0:
+            for index, wav in enumerate(self.wavs):
+                for sdm_idx in self.ihm2sdm:
+                    if sdm_idx not in wav:
+                        lost_segs.append(wav['filename'])
+                        lost_indices.append(index)
+            print ('In total {} sdm segments were missing and removed'.format(len(lost_segs)))
+            for index in sorted(lost_indices, reverse=True):
+                del self.wavs[index]
+
         for idx, wav in enumerate(self.wavs):
             fname = wav['filename']
             prefix = self.rec.sub('', fname)
@@ -443,8 +459,9 @@ class AmiSegTupleWavDataset(PairWavDataset):
         neighbors = self.neighbor_prefixes[prefix]
         # print('Wname: ', wname)
         # delete current file
-        # print('Found nehg: ', neighbors)
-        neighbors.remove(uttname)
+        #print('Found nehg: ', neighbors)
+        #print ("Uttn {}, wn {}, pref {}".format(uttname, wname, prefix))
+        neighbors.remove((index, uttname))
         # print('Found nehg: ', neighbors)
         # pick random one if possible, otherwise it will be empty
         # only sample the for now candidate, we will load the wav
@@ -463,6 +480,13 @@ class AmiSegTupleWavDataset(PairWavDataset):
         if len(self.ihm2sdm) > 0:
             #pick random distant channel id from which to load stuff
             idx = random.choice(self.ihm2sdm)
+            #print ('Utt {} idx is {}.'.format(uttname, idx))
+            #print ('Index {} and cfg {}'.format(index, self.wavs[index]))
+            #print ('Rindex {} and cfg {}'.format(self.wavs[rindex]))
+            #if idx not in self.wavs[index]:
+            #    print ('Opps {} not found in {}'.format(idx, self.wavs[index]))
+            #if idx not in self.wavs[rindex]:
+            #    print ('Oops {} not found in {}'.format(idx, self.wavs[rindex]))
             #load waveform sdm eqivalent for ihm
             sdm_fname = os.path.join(self.data_root, self.wavs[index][idx])
             sdm_wav = self.retrieve_cache(sdm_fname, self.wav_cache)
@@ -478,11 +502,11 @@ class AmiSegTupleWavDataset(PairWavDataset):
                 cwav = sdm_wav
             # Note: this one is quite dirty trick, but anyways for now
             # since we have parallel versions of data (i.e. corrputed naturally)
-            # we need to extract self-supervision targets for clean, which is 
+            # we need to extract self-supervision targets for clean, which is
             # assumed to be in chunk in all transforms. Thus, we keep it like this
             # and pass ihm wav in raw (so targets get extracted), we also pass
             # wav_sdm in raw_clean. After the transforms we swap them so sdm
-            # (not ihm) chunk gets fed into the model, and ihm is preserved in cchunk 
+            # (not ihm) chunk gets fed into the model, and ihm is preserved in cchunk
             pkg = {'raw': wav, 'raw_rand': rand_sdm_wav, 'raw_ctxt': cwav,
                'uttname': uttname, 'split': self.split, 'raw_clean':sdm_wav}
         else:
@@ -501,16 +525,19 @@ class AmiSegTupleWavDataset(PairWavDataset):
         if self.transform is not None:
             pkg = self.transform(pkg)
 
-        if 'cchunk' not in pkg:
+        if 'cchunk' in pkg:
             chunk = pkg['cchunk'].squeeze(0)
             pkg['cchunk'] = pkg['chunk']
             pkg['chunk'] = chunk
+        else:
+            pkg['cchunk'] = pkg['chunk'].squeeze(0)
+
         # initialize overlap label
         pkg['overlap'] = torch.zeros(len(pkg['chunk']) // pkg['dec_resolution']).float()
 
         if self.distortion_transforms:
             pkg = self.distortion_transforms(pkg)
-    
+
         # sf.write('/tmp/ex_chunk.wav', pkg['chunk'], 16000)
         # sf.write('/tmp/ex_cchunk.wav', pkg['cchunk'], 16000)
         # raise NotImplementedError

@@ -164,14 +164,20 @@ def build_dataset_providers(opts, minions_cfg):
                 "Spec one dtrans_cfg per data_root (can be the same) or None"
             )
         #make sure defaults for dataset has been properly set
-        if len(opts.datasets) < dr:
+        if len(opts.dataset) < dr:
             print ('Provided fewer dataset options than data_root. Repeating default.')
             for _ in range(len(opts.datasets), dr):
-                opts.datasets.append('LibriSpeechSegTupleWavDataset')
+                opts.dataset.append('LibriSpeechSegTupleWavDataset')
         if len(opts.zero_speech_p) < dr:
             print ('Provided fewer zero_speech_p options than data_roots. Repeating default.')
             for _ in range(len(opts.zero_speech_p), dr):
                 opts.zero_speech_p.append(0)
+
+    #this is to set default in proper way, as argparse
+    #uses whatever is set as default in append mode as
+    #initial values, which is bad
+    if len(opts.dataset) < 1:
+        opts.dataset.append('LibriSpeechSegTupleWavDataset')
 
     #TODO: allow for different base transforms for different datasets
     trans = make_transforms(opts, minions_cfg)
@@ -199,6 +205,7 @@ def build_dataset_providers(opts, minions_cfg):
             zp_trans = None
         # Build Dataset(s) and DataLoader(s)
         dataset = getattr(pase.dataset, opts.dataset[idx])
+        print ('Dataset name {} and opts {}'.format(dataset, opts.dataset[idx]))
         dset = dataset(opts.data_root[idx], opts.data_cfg[idx], 'train',
                        transform=trans,
                        noise_folder=opts.noise_folder,
@@ -331,9 +338,9 @@ if __name__ == '__main__':
                               'mutliple datasets, provide config multiple times')
     parser.add_argument('--zerospeech_cfg', action='append', default=None)
     parser.add_argument('--zero_speech_p', action='append', type=float,
-                        default=[0.1])
+                        default=[0.0])
     parser.add_argument('--dataset', action='append',
-                        default=['LibriSpeechSegTupleWavDataset'],
+                        default=[],
                         help='Dataset to be used: '
                              '(1) PairWavDataset, '
                              '(2) LibriSpeechSegTupleWavDataset, '
@@ -423,7 +430,7 @@ if __name__ == '__main__':
     parser.add_argument('--att_K', type=int, help="top K indices to select for attention")
 
     #this one is for AMI/ICSI parallel datasets, so one can selectively pick sdm chunks 
-    parser.add_argument('--ihm2sdms', type=str, default='1,3,5,7',
+    parser.add_argument('--ihm2sdm', type=str, default='1,3,5,7',
                             help="Pick random of one of these channels."
                                  "Can be empty or None in which case only"
                                  "ihm channel gets used for chunk and cchunk")
