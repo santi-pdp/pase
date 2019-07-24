@@ -179,7 +179,9 @@ def build_dataset_providers(opts, minions_cfg):
                 print(dist_trans)
         else:
             dist_trans = None
-        if opts.zerospeech_cfg is not None and opts.zero_speech_p[idx] > 0:
+        if opts.zerospeech_cfg is not None 
+            and len(opts.zero_speech_p) > 0 
+              and opts.zero_speech_p[idx] > 0:
             with open(opts.zerospeech_cfg[idx], 'r') as zsp_cfg:
                 ztr = json.load(zsp_cfg)
                 zp_trans = config_zerospeech(**ztr)
