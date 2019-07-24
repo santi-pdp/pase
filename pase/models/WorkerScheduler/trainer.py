@@ -144,6 +144,7 @@ class trainer(object):
         # init backprop scheduler
         assert backprop_mode is not None
         self.backprop = backprop_scheduler(self.model, mode=backprop_mode)
+        self.alphaSG = 1
 
         if backprop_mode == "dropout":
             print(backprop_mode)
@@ -211,10 +212,10 @@ class trainer(object):
                         batch = next(iterator)
 
                     # inference
-                    h, chunk, preds, labels = self.model.forward(batch, device)
+                    h, chunk, preds, labels = self.model.forward(batch, self.alphaSG, device)
 
                     # backprop using scheduler
-                    losses = self.backprop(preds,
+                    losses, self.alphaSG = self.backprop(preds,
                                            labels,
                                             self.cls_optim,
                                             self.regr_optim,

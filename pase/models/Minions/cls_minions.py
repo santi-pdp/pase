@@ -49,10 +49,10 @@ class LIM(Model):
         self.minion = minion_maker(cfg)
         self.loss = self.minion.loss
 
-    def forward(self, x, device):
+    def forward(self, x, alpha, device):
         x_pos, x_neg = make_samples(x)
         x = torch.cat((x_pos, x_neg), dim=0).to(device)
-        y = self.minion(x)
+        y = self.minion(x, alpha)
         label = make_labels(y).to(device)
         return y, label
 
@@ -66,11 +66,11 @@ class GIM(Model):
         self.minion = minion_maker(cfg)
         self.loss = self.minion.loss
 
-    def forward(self, x, device):
+    def forward(self, x, alpha, device):
         x_pos, x_neg = make_samples(x)
         x = torch.cat((x_pos, x_neg), dim=0).to(device)
         x = torch.mean(x, dim=2, keepdim=True)
-        y = self.minion(x)
+        y = self.minion(x, alpha)
         label = make_labels(y).to(device)
         return y, label
 
@@ -84,8 +84,8 @@ class SPC(Model):
 
         self.loss = self.minion.loss
 
-    def forward(self, x, device):
-        y = self.minion(x)
+    def forward(self, x, alpha, device):
+        y = self.minion(x, alpha)
         label = make_labels(y).to(device)
         return  y, label
 
@@ -99,8 +99,8 @@ class Gap(Model):
         self.minion = minion_maker(cfg)
         self.loss = self.minion.loss
 
-    def forward(self, x, device):
-        y, label = self.minion(x)
+    def forward(self, x, alpha, device):
+        y, label = self.minion(x, alpha)
         label = label.float().to(device)
         return y, label
 
