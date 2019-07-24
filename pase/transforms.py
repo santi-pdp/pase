@@ -231,6 +231,13 @@ class MIChunkWav(SingleChunkWav):
         pkg['chunk'] = chunk
         pkg['chunk_beg_i'] = beg_i
         pkg['chunk_end_i'] = end_i
+        #added for parallel like corpora with close and distant mics
+        #we do not make asserts here for now if raw is 
+        # exactly same as raw_clean, as this was up to segmentation
+        # script
+        if 'raw_clean' in pkg and pkg['raw_clean'] is not None:
+            raw_clean = pkg['raw_clean']
+            pkg['cchunk'] = raw_clean[beg_i:end_i]
         if 'raw_ctxt' in pkg and pkg['raw_ctxt'] is not None:
             raw_ctxt = pkg['raw_ctxt']
         else:
@@ -244,6 +251,8 @@ class MIChunkWav(SingleChunkWav):
             pkg['chunk'] = norm_and_scale(pkg['chunk'])
             pkg['chunk_ctxt'] = norm_and_scale(pkg['chunk_ctxt'])
             pkg['chunk_rand'] = norm_and_scale(pkg['chunk_rand'])
+            if 'cchunk' in pkg:
+                pkg['cchunk'] = norm_and_scale(pkg['cchunk'])
         # specify decimated resolution to be 1 (no decimation) so far
         pkg['dec_resolution'] = 1
         return pkg

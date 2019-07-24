@@ -448,7 +448,7 @@ class AmiSegTupleWavDataset(PairWavDataset):
                  zero_speech_p=0,
                  zero_speech_transform=None,
                  preload_wav=False,
-                 pair_sdms_from=[1,3,5,7]):
+                 ihm2sdm=['1','3','5','7']):
         super().__init__(data_root, data_cfg_file, split, transform=transform, 
                          sr=sr, preload_wav=preload_wav,
                          return_uttname=return_uttname,
@@ -461,56 +461,90 @@ class AmiSegTupleWavDataset(PairWavDataset):
                          zero_speech_p=zero_speech_p,
                          zero_speech_transform=zero_speech_transform,
                          verbose=verbose)
-        self.rec = re.compile(r'(\d+).wav')
+        assert self.zero_speech_p == 0, (
+            "Zero speech mode is not supported for AMI as of now"
+        )
+        self.rec = re.compile(r'.*Headset\-\d\-(\d+).wav')
+        self.ihm2sdm = ihm2sdm
         # pre-cache prefixes to load from dictionary quicker
         self.neighbor_prefixes = {}
-        for wav in self.wavs:
+        for idx, wav in enumerate(self.wavs):
             fname = wav['filename']
             prefix = self.rec.sub('', fname)
             if prefix not in self.neighbor_prefixes:
                 self.neighbor_prefixes[prefix] = []
-            self.neighbor_prefixes[prefix].append(fname)
+            self.neighbor_prefixes[prefix].append((idx, fname))
         print('Found {} prefixes in '
               'utterances'.format(len(self.neighbor_prefixes)))
 
     def __getitem__(self, index):
-        # Load current wav or generate the zero-version
-        if sample_probable(self.zero_speech_p):
-            ZERO_SPEECH = True
-            wav = zerospeech(int(5 * 16e3))
-            cwav = wav
-            uttname = 'zerospeech.wav'
-        else:
-            ZERO_SPEECH = False
-            uttname = self.wavs[index]['filename']
-            # Here we select the three wavs.
-            # (1) Current wav selection
-            wname = os.path.join(self.data_root, uttname)
-            wav = self.retrieve_cache(wname, self.wav_cache)
-            # (2) Context wav selection by utterance name pattern. If
-            # no other sub-index is found, the same as current wav is returned
-            prefix = self.rec.sub('', uttname)
-            neighbors = self.neighbor_prefixes[prefix]
-            # print('Wname: ', wname)
-            # delete current file
-            # print('Found nehg: ', neighbors)
-            neighbors.remove(uttname)
-            # print('Found nehg: ', neighbors)
-            # pick random one if possible, otherwise it will be empty
-            if len(neighbors) > 0:
-                cwname = os.path.join(self.data_root, random.choice(neighbors))
-                cwav = self.retrieve_cache(cwname, self.wav_cache)
-            else:
-                cwav = wav
+        # Load current wav 
+        # Note, this provided works with parlallel like data (i.e
+        # the one where you have two or more versions of the same
+        # signal, typically from multi-mic setups. As PASE relis on
+        # clean and [possibly] distorted signal, the following code
+        # reads both from parallel data. Notice, clean variant is only
+        # used to self-supervised minions, thus is not fpropped through
+        # the networks 
+
+        # I. get and load clean (here ihm) variant as in other provider,
+        # we are gonna need it anyways
+        uttname = self.wavs[index]['filename']
+        # Here we select the three wavs.
+        # (1) Current wav selection
+        wname = os.path.join(self.data_root, uttname)
+        wav = self.retrieve_cache(wname, self.wav_cache)
+        # (2) Context wav selection by utterance name pattern. If
+        # no other sub-index is found, the same as current wav is returned
+        prefix = self.rec.sub('', uttname)
+        neighbors = self.neighbor_prefixes[prefix]
+        # print('Wname: ', wname)
+        # delete current file
+        # print('Found nehg: ', neighbors)
+        neighbors.remove(uttname)
+        # print('Found nehg: ', neighbors)
+        # pick random one if possible, otherwise it will be empty
+        # only sample the for now candidate, we will load the wav
+        # depending on whether sdm or ihm is needed
+        choice = None
+        if len(neighbors) > 0:
+            choice = random.choice(neighbors)
+
         # (2) Random wav selection for out of context sample
         # create candidate indices without current index
         indices = list(range(len(self.wavs)))
         indices.remove(index)
         rindex = random.choice(indices)
-        rwname = os.path.join(self.data_root, self.wavs[rindex]['filename'])
-        rwav = self.retrieve_cache(rwname, self.wav_cache)
-        pkg = {'raw': wav, 'raw_rand': rwav, 'raw_ctxt': cwav,
-               'uttname': uttname, 'split': self.split}
+
+        # II. depending on config, load either sdm or ihm wavs
+        if len(self.ihm2sdm) > 0:
+            #pick random distant channel id from which to load stuff
+            idx = random.choice(self.ihm2sdm)
+            #load waveform sdm eqivalent for ihm
+            sdm_fname = os.path.join(self.data_root, self.wavs[index][idx])
+            sdm_wav = self.retrieve_cache(sdm_fname, self.wav_cache)
+            #load waveform sdm random chunk
+            rsdm_fname = os.path.join(self.data_root, self.wavs[rindex][idx])
+            rand_sdm_wav = self.retrieve_cache(rsdm_fname, self.wav_cache)
+            #load context wavform, given choice above
+            if choice is not None:
+                cindex, fname = choice
+                cwname = os.path.join(self.data_root, self.wavs[cindex][idx])
+                cwav = self.retrieve_cache(cwname, self.wav_cache)
+            else:
+                cwav = sdm_wav
+            pkg = {'raw': sdm_wav, 'raw_rand': rand_sdm_wav, 'raw_ctxt': cwav,
+               'uttname': uttname, 'split': self.split, 'raw_clean': wav}
+        else:
+            if choice is not None:
+                cindex, fname = choice
+                cwname = os.path.join(self.data_root, fname)
+                cwav = self.retrieve_cache(cwname, self.wav_cache)
+            else:
+                cwav = wav
+            pkg = {'raw': wav, 'raw_rand': rwav, 'raw_ctxt': cwav,
+                    'uttname': uttname, 'split': self.split}
+
         # Apply the set of 'target' transforms on the clean data
         if self.transform is not None:
             pkg = self.transform(pkg)
@@ -519,11 +553,9 @@ class AmiSegTupleWavDataset(PairWavDataset):
         # initialize overlap label
         pkg['overlap'] = torch.zeros(len(pkg['chunk']) // pkg['dec_resolution']).float()
 
-        if self.distortion_transforms and not ZERO_SPEECH:
+        if self.distortion_transforms:
             pkg = self.distortion_transforms(pkg)
-        
-        if self.zero_speech_transform and ZERO_SPEECH:
-            pkg = self.zero_speech_transform(pkg)
+    
 
         # sf.write('/tmp/ex_chunk.wav', pkg['chunk'], 16000)
         # sf.write('/tmp/ex_cchunk.wav', pkg['cchunk'], 16000)

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-stage=2
+stage=3
 
 data_root=/export/corpora/ami
 out_root=/export/team-mic/corpora/ami
@@ -33,4 +33,20 @@ if [ $stage -le 2 ]; then
    --test_scp ami_test.scp \
    --map_ihm2sdm 1,3,5,7 \
    --cfg_file ami_data_ihm_sdm1357.cfg
+fi
+
+if [ $stage -le 3 ]; then
+
+  python ../../make_trainset_statistics.py \
+    --data_root $out_root \
+    --data_cfg ami_data_ihm_sdm1357.cfg \
+    --exclude_keys 'chunk_rand', 'chunk_ctxt'
+    --out_file ami_ihm_sdm_stats.pkl
+
+  python ../../make_trainset_statistics.py \
+    --data_root $out_root \
+    --data_cfg ami_data_ihm_sdm1357.cfg \
+    --exclude_keys 'chunk', 'chunk_rand', 'chunk_ctxt'
+    --out_file ami_ihm_stats.pkl
+
 fi
