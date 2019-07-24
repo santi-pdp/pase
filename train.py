@@ -264,7 +264,7 @@ def train(opts):
     dloader = DataLoader(dset, batch_size=opts.batch_size,
                          shuffle=True, collate_fn=DictCollater(),
                          num_workers=opts.num_workers,drop_last=True,
-                         pin_memory=CUDA)
+                         pin_memory=False)
     # Compute estimation of bpe. As we sample chunks randomly, we
     # should say that an epoch happened after seeing at least as many
     # chunks as total_train_wav_dur // chunk_size
