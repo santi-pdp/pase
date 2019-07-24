@@ -207,7 +207,8 @@ def build_dataset_providers(opts, minions_cfg):
                        distortion_transforms=dist_trans,
                        zero_speech_p=opts.zero_speech_p[idx],
                        zero_speech_transform=zp_trans,
-                       preload_wav=opts.preload_wav)
+                       preload_wav=opts.preload_wav
+                       ihm2sdm=opts.ihm2sdm)
 
         dsets.append(dset)
 
