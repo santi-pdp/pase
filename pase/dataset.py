@@ -156,7 +156,8 @@ class WavDataset(Dataset):
                  distortion_probability=0.4,
                  zero_speech_p=0,
                  zero_speech_transform=None,
-                 verbose=True):
+                 verbose=True,
+                 *args, **kwargs):
         # sr: sampling rate, (Def: None, the one in the wav header)
         self.sr = sr
         self.data_root = data_root
@@ -257,30 +258,8 @@ class PairWavDataset(WavDataset):
         chosen one.
     """
 
-    def __init__(self, data_root, data_cfg_file, split,
-                 transform=None, sr=None, verbose=True,
-                 return_uttname=False,
-                 transforms_cache=None,
-                 distortion_transforms=None,
-                 whisper_folder=None,
-                 noise_folder=None,
-                 cache_on_load=False,
-                 distortion_probability=0.4,
-                 zero_speech_p=0,
-                 zero_speech_transform=None,
-                 preload_wav=False):
-        super().__init__(data_root, data_cfg_file, split, transform=transform,
-                         sr=sr, preload_wav=preload_wav,
-                         return_uttname=return_uttname,
-                         transforms_cache=transforms_cache,
-                         distortion_transforms=distortion_transforms,
-                         whisper_folder=whisper_folder,
-                         noise_folder=noise_folder,
-                         cache_on_load=cache_on_load,
-                         distortion_probability=distortion_probability,
-                         zero_speech_p=zero_speech_p,
-                         zero_speech_transform=zero_speech_transform,
-                         verbose=verbose)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.rwav_cache = {}
 
     def __getitem__(self, index):
@@ -336,30 +315,8 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
         following the filename is returned too as random context.
     """
 
-    def __init__(self, data_root, data_cfg_file, split,
-                 transform=None, sr=None, verbose=True,
-                 return_uttname=False,
-                 transforms_cache=None,
-                 distortion_transforms=None,
-                 whisper_folder=None,
-                 noise_folder=None,
-                 cache_on_load=False,
-                 distortion_probability=0.4,
-                 zero_speech_p=0,
-                 zero_speech_transform=None,
-                 preload_wav=False):
-        super().__init__(data_root, data_cfg_file, split, transform=transform,
-                         sr=sr, preload_wav=preload_wav,
-                         return_uttname=return_uttname,
-                         transforms_cache=transforms_cache,
-                         distortion_transforms=distortion_transforms,
-                         whisper_folder=whisper_folder,
-                         noise_folder=noise_folder,
-                         cache_on_load=cache_on_load,
-                         distortion_probability=distortion_probability,
-                         zero_speech_p=zero_speech_p,
-                         zero_speech_transform=zero_speech_transform,
-                         verbose=verbose)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.rec = re.compile(r'(\d+).wav')
         # pre-cache prefixes to load from dictionary quicker
         self.neighbor_prefixes = {}
@@ -441,36 +398,17 @@ class AmiSegTupleWavDataset(PairWavDataset):
     4th is a random (ideally) non-related chunk 
     Note, this can also only work with only ihms (when pair_sdms=None)
     """
-    def __init__(self, data_root, data_cfg_file, split, 
-                 transform=None, sr=None, verbose=True,
-                 return_uttname=False,
-                 transforms_cache=None,
-                 distortion_transforms=None,
-                 whisper_folder=None,
-                 noise_folder=None,
-                 cache_on_load=False,
-                 distortion_probability=0.4,
-                 zero_speech_p=0,
-                 zero_speech_transform=None,
-                 preload_wav=False,
-                 ihm2sdm=['1','3','5','7']):
-        super().__init__(data_root, data_cfg_file, split, transform=transform, 
-                         sr=sr, preload_wav=preload_wav,
-                         return_uttname=return_uttname,
-                         transforms_cache=transforms_cache,
-                         distortion_transforms=distortion_transforms,
-                         whisper_folder=whisper_folder,
-                         noise_folder=noise_folder,
-                         cache_on_load=cache_on_load,
-                         distortion_probability=distortion_probability,
-                         zero_speech_p=zero_speech_p,
-                         zero_speech_transform=zero_speech_transform,
-                         verbose=verbose)
+    def __init__(self, ihm2sdm=['1','3','5','7'], *args, **kwargs):
+        super().__init__(*args, **kwargs)
         assert self.zero_speech_p == 0, (
             "Zero speech mode is not supported for AMI as of now"
         )
         self.rec = re.compile(r'.*Headset\-\d\-(\d+).wav')
         self.ihm2sdm = ihm2sdm
+        if self.ihm2sdm is not None and len(self.ihm2sdm) > 0:
+            print ('Parallel mode enabled, will pair ihm with sdms: {}'.format(self.ihm2sdm))
+        else:
+            print ('Single channel mode enabled, will feed only ihm data')
         # pre-cache prefixes to load from dictionary quicker
         self.neighbor_prefixes = {}
         for idx, wav in enumerate(self.wavs):
@@ -573,7 +511,6 @@ class AmiSegTupleWavDataset(PairWavDataset):
         if self.distortion_transforms:
             pkg = self.distortion_transforms(pkg)
     
-
         # sf.write('/tmp/ex_chunk.wav', pkg['chunk'], 16000)
         # sf.write('/tmp/ex_cchunk.wav', pkg['cchunk'], 16000)
         # raise NotImplementedError
