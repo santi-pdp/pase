@@ -471,6 +471,10 @@ class AmiSegTupleWavDataset(PairWavDataset):
         )
         self.rec = re.compile(r'.*Headset\-\d\-(\d+).wav')
         self.ihm2sdm = ihm2sdm
+        if len(self.ihm2sdm) > 0:
+            print ('Parallel mode enabled, will pair ihm with sdms: {}'.format(self.ihm2sdm))
+        else:
+            print ('Single channel mode enabled, will feed only ihm data')
         # pre-cache prefixes to load from dictionary quicker
         self.neighbor_prefixes = {}
         for idx, wav in enumerate(self.wavs):
