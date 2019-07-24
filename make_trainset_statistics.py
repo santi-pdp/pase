@@ -26,6 +26,16 @@ def build_dataset_providers(opts):
 
     dsets = []
     for idx in range(len(opts.data_root)):
+        dataset = getattr(pase.dataset, opts.dataset[idx])
+        dset = dataset(opts.data_root[idx], opts.data_cfg[idx], 'train',
+                       transform=trans,
+                       noise_folder=opts.noise_folder,
+                       whisper_folder=opts.whisper_folder,
+                       distortion_probability=opts.distortion_p,
+                       distortion_transforms=dist_trans,
+                       zero_speech_p=opts.zero_speech_p[idx],
+                       zero_speech_transform=zp_trans,
+                       preload_wav=opts.preload_wav)
         dset = PairWavDataset(opts.data_root[idx], opts.data_cfg[idx], 'train',
                          transform=trans)
         dsets.append(dset)

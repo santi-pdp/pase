@@ -163,6 +163,13 @@ def build_dataset_providers(opts, minions_cfg):
             assert dr == len(opts.dtrans_cfg), (
                 "Spec one dtrans_cfg per data_root (can be the same) or None"
             )
+        #make sure defaults for dataset has been properly set
+        if len(opts.datasets) < dr:
+            for i in range(len(opts.datasets), dr):
+                opts.datasets.append('LibriSpeechSegTupleWavDataset')
+        if len(opts.zero_speech_p) < dr:
+            for i in range(len(opts.zero_speech_p), dr):
+                opts.zero_speech_p.append(0)
 
     #TODO: allow for different base transforms for different datasets
     trans = make_transforms(opts, minions_cfg)
