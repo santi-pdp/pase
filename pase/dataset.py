@@ -407,9 +407,15 @@ class AmiSegTupleWavDataset(PairWavDataset):
         assert 'ihm2sdm' in kwargs, (
             "Need to provide ihm2sdm for AMI dataset"
         )
-        self.rec = re.compile(r'(\d+).wav')
-        self.ihm2sdm = kwargs['ihm2sdm'].split(',')
-        if self.ihm2sdm is not None and len(self.ihm2sdm) > 0:
+        self.ihm2sdm = None
+        self.do_ihm2sdm = False
+        if kwargs['ihm2sdm'] is not None:
+            self.ihm2sdm = kwargs['ihm2sdm'].split(',')
+            assert len(self.ihm2sdm) > 0, (
+                "Expected at least one sdm channel, got {}".format(self.ihm2sdm)
+            )
+            self.do_ihm2sdm = True
+        if self.do_ihm2sdm:
             print ('Parallel mode enabled, will pair ihm with sdms: {}'.format(self.ihm2sdm))
         else:
             print ('Single channel mode enabled, will feed only ihm data')
@@ -417,7 +423,7 @@ class AmiSegTupleWavDataset(PairWavDataset):
         self.neighbor_prefixes = {}
         lost_segs, lost_indices = [], []
 
-        if len(self.ihm2sdm) > 0:
+        if self.do_ihm2sdm:
             for index, wav in enumerate(self.wavs):
                 for sdm_idx in self.ihm2sdm:
                     if sdm_idx not in wav:
@@ -426,7 +432,8 @@ class AmiSegTupleWavDataset(PairWavDataset):
             print ('In total {} sdm segments were missing and removed'.format(len(lost_segs)))
             for index in sorted(lost_indices, reverse=True):
                 del self.wavs[index]
-
+        
+        self.rec = re.compile(r'(\d+).wav')
         for idx, wav in enumerate(self.wavs):
             fname = wav['filename']
             prefix = self.rec.sub('', fname)
@@ -477,7 +484,7 @@ class AmiSegTupleWavDataset(PairWavDataset):
         rindex = random.choice(indices)
 
         # II. depending on config, load either sdm or ihm wavs
-        if len(self.ihm2sdm) > 0:
+        if self.do_ihm2sdm > 0:
             #pick random distant channel id from which to load stuff
             idx = random.choice(self.ihm2sdm)
             #print ('Utt {} idx is {}.'.format(uttname, idx))
