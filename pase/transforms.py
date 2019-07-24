@@ -281,6 +281,7 @@ class LPS(object):
             X = X[:, beg_i:end_i]
             pkg['lps'] = X
         else:
+            #print ('Chunks wav shape is {}'.format(wav.shape))
             wav = wav.to(self.device)
             X = torch.stft(wav, self.n_fft,
                            self.hop, self.win)
