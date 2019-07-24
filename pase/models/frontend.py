@@ -207,7 +207,7 @@ class WaveFe(Model):
 
 class aspp_res_encoder(Model):
 
-    def __init__(self, sinc_out, hidden_dim, kernel_sizes=[11, 11, 11, 11], sinc_stride=1,strides=[10, 4, 2, 2], dilations=[1, 6, 12, 18], fmaps=48, name='aspp_encoder', pool2d=False, rnn_pool=False, rnn_add=False, rnn_conv=False, dense=False):
+    def __init__(self, sinc_out, hidden_dim, kernel_sizes=[11, 11, 11, 11], sinc_stride=1,strides=[10, 4, 2, 2], dilations=[1, 6, 12, 18], fmaps=48, name='aspp_encoder', pool2d=False, rnn_pool=False, rnn_add=False, concat=False,dense=False):
         super().__init__(name=name)
         self.sinc = SincConv_fast(1, sinc_out, 251,
                                   sample_rate=16000,
@@ -228,13 +228,8 @@ class aspp_res_encoder(Model):
 
         self.rnn_pool = rnn_pool
         self.rnn_add = rnn_add
-        self.rnn_conv = rnn_conv
-        assert (self.rnn_pool and (self.rnn_add or self.rnn_conv)) or not self.rnn_pool
-
-        if self.rnn_conv:
-            self.conv1 = nn.Sequential(nn.Conv1d(2 * hidden_dim, hidden_dim, 1, bias=False),
-                                       nn.BatchNorm1d(hidden_dim),
-                                       nn.ReLU(hidden_dim))
+        self.concat = concat
+        assert (self.rnn_pool and self.rnn_add) or not self.rnn_pool
 
         if rnn_pool:
             self.rnn = build_rnn_block(hidden_dim, hidden_dim // 2,
@@ -249,7 +244,7 @@ class aspp_res_encoder(Model):
 
 
 
-    def forward(self, batch, device):
+    def forward(self, batch, device=None):
 
         if type(batch) == dict:
             x = torch.cat((batch['chunk'],
@@ -270,12 +265,9 @@ class aspp_res_encoder(Model):
             rnn_out, _ = self.rnn(rnn_out)
             rnn_out = rnn_out.transpose(0, 1).transpose(1, 2)
 
-        if self.rnn_pool and self.rnn_add and not self.rnn_conv:
+        if self.rnn_pool and self.rnn_add:
             h = out + rnn_out
-        elif self.rnn_pool and not self.rnn_add and self.rnn_conv:
-            h = torch.cat((out, rnn_out), dim=1)
-            h = self.conv1(h)
-        elif self.rnn_pool and not self.rnn_add and not self.rnn_conv:
+        elif self.rnn_pool and not self.rnn_add:
             h = rnn_out
         else:
             h = out
