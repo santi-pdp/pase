@@ -5,6 +5,7 @@ from torchvision.transforms import Compose
 from pase.transforms import *
 import argparse
 import pickle
+import pase
 
 def build_dataset_providers(opts):
 
@@ -14,6 +15,14 @@ def build_dataset_providers(opts):
 
     assert len(opts.data_root) == len(opts.data_cfg), (
         "Provide same number of data_root and data_cfg arguments"
+    )
+
+    if len(opts.data_root) == 1 and \
+        len(opts.dataset) < 1:
+        opts.dataset.append('PairWavDataset')
+
+    assert len(opts.data_root) == len(opts.dataset), (
+        "Provide same number of data_root and dataset arguments"
     )
 
     trans = Compose([
@@ -28,16 +37,9 @@ def build_dataset_providers(opts):
     for idx in range(len(opts.data_root)):
         dataset = getattr(pase.dataset, opts.dataset[idx])
         dset = dataset(opts.data_root[idx], opts.data_cfg[idx], 'train',
-                       transform=trans,
-                       noise_folder=opts.noise_folder,
-                       whisper_folder=opts.whisper_folder,
-                       distortion_probability=opts.distortion_p,
-                       distortion_transforms=dist_trans,
-                       zero_speech_p=opts.zero_speech_p[idx],
-                       zero_speech_transform=zp_trans,
-                       preload_wav=opts.preload_wav)
-        dset = PairWavDataset(opts.data_root[idx], opts.data_cfg[idx], 'train',
-                         transform=trans)
+                       transform=trans, ihm2sdm=opts.ihm2sdm)
+        #dset = PairWavDataset(opts.data_root[idx], opts.data_cfg[idx], 'train',
+        #                 transform=trans)
         dsets.append(dset)
 
     if len(dsets) > 1:
@@ -81,6 +83,8 @@ if __name__ == '__main__':
                         default=[])
     parser.add_argument('--data_cfg', action='append', 
                         default=[])
+    parser.add_argument('--dataset', action='append', 
+                        default=[])
     parser.add_argument('--exclude_keys', type=str, nargs='+', 
                         default=['chunk', 'chunk_rand', 'chunk_ctxt'])
     parser.add_argument('--num_workers', type=int, default=1)
@@ -88,6 +92,8 @@ if __name__ == '__main__':
     parser.add_argument('--max_batches', type=int, default=20)
     parser.add_argument('--out_file', type=str)
     parser.add_argument('--hop_size', type=int, default=160)
+    parser.add_argument('--ihm2sdm', type=str, default=None,
+                        help='Relevant only to ami-like dataset providers')
 
     opts = parser.parse_args()
     extract_stats(opts)

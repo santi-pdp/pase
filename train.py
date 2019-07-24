@@ -429,8 +429,8 @@ if __name__ == '__main__':
     parser.add_argument('--alpha', type=float, help="alpha for adaptive loss")
     parser.add_argument('--att_K', type=int, help="top K indices to select for attention")
 
-    #this one is for AMI/ICSI parallel datasets, so one can selectively pick sdm chunks 
-    parser.add_argument('--ihm2sdm', type=str, default='1,3,5,7',
+    #this one is for AMI/ICSI parallel like datasets, so one can selectively pick sdm chunks 
+    parser.add_argument('--ihm2sdm', type=str, default=None,
                             help="Pick random of one of these channels."
                                  "Can be empty or None in which case only"
                                  "ihm channel gets used for chunk and cchunk")
