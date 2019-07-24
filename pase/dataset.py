@@ -221,6 +221,10 @@ class WavDataset(Dataset):
             return cache[fname]
         else:
             wav, rate = sf.read(fname)
+            #fix in case wav is stereo, in which case
+            #pick first channel only
+            if wav.ndim > 1:
+                wav = wav[:,0]
             wav = wav.astype(np.float32)
             if self.cache_on_load:
                 cache[fname] = wav
@@ -297,6 +301,7 @@ class PairWavDataset(WavDataset):
             # Here we select two wavs, the current one and a randomly chosen one
             wname = os.path.join(self.data_root, uttname)
             wav = self.retrieve_cache(wname, self.wav_cache)
+            #print ('Wav shape for {} is {}'.format(uttname, wav.shape))
         pkg = {'raw': wav, 'raw_rand': rwav,
                'uttname': uttname, 'split': self.split}
         # Apply the set of 'target' transforms on the clean data
