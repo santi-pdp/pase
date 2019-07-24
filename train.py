@@ -165,10 +165,12 @@ def build_dataset_providers(opts, minions_cfg):
             )
         #make sure defaults for dataset has been properly set
         if len(opts.datasets) < dr:
-            for i in range(len(opts.datasets), dr):
+            print ('Provided fewer dataset options than data_root. Repeating default.')
+            for _ in range(len(opts.datasets), dr):
                 opts.datasets.append('LibriSpeechSegTupleWavDataset')
         if len(opts.zero_speech_p) < dr:
-            for i in range(len(opts.zero_speech_p), dr):
+            print ('Provided fewer zero_speech_p options than data_roots. Repeating default.')
+            for _ in range(len(opts.zero_speech_p), dr):
                 opts.zero_speech_p.append(0)
 
     #TODO: allow for different base transforms for different datasets

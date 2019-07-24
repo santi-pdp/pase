@@ -308,8 +308,7 @@ class PairWavDataset(WavDataset):
         if self.transform is not None:
             pkg = self.transform(pkg)
 
-        if 'cchunk' not in pkg:
-            pkg['cchunk'] = pkg['chunk'].squeeze(0)
+        pkg['cchunk'] = pkg['chunk'].squeeze(0)
         # initialize overlap label
         pkg['overlap'] = torch.zeros(len(pkg['chunk']) // pkg['dec_resolution']).float()
 
@@ -415,8 +414,7 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
         if self.transform is not None:
             pkg = self.transform(pkg)
 
-        if 'cchunk' not in pkg:
-            pkg['cchunk'] = pkg['chunk'].squeeze(0)
+        pkg['cchunk'] = pkg['chunk'].squeeze(0)
         # initialize overlap label
         pkg['overlap'] = torch.zeros(len(pkg['chunk']) // pkg['dec_resolution']).float()
 
@@ -540,8 +538,15 @@ class AmiSegTupleWavDataset(PairWavDataset):
                 cwav = self.retrieve_cache(cwname, self.wav_cache)
             else:
                 cwav = sdm_wav
-            pkg = {'raw': sdm_wav, 'raw_rand': rand_sdm_wav, 'raw_ctxt': cwav,
-               'uttname': uttname, 'split': self.split, 'raw_clean': wav}
+            # Note: this one is quite dirty trick, but anyways for now
+            # since we have parallel versions of data (i.e. corrputed naturally)
+            # we need to extract self-supervision targets for clean, which is 
+            # assumed to be in chunk in all transforms. Thus, we keep it like this
+            # and pass ihm wav in raw (so targets get extracted), we also pass
+            # wav_sdm in raw_clean. After the transforms we swap them so sdm
+            # (not ihm) chunk gets fed into the model, and ihm is preserved in cchunk 
+            pkg = {'raw': wav, 'raw_rand': rand_sdm_wav, 'raw_ctxt': cwav,
+               'uttname': uttname, 'split': self.split, 'raw_clean':sdm_wav}
         else:
             if choice is not None:
                 cindex, fname = choice
@@ -549,6 +554,8 @@ class AmiSegTupleWavDataset(PairWavDataset):
                 cwav = self.retrieve_cache(cwname, self.wav_cache)
             else:
                 cwav = wav
+            rwav_fname = os.path.join(self.data_root, self.wavs[rindex]['filename'])
+            rwav = self.retrieve_cache(rwav_fname, self.wav_cache)
             pkg = {'raw': wav, 'raw_rand': rwav, 'raw_ctxt': cwav,
                     'uttname': uttname, 'split': self.split}
 
@@ -557,7 +564,9 @@ class AmiSegTupleWavDataset(PairWavDataset):
             pkg = self.transform(pkg)
 
         if 'cchunk' not in pkg:
-            pkg['cchunk'] = pkg['chunk'].squeeze(0)
+            chunk = pkg['cchunk'].squeeze(0)
+            pkg['cchunk'] = pkg['chunk']
+            pkg['chunk'] = chunk
         # initialize overlap label
         pkg['overlap'] = torch.zeros(len(pkg['chunk']) // pkg['dec_resolution']).float()
 
