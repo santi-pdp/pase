@@ -200,8 +200,15 @@ class SingleChunkWav(object):
         pkg['chunk'] = chunk
         pkg['chunk_beg_i'] = beg_i
         pkg['chunk_end_i'] = end_i
+        #to make it compatible with parallel multi-chan data
+        #its backward compatible with single chan
+        if 'raw_clean' in pkg and pkg['raw_clean'] is not None:
+            raw_clean = pkg['raw_clean']
+            pkg['cchunk'] = raw_clean[beg_i:end_i]
         if self.random_scale:
             pkg['chunk'] = norm_and_scale(pkg['chunk'])
+            if 'cchunk' in pkg:
+                pkg['cchunk'] = norm_and_scale(pkg['cchunk'])
         # specify decimated resolution to be 1 (no decimation) so far
         pkg['dec_resolution'] = 1
         return pkg

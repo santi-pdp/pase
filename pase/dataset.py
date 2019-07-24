@@ -308,7 +308,8 @@ class PairWavDataset(WavDataset):
         if self.transform is not None:
             pkg = self.transform(pkg)
 
-        pkg['cchunk'] = pkg['chunk'].squeeze(0)
+        if 'cchunk' not in pkg:
+            pkg['cchunk'] = pkg['chunk'].squeeze(0)
         # initialize overlap label
         pkg['overlap'] = torch.zeros(len(pkg['chunk']) // pkg['dec_resolution']).float()
 
@@ -414,7 +415,8 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
         if self.transform is not None:
             pkg = self.transform(pkg)
 
-        pkg['cchunk'] = pkg['chunk'].squeeze(0)
+        if 'cchunk' not in pkg:
+            pkg['cchunk'] = pkg['chunk'].squeeze(0)
         # initialize overlap label
         pkg['overlap'] = torch.zeros(len(pkg['chunk']) // pkg['dec_resolution']).float()
 
@@ -554,7 +556,8 @@ class AmiSegTupleWavDataset(PairWavDataset):
         if self.transform is not None:
             pkg = self.transform(pkg)
 
-        pkg['cchunk'] = pkg['chunk'].squeeze(0)
+        if 'cchunk' not in pkg:
+            pkg['cchunk'] = pkg['chunk'].squeeze(0)
         # initialize overlap label
         pkg['overlap'] = torch.zeros(len(pkg['chunk']) // pkg['dec_resolution']).float()
 
