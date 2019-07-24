@@ -208,7 +208,7 @@ def build_dataset_providers(opts, minions_cfg):
                        zero_speech_p=opts.zero_speech_p[idx],
                        zero_speech_transform=zp_trans,
                        preload_wav=opts.preload_wav,
-                       ihm2sdm=opts.ihm2sdm)
+                       ihm2sdms=opts.ihm2sdm)
 
         dsets.append(dset)
 
@@ -222,7 +222,7 @@ def build_dataset_providers(opts, minions_cfg):
                               zero_speech_p=opts.zero_speech_p[idx],
                               zero_speech_transform=zp_trans,
                               preload_wav=opts.preload_wav,
-                              ihm2sdm=opts.ihm2sdm)
+                              ihm2sdms=opts.ihm2sdm)
             va_dsets.append(va_dset)
 
     ret = None
@@ -421,6 +421,11 @@ if __name__ == '__main__':
     parser.add_argument('--temp', type=float, help="temp for softmax or adaptive losss")
     parser.add_argument('--alpha', type=float, help="alpha for adaptive loss")
     parser.add_argument('--att_K', type=int, help="top K indices to select for attention")
+
+    #this one is for AMI/ICSI parallel datasets, so one can selectively pick sdm chunks 
+    parser.add_argument('--ihm2sdms', type=str, default='1,3,5,7',
+                            help="Pick random of one of these channels. Can be empty or None in which case"
+                                 "Only ihm channel get used (i.e. similar to other datasets)")
 
     opts = parser.parse_args()
     opts.ckpt_continue = not str2bool(opts.no_continue)
