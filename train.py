@@ -23,6 +23,11 @@ torch.backends.cudnn.benchmark = True
 def str2bool(v):
   return v.lower() in ("yes", "true", "t", "1")
 
+def str2None(v):
+    if v.lower in ('none'):
+        return None
+    return v
+
 def make_transforms(opts, workers_cfg):
     trans = [ToTensor()]
     keys = ['totensor']
@@ -175,7 +180,7 @@ def build_dataset_providers(opts, minions_cfg):
 
     #this is to set default in proper way, as argparse
     #uses whatever is set as default in append mode as
-    #initial values, which is bad
+    #initial values (i.e. do not override them)
     if len(opts.dataset) < 1:
         opts.dataset.append('LibriSpeechSegTupleWavDataset')
 
@@ -186,7 +191,9 @@ def build_dataset_providers(opts, minions_cfg):
     dsets, va_dsets = [], []
     for idx in range(dr):
         print ('Preparing dset for {}'.format(opts.data_root[idx]))
-        if opts.dtrans_cfg is not None and len(opts.dtrans_cfg) > 0:
+        if opts.dtrans_cfg is not None and \
+            len(opts.dtrans_cfg) > 0 and \
+            opts.dtrans_cfg[idx] is not None :
             with open(opts.dtrans_cfg[idx], 'r') as dtr_cfg:
                 dtr = json.load(dtr_cfg)
                 #dtr['trans_p'] = opts.distortion_p
