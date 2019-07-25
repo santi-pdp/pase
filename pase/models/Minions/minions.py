@@ -5,6 +5,7 @@ from ..modules import *
 import torch.nn.functional as F
 import json
 import random
+from pase.utils import ScaleGrad
 
 
 def minion_maker(cfg):
@@ -84,7 +85,7 @@ class DecoderMinion(Model):
             ninp = hidden_size
         self.W = nn.Conv1d(hidden_size, num_outputs, 1)
 
-    def forward(self, x, device=None):
+    def forward(self, x, alpha, device=None):
         h = x
         for bi, block in enumerate(self.blocks, start=1):
             h_ = h
@@ -131,7 +132,7 @@ class MLPMinion(Model):
             ninp = hidden_size
         self.W = nn.Conv1d(hidden_size, num_outputs, 1)
 
-    def forward(self, x, device=None):
+    def forward(self, x, alpha, device=None):
         h = x
         for bi, block in enumerate(self.blocks, start=1):
             h = block(h)
@@ -174,7 +175,7 @@ class GRUMinion(Model):
                           dropout=dropout)
         self.W = nn.Conv1d(hidden_size, num_outputs, 1)
 
-    def forward(self, x, device=None):
+    def forward(self, x, alpha, device=None):
         h, _ = self.rnn(x.transpose(1, 2))
         h = h.transpose(1, 2)
         y = self.W(h)
@@ -217,7 +218,7 @@ class SPCMinion(MLPMinion):
         self.ctxt_frames = ctxt_frames
         self.seq_pad = seq_pad
 
-    def forward(self, x, device=None):
+    def forward(self, x, alpha, device=None):
         # x is a batch of sequences
         # of dims [B, channels, time]
         # first select a "central" time-step
@@ -280,7 +281,7 @@ class GapMinion(MLPMinion):
                          keys=keys,
                          name=name)
 
-    def forward(self, x, device=None):
+    def forward(self, x, alpha, device=None):
         # x is a batch of sequences
         # of dims [B, channels, time]
         # Select randomly two chunks out of T possible

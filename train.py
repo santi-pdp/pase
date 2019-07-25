@@ -23,6 +23,11 @@ torch.backends.cudnn.benchmark = True
 def str2bool(v):
   return v.lower() in ("yes", "true", "t", "1")
 
+def str2None(v):
+    if v.lower() in ('none'):
+        return None
+    return v
+
 def make_transforms(opts, workers_cfg):
     trans = [ToTensor()]
     keys = ['totensor']
@@ -163,6 +168,21 @@ def build_dataset_providers(opts, minions_cfg):
             assert dr == len(opts.dtrans_cfg), (
                 "Spec one dtrans_cfg per data_root (can be the same) or None"
             )
+        #make sure defaults for dataset has been properly set
+        if len(opts.dataset) < dr:
+            print ('Provided fewer dataset options than data_root. Repeating default.')
+            for _ in range(len(opts.datasets), dr):
+                opts.dataset.append('LibriSpeechSegTupleWavDataset')
+        if len(opts.zero_speech_p) < dr:
+            print ('Provided fewer zero_speech_p options than data_roots. Repeating default.')
+            for _ in range(len(opts.zero_speech_p), dr):
+                opts.zero_speech_p.append(0)
+
+    #this is to set default in proper way, as argparse
+    #uses whatever is set as default in append mode as
+    #initial values (i.e. do not override them)
+    if len(opts.dataset) < 1:
+        opts.dataset.append('LibriSpeechSegTupleWavDataset')
 
     #TODO: allow for different base transforms for different datasets
     trans = make_transforms(opts, minions_cfg)
@@ -171,7 +191,9 @@ def build_dataset_providers(opts, minions_cfg):
     dsets, va_dsets = [], []
     for idx in range(dr):
         print ('Preparing dset for {}'.format(opts.data_root[idx]))
-        if opts.dtrans_cfg is not None:
+        if opts.dtrans_cfg is not None and \
+            len(opts.dtrans_cfg) > 0 and \
+            str2None(opts.dtrans_cfg[idx]) is not None :
             with open(opts.dtrans_cfg[idx], 'r') as dtr_cfg:
                 dtr = json.load(dtr_cfg)
                 #dtr['trans_p'] = opts.distortion_p
@@ -179,7 +201,9 @@ def build_dataset_providers(opts, minions_cfg):
                 print(dist_trans)
         else:
             dist_trans = None
-        if opts.zerospeech_cfg is not None and opts.zero_speech_p[idx] > 0:
+        if opts.zerospeech_cfg is not None \
+            and len(opts.zero_speech_p) > 0 \
+              and opts.zero_speech_p[idx] > 0:
             with open(opts.zerospeech_cfg[idx], 'r') as zsp_cfg:
                 ztr = json.load(zsp_cfg)
                 zp_trans = config_zerospeech(**ztr)
@@ -188,6 +212,7 @@ def build_dataset_providers(opts, minions_cfg):
             zp_trans = None
         # Build Dataset(s) and DataLoader(s)
         dataset = getattr(pase.dataset, opts.dataset[idx])
+        print ('Dataset name {} and opts {}'.format(dataset, opts.dataset[idx]))
         dset = dataset(opts.data_root[idx], opts.data_cfg[idx], 'train',
                        transform=trans,
                        noise_folder=opts.noise_folder,
@@ -196,7 +221,8 @@ def build_dataset_providers(opts, minions_cfg):
                        distortion_transforms=dist_trans,
                        zero_speech_p=opts.zero_speech_p[idx],
                        zero_speech_transform=zp_trans,
-                       preload_wav=opts.preload_wav)
+                       preload_wav=opts.preload_wav,
+                       ihm2sdm=opts.ihm2sdm)
 
         dsets.append(dset)
 
@@ -209,7 +235,8 @@ def build_dataset_providers(opts, minions_cfg):
                               distortion_transforms=dist_trans,
                               zero_speech_p=opts.zero_speech_p[idx],
                               zero_speech_transform=zp_trans,
-                              preload_wav=opts.preload_wav)
+                              preload_wav=opts.preload_wav,
+                              ihm2sdm=opts.ihm2sdm)
             va_dsets.append(va_dset)
 
     ret = None
@@ -221,6 +248,10 @@ def build_dataset_providers(opts, minions_cfg):
         ret = (dsets[0], )
         if opts.do_eval:
             ret = ret + (va_dsets[0], )
+
+    if opts.do_eval is False or len(va_dsets) == 0:
+        ret = ret + (None, )
+
     return ret
 
 def train(opts):
@@ -249,7 +280,7 @@ def train(opts):
     dloader = DataLoader(dset, batch_size=opts.batch_size,
                          shuffle=True, collate_fn=DictCollater(),
                          num_workers=opts.num_workers,drop_last=True,
-                         pin_memory=CUDA)
+                         pin_memory=False)
     # Compute estimation of bpe. As we sample chunks randomly, we
     # should say that an epoch happened after seeing at least as many
     # chunks as total_train_wav_dur // chunk_size
@@ -262,7 +293,7 @@ def train(opts):
         va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
                                 shuffle=True, collate_fn=DictCollater(),
                                 num_workers=opts.num_workers,drop_last=True,
-                                pin_memory=CUDA)
+                                pin_memory=False)
         va_bpe = (va_dset.total_wav_dur // opts.chunk_size) // opts.batch_size
         opts.va_bpe = va_bpe
     else:
@@ -314,9 +345,9 @@ if __name__ == '__main__':
                               'mutliple datasets, provide config multiple times')
     parser.add_argument('--zerospeech_cfg', action='append', default=None)
     parser.add_argument('--zero_speech_p', action='append', type=float,
-                        default=[0.1])
+                        default=[0.0])
     parser.add_argument('--dataset', action='append',
-                        default=['LibriSpeechSegTupleWavDataset'],
+                        default=[],
                         help='Dataset to be used: '
                              '(1) PairWavDataset, '
                              '(2) LibriSpeechSegTupleWavDataset, '
@@ -397,13 +428,19 @@ if __name__ == '__main__':
     parser.add_argument('--att_cfg', type=str, help='Path to the config file of attention blocks')
     parser.add_argument('--avg_factor', type=float, default=0, help="running average factor for option running_avg for attention")
     parser.add_argument('--att_mode', type=str, help='options for attention block')
-    parser.add_argument('--tensorboard', type=str, default='False', help='use tensorboard for logging')
+    parser.add_argument('--tensorboard', type=str, default='True', help='use tensorboard for logging')
     parser.add_argument('--backprop_mode', type=str, default='base',help='backprop policy can be choose from: [base, select_one, select_half]')
     parser.add_argument('--dropout_rate', type=float, default=0.5, help="drop out rate for workers")
     parser.add_argument('--delta', type=float, help="delta for hyper volume loss scheduling")
     parser.add_argument('--temp', type=float, help="temp for softmax or adaptive losss")
     parser.add_argument('--alpha', type=float, help="alpha for adaptive loss")
     parser.add_argument('--att_K', type=int, help="top K indices to select for attention")
+
+    #this one is for AMI/ICSI parallel like datasets, so one can selectively pick sdm chunks 
+    parser.add_argument('--ihm2sdm', type=str, default=None,
+                            help="Pick random of one of these channels."
+                                 "Can be empty or None in which case only"
+                                 "ihm channel gets used for chunk and cchunk")
 
     opts = parser.parse_args()
     opts.ckpt_continue = not str2bool(opts.no_continue)

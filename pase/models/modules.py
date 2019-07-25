@@ -218,6 +218,7 @@ class Saver(object):
             print('Current Pt keys: ', len(list(pt_dict.keys())))
             print('Loading matching keys: ', list(pt_dict.keys()))
         if len(pt_dict.keys()) != len(model_dict.keys()):
+            raise ValueError('WARNING: LOADING DIFFERENT NUM OF KEYS')
             print('WARNING: LOADING DIFFERENT NUM OF KEYS')
         # overwrite entries in existing dict
         model_dict.update(pt_dict)
