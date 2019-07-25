@@ -174,7 +174,7 @@ class SingleChunkWav(object):
         # assert x.dim() == 1, x.size()
 
     ##@profile
-    def select_chunk(self, wav, ret_bounds=False):
+    def select_chunk(self, wav, ret_bounds=False, reuse_bounds=None):
         # select random index
         chksz = self.chunk_size
         if len(wav) <= chksz:
@@ -182,6 +182,16 @@ class SingleChunkWav(object):
             P = chksz - len(wav)
             chk = F.pad(wav.view(1, 1, -1), (0, P), mode='reflect').view(-1)
             idx = 0
+        elif reuse_bounds is not None:
+            idx, end_i = reuse_bounds
+            assert idx >= 0 and \
+                   idx < end_i and \
+                   wav.shape[0] >= end_i and \
+                   chksz == end_i - idx, (
+               "Cannot reuse_bounds {} for chksz {} and wav of shape {}"\
+                         .format(reuse_bounds, chksz, wav.shape)
+            )
+            chk = wav[idx:idx + chksz]
         else:
             # idxs = list(range(wav.size(0) - chksz))
             # idx = random.choice(idxs)
@@ -200,8 +210,16 @@ class SingleChunkWav(object):
         pkg['chunk'] = chunk
         pkg['chunk_beg_i'] = beg_i
         pkg['chunk_end_i'] = end_i
+        #to make it compatible with parallel multi-chan data
+        #its backward compatible with single chan
+        if 'raw_clean' in pkg and pkg['raw_clean'] is not None:
+            raw_clean = pkg['raw_clean']
+            pkg['cchunk'] = self.select_chunk(raw_clean,\
+                                    reuse_bounds=(beg_i, end_i))
         if self.random_scale:
             pkg['chunk'] = norm_and_scale(pkg['chunk'])
+            if 'cchunk' in pkg:
+                pkg['cchunk'] = norm_and_scale(pkg['cchunk'])
         # specify decimated resolution to be 1 (no decimation) so far
         pkg['dec_resolution'] = 1
         return pkg
@@ -231,6 +249,13 @@ class MIChunkWav(SingleChunkWav):
         pkg['chunk'] = chunk
         pkg['chunk_beg_i'] = beg_i
         pkg['chunk_end_i'] = end_i
+        #added for parallel like corpora with close and distant mics
+        #we do not make asserts here for now if raw is 
+        # exactly same as raw_clean, as this was up to segmentation
+        # script
+        if 'raw_clean' in pkg and pkg['raw_clean'] is not None:
+            raw_clean = pkg['raw_clean']
+            pkg['cchunk'] = self.select_chunk(raw_clean, reuse_bounds=(beg_i, end_i))
         if 'raw_ctxt' in pkg and pkg['raw_ctxt'] is not None:
             raw_ctxt = pkg['raw_ctxt']
         else:
@@ -244,6 +269,8 @@ class MIChunkWav(SingleChunkWav):
             pkg['chunk'] = norm_and_scale(pkg['chunk'])
             pkg['chunk_ctxt'] = norm_and_scale(pkg['chunk_ctxt'])
             pkg['chunk_rand'] = norm_and_scale(pkg['chunk_rand'])
+            if 'cchunk' in pkg:
+                pkg['cchunk'] = norm_and_scale(pkg['cchunk'])
         # specify decimated resolution to be 1 (no decimation) so far
         pkg['dec_resolution'] = 1
         return pkg
@@ -272,6 +299,7 @@ class LPS(object):
             X = X[:, beg_i:end_i]
             pkg['lps'] = X
         else:
+            #print ('Chunks wav shape is {}'.format(wav.shape))
             wav = wav.to(self.device)
             X = torch.stft(wav, self.n_fft,
                            self.hop, self.win)

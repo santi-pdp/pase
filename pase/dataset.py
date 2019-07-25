@@ -156,7 +156,8 @@ class WavDataset(Dataset):
                  distortion_probability=0.4,
                  zero_speech_p=0,
                  zero_speech_transform=None,
-                 verbose=True):
+                 verbose=True,
+                 *args, **kwargs):
         # sr: sampling rate, (Def: None, the one in the wav header)
         self.sr = sr
         self.data_root = data_root
@@ -221,6 +222,10 @@ class WavDataset(Dataset):
             return cache[fname]
         else:
             wav, rate = sf.read(fname)
+            #fix in case wav is stereo, in which case
+            #pick first channel only
+            if wav.ndim > 1:
+                wav = wav[:,0]
             wav = wav.astype(np.float32)
             if self.cache_on_load:
                 cache[fname] = wav
@@ -253,30 +258,8 @@ class PairWavDataset(WavDataset):
         chosen one.
     """
 
-    def __init__(self, data_root, data_cfg_file, split,
-                 transform=None, sr=None, verbose=True,
-                 return_uttname=False,
-                 transforms_cache=None,
-                 distortion_transforms=None,
-                 whisper_folder=None,
-                 noise_folder=None,
-                 cache_on_load=False,
-                 distortion_probability=0.4,
-                 zero_speech_p=0,
-                 zero_speech_transform=None,
-                 preload_wav=False):
-        super().__init__(data_root, data_cfg_file, split, transform=transform,
-                         sr=sr, preload_wav=preload_wav,
-                         return_uttname=return_uttname,
-                         transforms_cache=transforms_cache,
-                         distortion_transforms=distortion_transforms,
-                         whisper_folder=whisper_folder,
-                         noise_folder=noise_folder,
-                         cache_on_load=cache_on_load,
-                         distortion_probability=distortion_probability,
-                         zero_speech_p=zero_speech_p,
-                         zero_speech_transform=zero_speech_transform,
-                         verbose=verbose)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.rwav_cache = {}
 
     def __getitem__(self, index):
@@ -297,6 +280,7 @@ class PairWavDataset(WavDataset):
             # Here we select two wavs, the current one and a randomly chosen one
             wname = os.path.join(self.data_root, uttname)
             wav = self.retrieve_cache(wname, self.wav_cache)
+            #print ('Wav shape for {} is {}'.format(uttname, wav.shape))
         pkg = {'raw': wav, 'raw_rand': rwav,
                'uttname': uttname, 'split': self.split}
         # Apply the set of 'target' transforms on the clean data
@@ -331,30 +315,8 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
         following the filename is returned too as random context.
     """
 
-    def __init__(self, data_root, data_cfg_file, split,
-                 transform=None, sr=None, verbose=True,
-                 return_uttname=False,
-                 transforms_cache=None,
-                 distortion_transforms=None,
-                 whisper_folder=None,
-                 noise_folder=None,
-                 cache_on_load=False,
-                 distortion_probability=0.4,
-                 zero_speech_p=0,
-                 zero_speech_transform=None,
-                 preload_wav=False):
-        super().__init__(data_root, data_cfg_file, split, transform=transform,
-                         sr=sr, preload_wav=preload_wav,
-                         return_uttname=return_uttname,
-                         transforms_cache=transforms_cache,
-                         distortion_transforms=distortion_transforms,
-                         whisper_folder=whisper_folder,
-                         noise_folder=noise_folder,
-                         cache_on_load=cache_on_load,
-                         distortion_probability=distortion_probability,
-                         zero_speech_p=zero_speech_p,
-                         zero_speech_transform=zero_speech_transform,
-                         verbose=verbose)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.rec = re.compile(r'(\d+).wav')
         # pre-cache prefixes to load from dictionary quicker
         self.neighbor_prefixes = {}
@@ -387,6 +349,7 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
             neighbors = self.neighbor_prefixes[prefix]
             # print('Wname: ', wname)
             # delete current file
+            # print ('Uttn {}, Pref {}'.format(uttname, prefix))
             # print('Found nehg: ', neighbors)
             neighbors.remove(uttname)
             # print('Found nehg: ', neighbors)
@@ -434,43 +397,64 @@ class AmiSegTupleWavDataset(PairWavDataset):
     1st is IHM chunk, 2nd is continuation chunk
     3rd is a corresponding to ihm distant channel (random one from the mic array)
     4th is a random (ideally) non-related chunk 
-    Note, this can also only work with only ihms (when pair_sdms=False)
+    Note, this can also only work with only ihms (when pair_sdms=None)
     """
-    def __init__(self, data_root, data_cfg_file, split, 
-                 transform=None, sr=None, verbose=True,
-                 return_uttname=False,
-                 transforms_cache=None,
-                 distortion_transforms=None,
-                 whisper_folder=None,
-                 noise_folder=None,
-                 cache_on_load=False,
-                 distortion_probability=0.4,
-                 preload_wav=False,
-                 pair_sdms=True):
-        super().__init__(data_root, data_cfg_file, split, transform=transform, 
-                         sr=sr, preload_wav=preload_wav,
-                         return_uttname=return_uttname,
-                         transforms_cache=transforms_cache,
-                         distortion_transforms=distortion_transforms,
-                         whisper_folder=whisper_folder,
-                         noise_folder=noise_folder,
-                         cache_on_load=cache_on_load,
-                         distortion_probability=distortion_probability,
-                         verbose=verbose)
-        self.rec = re.compile(r'(\d+).wav')
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        assert self.zero_speech_p == 0, (
+            "Zero speech mode is not supported for AMI as of now"
+        )
+        assert 'ihm2sdm' in kwargs, (
+            "Need to provide ihm2sdm for AMI dataset"
+        )
+        self.ihm2sdm = None
+        self.do_ihm2sdm = False
+        if kwargs['ihm2sdm'] is not None:
+            self.ihm2sdm = kwargs['ihm2sdm'].split(',')
+            assert len(self.ihm2sdm) > 0, (
+                "Expected at least one sdm channel, got {}".format(self.ihm2sdm)
+            )
+            self.do_ihm2sdm = True
+        if self.do_ihm2sdm:
+            print ('Parallel mode enabled, will pair ihm with sdms: {}'.format(self.ihm2sdm))
+        else:
+            print ('Single channel mode enabled, will feed only ihm data')
         # pre-cache prefixes to load from dictionary quicker
         self.neighbor_prefixes = {}
-        for wav in self.wavs:
+        lost_segs, lost_indices = [], []
+
+        if self.do_ihm2sdm:
+            for index, wav in enumerate(self.wavs):
+                for sdm_idx in self.ihm2sdm:
+                    if sdm_idx not in wav:
+                        lost_segs.append(wav['filename'])
+                        lost_indices.append(index)
+            print ('In total {} sdm segments were missing and removed'.format(len(lost_segs)))
+            for index in sorted(lost_indices, reverse=True):
+                del self.wavs[index]
+        
+        self.rec = re.compile(r'(\d+).wav')
+        for idx, wav in enumerate(self.wavs):
             fname = wav['filename']
             prefix = self.rec.sub('', fname)
             if prefix not in self.neighbor_prefixes:
                 self.neighbor_prefixes[prefix] = []
-            self.neighbor_prefixes[prefix].append(fname) 
+            self.neighbor_prefixes[prefix].append((idx, fname))
         print('Found {} prefixes in '
               'utterances'.format(len(self.neighbor_prefixes)))
-            
 
     def __getitem__(self, index):
+        # Load current wav 
+        # Note, this provided works with parlallel like data (i.e
+        # the one where you have two or more versions of the same
+        # signal, typically from multi-mic setups. As PASE relis on
+        # clean and [possibly] distorted signal, the following code
+        # reads both from parallel data. Notice, clean variant is only
+        # used to self-supervised minions, thus is not fpropped through
+        # the networks 
+
+        # I. get and load clean (here ihm) variant as in other provider,
+        # we are gonna need it anyways
         uttname = self.wavs[index]['filename']
         # Here we select the three wavs.
         # (1) Current wav selection
@@ -480,71 +464,90 @@ class AmiSegTupleWavDataset(PairWavDataset):
         # no other sub-index is found, the same as current wav is returned
         prefix = self.rec.sub('', uttname)
         neighbors = self.neighbor_prefixes[prefix]
-        #print('Wname: ', wname)
+        # print('Wname: ', wname)
         # delete current file
         #print('Found nehg: ', neighbors)
-        neighbors.remove(uttname)
-        #print('Found nehg: ', neighbors)
+        #print ("Uttn {}, wn {}, pref {}".format(uttname, wname, prefix))
+        neighbors.remove((index, uttname))
+        # print('Found nehg: ', neighbors)
         # pick random one if possible, otherwise it will be empty
+        # only sample the for now candidate, we will load the wav
+        # depending on whether sdm or ihm is needed
+        choice = None
         if len(neighbors) > 0:
-            cwname = os.path.join(self.data_root, random.choice(neighbors))
-            cwav = self.retrieve_cache(cwname, self.wav_cache)
-        else:
-            cwav = wav
+            choice = random.choice(neighbors)
+
         # (2) Random wav selection for out of context sample
         # create candidate indices without current index
         indices = list(range(len(self.wavs)))
         indices.remove(index)
         rindex = random.choice(indices)
-        rwname = os.path.join(self.data_root, self.wavs[rindex]['filename'])
-        rwav = self.retrieve_cache(rwname, self.wav_cache)
-        pkg = {'raw': wav, 'raw_rand': rwav, 'raw_ctxt': cwav,
-               'uttname':uttname, 'split':self.split}
+
+        # II. depending on config, load either sdm or ihm wavs
+        if self.do_ihm2sdm > 0:
+            #pick random distant channel id from which to load stuff
+            idx = random.choice(self.ihm2sdm)
+            #print ('Utt {} idx is {}.'.format(uttname, idx))
+            #print ('Index {} and cfg {}'.format(index, self.wavs[index]))
+            #print ('Rindex {} and cfg {}'.format(self.wavs[rindex]))
+            #if idx not in self.wavs[index]:
+            #    print ('Opps {} not found in {}'.format(idx, self.wavs[index]))
+            #if idx not in self.wavs[rindex]:
+            #    print ('Oops {} not found in {}'.format(idx, self.wavs[rindex]))
+            #load waveform sdm eqivalent for ihm
+            sdm_fname = os.path.join(self.data_root, self.wavs[index][idx])
+            sdm_wav = self.retrieve_cache(sdm_fname, self.wav_cache)
+            #load waveform sdm random chunk
+            rsdm_fname = os.path.join(self.data_root, self.wavs[rindex][idx])
+            rand_sdm_wav = self.retrieve_cache(rsdm_fname, self.wav_cache)
+            #load context wavform, given choice above
+            if choice is not None:
+                cindex, fname = choice
+                cwname = os.path.join(self.data_root, self.wavs[cindex][idx])
+                cwav = self.retrieve_cache(cwname, self.wav_cache)
+            else:
+                cwav = sdm_wav
+            # Note: this one is quite dirty trick, but anyways for now
+            # since we have parallel versions of data (i.e. corrputed naturally)
+            # we need to extract self-supervision targets for clean, which is
+            # assumed to be in chunk in all transforms. Thus, we keep it like this
+            # and pass ihm wav in raw (so targets get extracted), we also pass
+            # wav_sdm in raw_clean. After the transforms we swap them so sdm
+            # (not ihm) chunk gets fed into the model, and ihm is preserved in cchunk
+            pkg = {'raw': wav, 'raw_rand': rand_sdm_wav, 'raw_ctxt': cwav,
+               'uttname': uttname, 'split': self.split, 'raw_clean':sdm_wav}
+        else:
+            if choice is not None:
+                cindex, fname = choice
+                cwname = os.path.join(self.data_root, fname)
+                cwav = self.retrieve_cache(cwname, self.wav_cache)
+            else:
+                cwav = wav
+            rwav_fname = os.path.join(self.data_root, self.wavs[rindex]['filename'])
+            rwav = self.retrieve_cache(rwav_fname, self.wav_cache)
+            pkg = {'raw': wav, 'raw_rand': rwav, 'raw_ctxt': cwav,
+                    'uttname': uttname, 'split': self.split}
+
         # Apply the set of 'target' transforms on the clean data
         if self.transform is not None:
             pkg = self.transform(pkg)
-        do_addnoise = False
-        do_whisper = False
-        # Then select possibly a distorted version of the 'current' chunk
-        if hasattr(self, 'whisper_cache'):
-            do_whisper = random.random() <= self.distortion_probability
-            if do_whisper:
-                dwname = os.path.join(self.whisper_folder, uttname)
-                #print('getting whisper file: ', dwname)
-                dwav = self.retrieve_cache(dwname, 
-                                           self.whisper_cache)
-                pkg['raw'] = torch.tensor(dwav)
-        # Check if additive noise to be added
-        if hasattr(self, 'noise_cache'):
-            do_addnoise = random.random() <= self.distortion_probability
-            if do_addnoise:
-                nwname = os.path.join(self.noise_folder, uttname)
-                #print('getting noise file: ', nwname)
-                noise = self.retrieve_cache(nwname,
-                                            self.noise_cache)
-                if noise.shape[0] < pkg['raw'].size(0):
-                    P_ = pkg['raw'].size(0) - noise.shape[0]
-                    noise_piece = noise[-P_:][::-1]
-                    noise = np.concatenate((noise, noise_piece), axis=0)
-                noise = torch.FloatTensor(noise)
-                pkg['raw'] = pkg['raw'] + noise
 
-        pkg['cchunk'] = pkg['chunk'].squeeze(0)
+        if 'cchunk' in pkg:
+            chunk = pkg['cchunk']
+            pkg['cchunk'] = pkg['chunk'].squeeze(0)
+            pkg['chunk'] = chunk
+        else:
+            pkg['cchunk'] = pkg['chunk'].squeeze(0)
 
-        if do_addnoise or do_whisper:
-            # re-chunk raw into chunk if boundaries available in pkg
-            if 'chunk_beg_i' in pkg and 'chunk_end_i' in pkg:
-                beg_i = pkg['chunk_beg_i']
-                end_i = pkg['chunk_end_i']
-                # separate clean chunk version
-                # make distorted chunk
-                pkg['chunk'] = pkg['raw'][beg_i:end_i]
+        # initialize overlap label
+        pkg['overlap'] = torch.zeros(len(pkg['chunk']) // pkg['dec_resolution']).float()
 
         if self.distortion_transforms:
             pkg = self.distortion_transforms(pkg)
-        #sf.write('/tmp/ex_chunk.wav', pkg['chunk'], 16000)
-        #sf.write('/tmp/ex_cchunk.wav', pkg['cchunk'], 16000)
-        #raise NotImplementedError
+
+        # sf.write('/tmp/ex_chunk.wav', pkg['chunk'], 16000)
+        # sf.write('/tmp/ex_cchunk.wav', pkg['cchunk'], 16000)
+        # raise NotImplementedError
         if self.transform is None:
             # if no transforms happened do not send a package
             return pkg['chunk'], pkg['raw_rand']

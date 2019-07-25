@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 import json
 from .aspp import aspp_resblock
+from .tdnn import TDNN
 from pase.models.WorkerScheduler.encoder import encoder
 try:
     from modules import *
@@ -16,19 +17,95 @@ def wf_builder(cfg_path):
         if isinstance(cfg_path, str):
             with open(cfg_path, 'r') as cfg_f:
                 cfg = json.load(cfg_f)
-                if "name" in cfg.keys() and cfg['name'] == "asppRes":
-                    return aspp_res_encoder(**cfg)
-                else:
-                    return WaveFe(**cfg)
+                return wf_builder(cfg)
         elif isinstance(cfg_path, dict):
-            if "name" in cfg_path.keys() and cfg_path['name'] == "asppRes":
-                return aspp_res_encoder(**cfg_path)
+            if "name" in cfg_path.keys():
+                model_name = cfg_path['name']
+                if cfg_path['name'] == "asppRes":
+                    return aspp_res_encoder(**cfg_path)
+                elif model_name == "tdnn":
+                    return TDNNFe(**cfg_path)
+                else:
+                    raise TypeError('Unrecognized frontend type: ', model_name)
             else:
                 return WaveFe(**cfg_path)
         else:
             TypeError('Unexpected config for WaveFe')
     else:
         raise ValueError("cfg cannot be None!")
+
+class TDNNFe(Model):
+    """ Time-Delayed Neural Network front-end
+    """
+    def __init__(self, num_inputs=1,
+                 sincnet=True,
+                 kwidth=641, stride=160,
+                 fmaps=128, norm_type='bnorm',
+                 pad_mode='reflect',
+                 sr=16000, emb_dim=256,
+                 activation=None,
+                 rnn_pool=False,
+                 rnn_layers=1,
+                 rnn_dropout=0,
+                 rnn_type='qrnn',
+                 name='TDNNFe'):
+        super().__init__(name=name) 
+        # apply sincnet at first layer
+        self.sincnet = sincnet
+        self.emb_dim = emb_dim
+        ninp = num_inputs
+        if self.sincnet:
+            self.feblock = FeBlock(ninp, fmaps, kwidth, stride,
+                                   1, act=activation,
+                                   pad_mode=pad_mode,
+                                   norm_type=norm_type,
+                                   sincnet=True,
+                                   sr=sr)
+            ninp = fmaps
+        # 2 is just a random number because it is not used
+        # with unpooled method
+        self.tdnn = TDNN(ninp, 2, method='unpooled')
+        fmap = self.tdnn.emb_dim
+        # last projection
+        if rnn_pool:
+            self.rnn = build_rnn_block(fmap, emb_dim // 2,
+                                       rnn_layers=rnn_layers,
+                                       rnn_type=rnn_type,
+                                       bidirectional=True,
+                                       dropout=rnn_dropout)
+            self.W = nn.Conv1d(emb_dim, emb_dim, 1)
+        else:
+            self.W = nn.Conv1d(fmap, emb_dim, 1)
+        self.rnn_pool = rnn_pool
+
+    def forward(self, batch, device=None):
+
+        if type(batch) == dict:
+            x = torch.cat((batch['chunk'],
+                           batch['chunk_ctxt'],
+                           batch['chunk_rand']),
+                          dim=0).to(device)
+        else:
+            x = batch
+        if hasattr(self, 'feblock'): 
+            h = self.feblock(x)
+        
+        h = self.tdnn(h)
+
+        if self.rnn_pool:
+            h = h.transpose(1, 2).transpose(0, 1)
+            h, _ = self.rnn(h)
+            h = h.transpose(0, 1).transpose(1, 2)
+
+        y = self.W(h)
+
+        if type(batch) == dict:
+            embedding = torch.chunk(y, 3, dim=0)
+
+            chunk = embedding[0]
+            return embedding, chunk
+        else:
+            return y
 
 class WaveFe(Model):
     """ Convolutional front-end to process waveforms

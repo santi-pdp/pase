@@ -19,9 +19,10 @@ class TDNN(Model):
     # Architecture taken from x-vectors extractor
     # https://www.danielpovey.com/files/2018_icassp_xvectors.pdf
     def __init__(self, num_inputs, num_outputs, 
-                 xvector=False,
+                 method='cls',
                  name='TDNN'):
         super().__init__(name=name)
+        self.method = method
         self.model = nn.Sequential(
             nn.Conv1d(num_inputs, 512, 5, padding=2),
             nn.BatchNorm1d(512),
@@ -48,16 +49,25 @@ class TDNN(Model):
             nn.Conv1d(512, num_outputs, 1),
             nn.LogSoftmax(dim=1)
         )
-        if xvector:
+        if method == 'cls':
+            print('Using cls TDNN method')
+        elif method == 'xvector':
             # get output features at affine after stats pooling
             self.model = nn.Sequential(*list(self.model.children())[:-5])
-        self.xvector = xvector
+            print('Using xvector TDNN method')
+        elif method == 'unpooled':
+            # get output features right before the pooling
+            self.model = nn.Sequential(*list(self.model.children())[:-9])
+            print('Using unpooled TDNN method')
+        else:
+            raise TypeError('Unrecognized TDNN method: ', method)
+        self.emb_dim = 1500
 
     def forward(self, x):
         return self.model(x)
 
     def load_pretrained(self, ckpt_path, verbose=True):
-        if self.xvector:
+        if self.method != 'cls':
             # remove last layers from dict first
             ckpt = torch.load(ckpt_path, 
                               map_location=lambda storage, loc: storage)
@@ -75,6 +85,7 @@ class TDNN(Model):
                                     verbose=verbose)
 
 if __name__ == '__main__':
+    """
     sp = StatisticalPooling()
     x = torch.randn(1, 100, 1000)
     y = sp(x)
@@ -84,3 +95,7 @@ if __name__ == '__main__':
     y = tdnn(x)
     print('y size: ', y.size())
     tdnn.load_pretrained('/tmp/xvector.ckpt')
+    """
+    x = torch.randn(2, 24, 1000)
+    tdnn = TDNN(24, 2, method='unpooled')
+    print(tdnn(x).shape)
