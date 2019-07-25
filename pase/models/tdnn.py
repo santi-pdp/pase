@@ -61,6 +61,7 @@ class TDNN(Model):
             print('Using unpooled TDNN method')
         else:
             raise TypeError('Unrecognized TDNN method: ', method)
+        self.emb_dim = 1500
 
     def forward(self, x):
         return self.model(x)
