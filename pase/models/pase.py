@@ -64,7 +64,7 @@ class pase_attention(Model):
         if pretrained_ckpt is not None:
             self.load_pretrained(pretrained_ckpt, load_last=True)
 
-    def forward(self, x, alpha, device):
+    def forward(self, x, alpha=1, device=None):
 
         # forward the encoder
         # x[chunk, context, rand] => y[chunk, context, rand], chunk
@@ -277,7 +277,7 @@ class pase(Model):
         if pretrained_ckpt is not None:
             self.load_pretrained(pretrained_ckpt, load_last=True)
 
-    def forward(self, x, alpha, device):
+    def forward(self, x, alpha=1, device=None):
 
         # forward the encoder
         # x[chunk, context, rand] => y[chunk, context, rand], chunk
