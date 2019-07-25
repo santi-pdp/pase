@@ -402,15 +402,18 @@ class ResBasicBlock1D(NeuralBlock):
         out = self.relu(out)
         return out
 
-class ResARModule(NeuralBlock):
+class ResDilatedModule(NeuralBlock):
 
     def __init__(self, ninp, fmaps,
                  res_fmaps,
                  kwidth, dilation,
                  norm_type=None,
                  act=None,
-                 name='ResARModule'):
+                 causal=False,
+                 name='ResDilatedModule'):
         super().__init__(name=name)
+        assert kwidth % 2 != 0
+        self.causal = causal
         self.dil_conv = nn.Conv1d(ninp, fmaps,
                                   kwidth, dilation=dilation)
         if act is not None:
@@ -433,10 +436,15 @@ class ResARModule(NeuralBlock):
                                                   res_fmaps)
 
     def forward(self, x):
-        kw__1 = self.kwidth - 1
-        P = kw__1 + kw__1 * (self.dilation - 1)
-        # causal padding
-        x_p = F.pad(x, (P, 0))
+        if self.causal:
+            kw__1 = self.kwidth - 1
+            P = kw__1 + kw__1 * (self.dilation - 1)
+            # causal padding
+            x_p = F.pad(x, (P, 0))
+        else:
+            kw_2 = self.kwidth // 2
+            P = kw_2 * self.dilation
+            x_p = F.pad(x, (P, P))
         # dilated conv
         h = self.dil_conv(x_p)
         # normalization if applies
@@ -984,10 +992,11 @@ if __name__ == '__main__':
 #                         padding='SAME',
 #                         stride=160)
     #conv = GConv1DBlock(1, 10, 21, 1)
-    conv = FeResBlock(1, 10, 3, 1, 1)
-    x = torch.randn(1, 1, 10)
+    #conv = FeResBlock(1, 10, 3, 1, 1)
+    conv = ResDilatedModule(1, 50, 256, 3, 1024)
+    x = torch.randn(1, 1, 16000)
     print(conv)
-    y = conv(x)
+    y, res = conv(x)
     print(y.size())
 
 
