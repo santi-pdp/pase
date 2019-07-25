@@ -64,7 +64,7 @@ class pase_attention(Model):
         if pretrained_ckpt is not None:
             self.load_pretrained(pretrained_ckpt, load_last=True)
 
-    def forward(self, x, device):
+    def forward(self, x, alpha, device):
 
         # forward the encoder
         # x[chunk, context, rand] => y[chunk, context, rand], chunk
@@ -85,7 +85,7 @@ class pase_attention(Model):
         labels = {}
         for worker in self.regression_workers:
             hidden, _ = new_hidden[worker.name]
-            y = worker(hidden)
+            y = worker(hidden, alpha)
             preds[worker.name] = y
             labels[worker.name] = x[worker.name].to(device).detach()
             if worker.name == 'chunk':
@@ -98,12 +98,12 @@ class pase_attention(Model):
             hidden, mask = new_hidden[worker.name]
             h = [hidden, h[1] * mask, h[2] * mask]
             if worker.name == "spc":
-                y, label = worker(hidden, device)
+                y, label = worker(hidden, alpha, device)
             elif worker.name == "overlap":
-                y = worker(hidden)
+                y = worker(hidden, alpha)
                 label = x[worker.name].to(device).detach()
             else:
-                y, label = worker(h, device=device)
+                y, label = worker(h, alpha, device=device)
             preds[worker.name] = y
             labels[worker.name] = label
 
@@ -248,6 +248,19 @@ class pase(Model):
         self.regression_workers = nn.ModuleList()
         self.classification_workers = nn.ModuleList()
 
+        count_cat = 0
+        if "concat" in frontend_cfg.keys():
+            for cat in frontend_cfg['concat']:
+                if cat:
+                    count_cat += 1
+        if count_cat == 0:
+            count_cat = 1
+
+        ninp *= count_cat
+
+        print("==>concat features from {} levels".format(count_cat))
+        print("==>input size for workers: {}".format(ninp))
+
         for type, cfg_lst in minions_cfg.items():
 
             for cfg in cfg_lst:
@@ -264,7 +277,7 @@ class pase(Model):
         if pretrained_ckpt is not None:
             self.load_pretrained(pretrained_ckpt, load_last=True)
 
-    def forward(self, x, device):
+    def forward(self, x, alpha, device):
 
         # forward the encoder
         # x[chunk, context, rand] => y[chunk, context, rand], chunk
@@ -278,23 +291,23 @@ class pase(Model):
         preds = {}
         labels = {}
         for worker in self.regression_workers:
-            y = worker(chunk)
+            y = worker(chunk, alpha)
             preds[worker.name] = y
             labels[worker.name] = x[worker.name].to(device).detach()
             if worker.name == 'chunk':
-                labels[worker.name] =  x['cchunk'].to(device).detach()
+                labels[worker.name] = x['cchunk'].to(device).detach()
 
         # forward all regression workers
         # h => y, label
 
         for worker in self.classification_workers:
             if worker.name == "spc" or worker.name == "gap":
-                y, label = worker(chunk, device=device)
+                y, label = worker(chunk, alpha, device=device)
             elif worker.name == "overlap":
-                y = worker(chunk)
+                y = worker(chunk, alpha)
                 label = x[worker.name].to(device).detach()
             else:
-                y, label = worker(h, device=device)
+                y, label = worker(h, alpha, device=device)
             preds[worker.name] = y
             labels[worker.name] = label
 
