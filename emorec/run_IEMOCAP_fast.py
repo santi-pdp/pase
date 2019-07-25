@@ -67,13 +67,13 @@ N_epochs=15
 seed=1234
 batch_size=128
 halving_factor=0.8
-lr=0.12
+lr=0.0001
 left=0
 right=0
 
 # Neural network parameters
 options={}
-options['dnn_lay']='1024,4'
+options['dnn_lay']='256,4'
 options['dnn_drop']='0.15,0.0'
 options['dnn_use_batchnorm']='False,False'
 options['dnn_use_laynorm']='True,False'
