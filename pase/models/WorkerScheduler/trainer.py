@@ -201,7 +201,7 @@ class trainer(object):
             self.model.train()
 
             iterator = iter(dataloader)
-
+            self.bpe =3
             with trange(1, self.bpe + 1) as pbar:
                 for bidx in pbar:
                     pbar.set_description("Epoch {}/{}".format(e, self.epoch))
@@ -280,7 +280,7 @@ class trainer(object):
                         batch = next(iterator)
 
                     # inference
-                    h, chunk, preds, labels = self.model.forward(batch, device)
+                    h, chunk, preds, labels = self.model.forward(batch, device=device)
 
                     # calculate losses
                     tot_loss = torch.tensor([0.]).to(device)
