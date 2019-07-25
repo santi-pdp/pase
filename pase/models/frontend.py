@@ -306,7 +306,7 @@ class aspp_res_encoder(Model):
         self.rnn_pool = rnn_pool
         self.rnn_add = rnn_add
         self.concat = concat
-        assert (self.rnn_pool and self.rnn_add) or not self.rnn_pool
+        assert ((self.rnn_pool and self.rnn_add) or not self.rnn_pool) or self.rnn_pool
 
         if rnn_pool:
             self.rnn = build_rnn_block(hidden_dim, hidden_dim // 2,
