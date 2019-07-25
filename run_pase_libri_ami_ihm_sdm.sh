@@ -7,11 +7,11 @@
 #export CUDA_VISIBLE_DEVICES=1
 
 python -u train.py --batch_size 32 --epoch 40 \
-        --save_path ckpt_PASE_libri_revno_ami_ihm_revno \
+        --save_path ckpt_PASE_libri_revno_ami_sdm \
         --num_workers 4 --warmup 10000000 --net_cfg cfg/workers.cfg \
         --fe_cfg cfg/PASE_concatdense_QRNN.cfg --do_eval \
         --min_lr 0.0005 --fe_lr 0.0005  \
-        --stats data/libri_ami_ihm_stats.pkll --lrdec_step 20 --lrdecay 0.5 \
+        --stats data/prep/ami_ihm_stats.pkl --lrdec_step 20 --lrdecay 0.5 \
         --chunk_size 32000 --random_scale True --log_grad_keys rnn \
         --tensorboard True \
         --cchunk_prior \
@@ -21,6 +21,7 @@ python -u train.py --batch_size 32 --epoch 40 \
         --dataset LibriSpeechSegTupleWavDataset \
         --data_root /export/team-mic/corpora/ami \
         --data_cfg data/prep/ami_data_ihm_sdm1357.cfg \
-        --dtrans_cfg cfg/distortions/all.cfg \
-        --dataset AmiSegTupleWavDataset
+        --dtrans_cfg None \
+        --dataset AmiSegTupleWavDataset \
+        --ihm2sdm 1,3,5,7
 
