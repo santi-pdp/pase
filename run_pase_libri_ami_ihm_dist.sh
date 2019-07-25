@@ -20,7 +20,7 @@ python -u train.py --batch_size 32 --epoch 40 \
         --dtrans_cfg cfg/distortions/all.cfg \
         --dataset LibriSpeechSegTupleWavDataset \
         --data_root /export/team-mic/corpora/ami \
-        --data_cfg data/prep/ami_data_ihm_sdm1357.cfg \
+        --data_cfg data/ami_data_ihm_sdm1357.cfg \
         --dtrans_cfg cfg/distortions/all.cfg \
         --dataset AmiSegTupleWavDataset
 
