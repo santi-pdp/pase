@@ -193,7 +193,7 @@ def build_dataset_providers(opts, minions_cfg):
         print ('Preparing dset for {}'.format(opts.data_root[idx]))
         if opts.dtrans_cfg is not None and \
             len(opts.dtrans_cfg) > 0 and \
-            opts.dtrans_cfg[idx] is not None :
+            str2None(opts.dtrans_cfg[idx]) is not None :
             with open(opts.dtrans_cfg[idx], 'r') as dtr_cfg:
                 dtr = json.load(dtr_cfg)
                 #dtr['trans_p'] = opts.distortion_p
