@@ -533,8 +533,8 @@ class AmiSegTupleWavDataset(PairWavDataset):
             pkg = self.transform(pkg)
 
         if 'cchunk' in pkg:
-            chunk = pkg['cchunk'].squeeze(0)
-            pkg['cchunk'] = pkg['chunk']
+            chunk = pkg['cchunk']
+            pkg['cchunk'] = pkg['chunk'].squeeze(0)
             pkg['chunk'] = chunk
         else:
             pkg['cchunk'] = pkg['chunk'].squeeze(0)

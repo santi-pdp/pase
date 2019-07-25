@@ -293,7 +293,7 @@ def train(opts):
         va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
                                 shuffle=True, collate_fn=DictCollater(),
                                 num_workers=opts.num_workers,drop_last=True,
-                                pin_memory=CUDA)
+                                pin_memory=False)
         va_bpe = (va_dset.total_wav_dur // opts.chunk_size) // opts.batch_size
         opts.va_bpe = va_bpe
     else:
