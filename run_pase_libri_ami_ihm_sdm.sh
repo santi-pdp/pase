@@ -7,7 +7,7 @@
 #export CUDA_VISIBLE_DEVICES=1
 
 python -u train.py --batch_size 32 --epoch 40 \
-        --save_path ckpt_PASE_libri_revno_ami_sdm \
+        --save_path ckpt_PASE_libri_revno_ami_sdm1357 \
         --num_workers 4 --warmup 10000000 --net_cfg cfg/workers.cfg \
         --fe_cfg cfg/PASE_concatdense_QRNN.cfg --do_eval \
         --min_lr 0.0005 --fe_lr 0.0005  \
