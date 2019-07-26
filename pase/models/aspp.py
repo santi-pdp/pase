@@ -54,7 +54,7 @@ class _ASPPModule2d(Model):
                 m.bias.data.zero_()
 
 class ASPP(Model):
-    def __init__(self, inplanes, emb_dim, dilations=[1, 12, 24, 36], fmaps=48, dense=False):
+    def __init__(self, inplanes, emb_dim, dilations=[1, 6, 12, 18], fmaps=48, dense=False):
         super(ASPP, self).__init__()
 
         if not dense:

@@ -5,6 +5,7 @@ import json
 from .aspp import aspp_resblock
 from .tdnn import TDNN
 from pase.models.WorkerScheduler.encoder import encoder
+import torchvision.models as models
 try:
     from modules import *
 except ImportError:
@@ -23,6 +24,8 @@ def wf_builder(cfg_path):
                 model_name = cfg_path['name']
                 if cfg_path['name'] == "asppRes":
                     return aspp_res_encoder(**cfg_path)
+                elif model_name == "Resnet50":
+                    return Resnet50_encoder(**cfg_path)
                 elif model_name == "tdnn":
                     return TDNNFe(**cfg_path)
                 else:
@@ -374,5 +377,69 @@ class aspp_res_encoder(Model):
         for i in range(len(out) - 1):
             out[i] = F.adaptive_avg_pool1d(out[i], last_feature.shape[-1])
         return out
+
+class Resnet50_encoder(Model):
+
+    def __init__(self, sinc_out, hidden_dim, sinc_kernel=251, sinc_stride=1, conv_stride=5, kernel_size=21, name="Resnet50"):
+        super().__init__(name=name)
+        self.sinc = SincConv_fast(1, sinc_out, sinc_kernel,
+                                  sample_rate=16000,
+                                  padding='SAME',
+                                  stride=sinc_stride,
+                                  pad_mode='reflect'
+                                  )
+
+        self.conv1 = nn.Sequential(nn.Conv2d(1, 64, kernel_size=kernel_size, stride=conv_stride, padding= kernel_size // 2, bias=False),
+                                   nn.BatchNorm2d(64),
+                                   nn.ReLU(64))
+
+        resnet = models.resnet34(pretrained=True)
+        self.resnet = nn.Sequential(resnet.layer1,
+                                    resnet.layer2,
+                                    resnet.layer3,
+                                    resnet.layer4
+                                    )
+
+        self.conv2 = nn.Sequential(nn.Conv2d(512, 256, kernel_size=[2, 1], stride=1, bias=False))
+
+        self.emb_dim = hidden_dim
+
+
+    def forward(self, batch, device=None):
+
+        if type(batch) == dict:
+            x = torch.cat((batch['chunk'],
+                           batch['chunk_ctxt'],
+                           batch['chunk_rand']),
+                          dim=0).to(device)
+        else:
+            x = batch
+
+
+        sinc_out = self.sinc(x).unsqueeze(1)
+
+        # print(sinc_out.shape)
+
+        conv_out = self.conv1(sinc_out)
+
+        # print(conv_out.shape)
+
+        res_out = self.resnet(conv_out)
+
+        # print(res_out.shape)
+
+        h =self.conv2(res_out).squeeze(2)
+
+        # print(h.shape)
+
+        if type(batch) == dict:
+            embedding = torch.chunk(h, 3, dim=0)
+
+            chunk = embedding[0]
+            return embedding, chunk
+        else:
+            return h
+
+
 
 

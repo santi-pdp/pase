@@ -9,6 +9,9 @@ from pase.utils import ScaleGrad
 
 
 def minion_maker(cfg):
+    if isinstance(cfg, str):
+        with open(cfg, "r") as f:
+            cfg = json.load(f)
     mtype = cfg.pop('type', 'mlp')
     if mtype == 'mlp':
         minion = MLPMinion(**cfg)
@@ -84,8 +87,10 @@ class DecoderMinion(Model):
                                         hidden_size, dropout))
             ninp = hidden_size
         self.W = nn.Conv1d(hidden_size, num_outputs, 1)
+        self.sg = ScaleGrad()
 
-    def forward(self, x, alpha, device=None):
+    def forward(self, x, alpha=1, device=None):
+        self.sg.apply(x, alpha)
         h = x
         for bi, block in enumerate(self.blocks, start=1):
             h_ = h
@@ -131,8 +136,10 @@ class MLPMinion(Model):
                                         dropout))
             ninp = hidden_size
         self.W = nn.Conv1d(hidden_size, num_outputs, 1)
+        self.sg = ScaleGrad()
 
-    def forward(self, x, alpha, device=None):
+    def forward(self, x, alpha=1, device=None):
+        self.sg.apply(x, alpha)
         h = x
         for bi, block in enumerate(self.blocks, start=1):
             h = block(h)
@@ -174,8 +181,10 @@ class GRUMinion(Model):
                           batch_first=True,
                           dropout=dropout)
         self.W = nn.Conv1d(hidden_size, num_outputs, 1)
+        self.sg = ScaleGrad()
 
-    def forward(self, x, alpha, device=None):
+    def forward(self, x, alpha=1, device=None):
+        self.sg.apply(x, alpha)
         h, _ = self.rnn(x.transpose(1, 2))
         h = h.transpose(1, 2)
         y = self.W(h)
@@ -217,13 +226,15 @@ class SPCMinion(MLPMinion):
                          name=name)
         self.ctxt_frames = ctxt_frames
         self.seq_pad = seq_pad
+        self.sg = ScaleGrad()
 
-    def forward(self, x, alpha, device=None):
+    def forward(self, x, alpha=1, device=None):
         # x is a batch of sequences
         # of dims [B, channels, time]
         # first select a "central" time-step
         # with enough seq_pad an ctxt_frames
         # margin M = seq_pad + ctxt_frames on both sides
+        self.sg.apply(x, alpha)
         seq_pad = self.seq_pad
         N = self.ctxt_frames
         M = seq_pad + N
@@ -280,11 +291,13 @@ class GapMinion(MLPMinion):
                          loss_weight=loss_weight,
                          keys=keys,
                          name=name)
+        self.sg = ScaleGrad()
 
-    def forward(self, x, alpha, device=None):
+    def forward(self, x, alpha=1, device=None):
         # x is a batch of sequences
         # of dims [B, channels, time]
         # Select randomly two chunks out of T possible
+        self.sg.apply(x, alpha)
         T = x.shape[2]
         aidx = torch.LongTensor(np.random.randint(0, T, size=x.shape[0]))
         bidx = torch.LongTensor(np.random.randint(0, T, size=x.shape[0]))
