@@ -380,7 +380,7 @@ class aspp_res_encoder(Model):
 
 class Resnet50_encoder(Model):
 
-    def __init__(self, sinc_out, hidden_dim, sinc_kernel=251, sinc_stride=1, conv_stride=5, kernel_size=21, name="Resnet50"):
+    def __init__(self, sinc_out, hidden_dim, sinc_kernel=251, sinc_stride=1, conv_stride=5, kernel_size=21, pretrained=True,name="Resnet50"):
         super().__init__(name=name)
         self.sinc = SincConv_fast(1, sinc_out, sinc_kernel,
                                   sample_rate=16000,
@@ -393,7 +393,7 @@ class Resnet50_encoder(Model):
                                    nn.BatchNorm2d(64),
                                    nn.ReLU(64))
 
-        resnet = models.resnet34(pretrained=True)
+        resnet = models.resnet34(pretrained=pretrained)
         self.resnet = nn.Sequential(resnet.layer1,
                                     resnet.layer2,
                                     resnet.layer3,
