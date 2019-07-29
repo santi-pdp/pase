@@ -1,10 +1,13 @@
 import torch
 import torch.nn.functional as F
 import tqdm
+import gammatone
+from gammatone.gtgram import gtgram
 import numpy as np
 import random
 import pysptk
 import os
+from python_speech_features import logfbank
 import librosa
 import struct
 import glob
@@ -316,6 +319,164 @@ class LPS(object):
         attrs += ', device={})'.format(self.device)
         return self.__class__.__name__ + attrs
 
+class FBanks(object):
+
+    def __init__(self, n_filters=40, n_fft=512, hop=80,
+                 win=320, rate=16000,
+                 device='cpu'):
+        self.n_fft = n_fft
+        self.n_filters = n_filters
+        self.rate = rate
+        self.hop = hop
+        self.win = win
+
+    # @profile
+    def __call__(self, pkg, cached_file=None):
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        if torch.is_tensor(wav):
+            wav = wav.data.numpy().astype(np.float32)
+        max_frames = wav.shape[0] // self.hop
+        if cached_file is not None:
+            # load pre-computed data
+            X = torch.load(cached_file)
+            beg_i = pkg['chunk_beg_i'] // self.hop
+            end_i = pkg['chunk_end_i'] // self.hop
+            X = X[:, beg_i:end_i]
+            pkg['fbank'] = X
+        else:
+            winlen = (float(self.win) / self.rate)
+            winstep = (float(self.hop) / self.rate)
+            X = logfbank(wav, self.rate, winlen, winstep,
+                         self.n_filters, self.n_fft).T
+            expected_frames = len(wav) // self.hop
+            fbank = torch.FloatTensor(X)
+            if fbank.shape[1] < expected_frames:
+                P = expected_frames - fbank.shape[1]
+                # pad repeating borders
+                fbank = F.pad(fbank.unsqueeze(0), (0, P), mode='replicate')
+                fbank = fbank.squeeze(0)
+            pkg['fbank'] = fbank
+        # Overwrite resolution to hop length
+        pkg['dec_resolution'] = self.hop
+        return pkg
+
+    def __repr__(self):
+        attrs = '(n_fft={}, n_filters={}, ' \
+                'hop={}, win={}'.format(self.n_fft,
+                                        self.n_filters,
+                                        self.hop,
+                                        self.win)
+        return self.__class__.__name__ + attrs
+
+class Gammatone(object):
+
+    def __init__(self, f_min=500, n_channels=40, hop=80,
+                 win=320,  rate=16000,
+                 device='cpu'):
+        self.hop = hop
+        self.win = win
+        self.n_channels = n_channels
+        self.rate = rate
+        self.f_min = f_min
+
+    # @profile
+    def __call__(self, pkg, cached_file=None):
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        if torch.is_tensor(wav):
+            wav = wav.data.numpy().astype(np.float32)
+        max_frames = wav.shape[0] // self.hop
+        if cached_file is not None:
+            # load pre-computed data
+            X = torch.load(cached_file)
+            beg_i = pkg['chunk_beg_i'] // self.hop
+            end_i = pkg['chunk_end_i'] // self.hop
+            X = X[:, beg_i:end_i]
+            pkg['gtn'] = X
+        else:
+            windowtime = float(self.win) / self.rate
+            windowhop = float(self.hop) / self.rate
+            gtn = gammatone.gtgram.gtgram(wav, self.rate, 
+                                          windowtime, windowhop,
+                                          self.n_channels,
+                                          self.f_min)
+            gtn = np.log(gtn + 1e-10)
+            expected_frames = len(wav) // self.hop
+            gtn = torch.FloatTensor(gtn)
+            if gtn.shape[1] < expected_frames:
+                P = expected_frames - gtn.shape[1]
+                # pad repeating borders
+                gtn = F.pad(gtn.unsqueeze(0), (0, P), mode='replicate')
+                gtn = gtn.squeeze(0)
+            #pkg['gtn'] = torch.FloatTensor(gtn[:, :total_frames])
+            pkg['gtn'] = torch.FloatTensor(gtn)
+        # Overwrite resolution to hop length
+        pkg['dec_resolution'] = self.hop
+        return pkg
+
+    def __repr__(self):
+        attrs = '(f_min={}, n_channels={}, ' \
+                'hop={}, win={})'.format(self.f_min,
+                                        self.n_channels,
+                                        self.hop,
+                                        self.win)
+        return self.__class__.__name__ + attrs
+
+class LPC(object):
+
+    def __init__(self, order=25, hop=80,
+                 win=320, 
+                 device='cpu'):
+        self.order = order
+        self.hop = hop
+        self.win = win
+        self.window = pysptk.hamming(win).astype(np.float32)
+
+    def frame_signal(self, signal, window):
+        
+        frames = []
+        for beg_i in range(0, signal.shape[0], self.hop):
+            frame = signal[beg_i:beg_i + self.win]
+            if len(frame) < self.win:
+                # pad right size with zeros
+                P = self.win - len(frame)
+                frame = np.concatenate((frame,
+                                        np.zeros(P,)), axis=0)
+            frame = frame * window
+            frames.append(frame[None, :])
+        frames = np.concatenate(frames, axis=0)
+        return frames
+
+    # @profile
+    def __call__(self, pkg, cached_file=None):
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        if torch.is_tensor(wav):
+            wav = wav.data.numpy().astype(np.float32)
+        max_frames = wav.shape[0] // self.hop
+        if cached_file is not None:
+            # load pre-computed data
+            X = torch.load(cached_file)
+            beg_i = pkg['chunk_beg_i'] // self.hop
+            end_i = pkg['chunk_end_i'] // self.hop
+            X = X[:, beg_i:end_i]
+            pkg['lpc'] = X
+        else:
+            wav = self.frame_signal(wav, self.window)
+            #print('wav shape: ', wav.shape)
+            lpc = pysptk.sptk.lpc(wav, order=self.order)
+            #print('lpc: ', lpc.shape)
+            pkg['lpc'] = torch.FloatTensor(lpc)
+        # Overwrite resolution to hop length
+        pkg['dec_resolution'] = self.hop
+        return pkg
+
+    def __repr__(self):
+        attrs = '(order={}, hop={}, win={})'.format(self.order,
+                                                    self.hop,
+                                                    self.win)
+        return self.__class__.__name__ + attrs
 
 class MFCC(object):
 
@@ -1460,3 +1621,22 @@ class SpeedChange(object):
             self.factor_range
         )
         return self.__class__.__name__ + attrs
+
+if __name__ == '__main__':
+    lpc = Gammatone(n_channels=40, f_min=100)
+    wav, size = sf.read('test.wav')
+    wav = wav[:32000]
+    print(wav.shape)
+    gtn = lpc({'chunk':wav})['gtn'].data.numpy()
+    lps = LPS()({'chunk':torch.FloatTensor(wav)})['lps'].data.numpy()
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    plt.subplot(2,1,1)
+    plt.imshow(np.log(gtn))
+    plt.subplot(2,1,2)
+    #plt.imshow(lps)
+    #plt.subplot(3,1,3)
+    plt.plot(wav)
+    plt.tight_layout()
+    plt.savefig('gtn.png', dpi=200)
