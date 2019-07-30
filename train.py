@@ -52,15 +52,29 @@ def make_transforms(opts, workers_cfg):
                 continue
             elif name == 'lps':
                 znorm = True
-                trans.append(LPS(opts.nfft, hop=160, win=400))
+                trans.append(LPS(opts.nfft, hop=opts.hop, win=opts.win))
+            elif name == 'gtn':
+                znorm = True
+                trans.append(Gammatone(opts.gtn_fmin, opts.gtn_channels, 
+                                       hop=opts.hop, win=opts.win))
+            elif name == 'lpc':
+                znorm = True
+                trans.append(LPC(opts.lpc_order, hop=opts.hop,
+                                 win=opts.win))
+            elif name == 'fbank':
+                znorm = True
+                trans.append(FBanks(n_filters=opts.fbank_filters, 
+                                    n_fft=opts.nfft,
+                                    hop=opts.hop,
+                                    win=opts.win))
             elif name == 'mfcc':
                 znorm = True
-                trans.append(MFCC(hop=160))
+                trans.append(MFCC(hop=opts.hop))
             elif name == 'prosody':
                 znorm = True
-                trans.append(Prosody(hop=160, win=400))
+                trans.append(Prosody(hop=opts.hop, win=opts.win))
             elif name == 'chunk' or name == 'cchunk':
-                znorm = True
+                znorm = False
             else:
                 raise TypeError('Unrecognized module \"{}\"'
                                 'whilst building transfromations'.format(name))
@@ -381,6 +395,10 @@ if __name__ == '__main__':
     parser.add_argument('--log_freq', type=int, default=100)
     parser.add_argument('--epoch', type=int, default=1000)
     parser.add_argument('--nfft', type=int, default=2048)
+    parser.add_argument('--fbank_filters', type=int, default=40)
+    parser.add_argument('--lpc_order', type=int, default=25)
+    parser.add_argument('--gtn_channels', type=int, default=40)
+    parser.add_argument('--gtn_fmin', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=100)
     parser.add_argument('--hidden_size', type=int, default=256)
     parser.add_argument('--hidden_layers', type=int, default=2)
@@ -416,6 +434,8 @@ if __name__ == '__main__':
                         help='Do VQ quantization of enc output (Def: False).')
     parser.add_argument('--cchunk_prior', action='store_true', default=False)
     parser.add_argument('--sup_exec', type=str, default=None)
+    parser.add_argument('--hop', type=int, default=160)
+    parser.add_argument('--win', type=int, default=400)
     parser.add_argument('--sup_freq', type=int, default=1)
     parser.add_argument('--preload_wav', action='store_true', default=False,
                         help='Preload wav files in Dataset (Def: False).')
