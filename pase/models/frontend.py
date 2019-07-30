@@ -39,14 +39,14 @@ def wf_builder(cfg_path):
 
 def select_output(h, mode=None):
     if mode == "avg_norm":
-        return h - torch.mean(h, dim=2)
+        return h - torch.mean(h, dim=2, keepdim=True)
     elif mode == "avg_concat":
-        global_avg = torch.mean(h, dim=2).repeat(1, 1, h.shape[-1]).view(h.shape).to(h.device)
+        global_avg = torch.mean(h, dim=2, keepdim=True).repeat(1, 1, h.shape[-1]).to(h.device)
         return torch.cat((h, global_avg), dim=1)
     elif mode == "avg_norm_concat":
-        global_avg = torch.mean(h, dim=2).to(h.device)
+        global_avg = torch.mean(h, dim=2, keepdim=True).to(h.device)
         h = h - global_avg
-        global_feature = global_avg.repeat(1, 1, h.shape[-1]).view(h.shape).to(h.device)
+        global_feature = global_avg.repeat(1, 1, h.shape[-1]).to(h.device)
         return torch.cat((h, global_feature), dim=1)
     else:
         return h
