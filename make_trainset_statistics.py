@@ -29,6 +29,9 @@ def build_dataset_providers(opts):
         ToTensor(),
         MIChunkWav(opts.chunk_size),
         LPS(hop=opts.hop_size),
+        Gammatone(hop=opts.hop_size),
+        #LPC(hop=opts.hop_size),
+        FBanks(hop=opts.hop_size),
         MFCC(hop=opts.hop_size),
         Prosody(hop=opts.hop_size)
     ])
@@ -61,6 +64,8 @@ def extract_stats(opts):
     for bidx, batch in enumerate(dloader, start=1):
         print('Bidx: {}/{}'.format(bidx, bpe))
         for k, v in batch.items():
+            if k in opts.exclude_keys:
+                continue
             if k not in data:
                 data[k] = []
             data[k].append(v)
