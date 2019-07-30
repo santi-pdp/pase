@@ -26,6 +26,9 @@ class DictCollater(object):
                                       'chunk_rand',
                                       'overlap',
                                       'lps',
+                                      'lpc',
+                                      'gtn',
+                                      'fbank',
                                       'mfcc',
                                       'prosody'],
                  labs=False):
@@ -374,7 +377,7 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
 
         pkg['cchunk'] = pkg['chunk'].squeeze(0)
         # initialize overlap label
-        pkg['overlap'] = torch.zeros(len(pkg['chunk']) // pkg['dec_resolution']).float()
+        pkg['overlap'] = torch.zeros(pkg['chunk'].shape[-1] // pkg['dec_resolution']).float()
 
         if self.distortion_transforms and not ZERO_SPEECH:
             pkg = self.distortion_transforms(pkg)
