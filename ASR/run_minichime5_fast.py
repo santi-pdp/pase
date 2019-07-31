@@ -120,7 +120,7 @@ print('Computing PASE features...')
 fea_pase={}
 for snt_id in fea.keys():
     pase.eval()
-    fea_pase[snt_id]=pase(fea[snt_id], device).to('cpu').detach()
+    fea_pase[snt_id]=pase(fea[snt_id], device,mode='avg_norm').to('cpu').detach()
     fea_pase[snt_id]=fea_pase[snt_id].view(fea_pase[snt_id].shape[1],fea_pase[snt_id].shape[2]).transpose(0,1)
 
 inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
@@ -128,7 +128,7 @@ inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
 # Computing pase features for test
 fea_pase_dev={}
 for snt_id in fea_dev.keys():
-    fea_pase_dev[snt_id]=pase(fea_dev[snt_id], device).to('cpu').detach()
+    fea_pase_dev[snt_id]=pase(fea_dev[snt_id], device,mode='avg_norm').to('cpu').detach()
     fea_pase_dev[snt_id]=fea_pase_dev[snt_id].view(fea_pase_dev[snt_id].shape[1],fea_pase_dev[snt_id].shape[2]).transpose(0,1)
 
   
