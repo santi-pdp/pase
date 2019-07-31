@@ -37,6 +37,20 @@ def wf_builder(cfg_path):
     else:
         raise ValueError("cfg cannot be None!")
 
+def select_output(h, mode=None):
+    if mode == "avg_norm":
+        return h - torch.mean(h, dim=2, keepdim=True)
+    elif mode == "avg_concat":
+        global_avg = torch.mean(h, dim=2, keepdim=True).repeat(1, 1, h.shape[-1])
+        return torch.cat((h, global_avg), dim=1)
+    elif mode == "avg_norm_concat":
+        global_avg = torch.mean(h, dim=2, keepdim=True)
+        h = h - global_avg
+        global_feature = global_avg.repeat(1, 1, h.shape[-1])
+        return torch.cat((h, global_feature), dim=1)
+    else:
+        return h
+
 class TDNNFe(Model):
     """ Time-Delayed Neural Network front-end
     """
@@ -81,7 +95,7 @@ class TDNNFe(Model):
             self.W = nn.Conv1d(fmap, emb_dim, 1)
         self.rnn_pool = rnn_pool
 
-    def forward(self, batch, device=None):
+    def forward(self, batch, device=None, mode=None):
 
         if type(batch) == dict:
             x = torch.cat((batch['chunk'],
@@ -108,7 +122,7 @@ class TDNNFe(Model):
             chunk = embedding[0]
             return embedding, chunk
         else:
-            return y
+            return select_output(h, mode=mode)
 
 class WaveFe(Model):
     """ Convolutional front-end to process waveforms
@@ -224,7 +238,7 @@ class WaveFe(Model):
         else:
             raise TypeError('Unknown densemerge: ', self.densemerge)
         
-    def forward(self, batch, device=None):
+    def forward(self, batch, device=None, mode=None):
 
         if type(batch) == dict:
             x = torch.cat((batch['chunk'],
@@ -282,7 +296,7 @@ class WaveFe(Model):
             chunk = embedding[0]
             return embedding, chunk
         else:
-            return y
+            return select_output(y, mode)
 
 
 class aspp_res_encoder(Model):
@@ -324,7 +338,7 @@ class aspp_res_encoder(Model):
 
 
 
-    def forward(self, batch, device=None):
+    def forward(self, batch, device=None, mode=None):
 
         if type(batch) == dict:
             x = torch.cat((batch['chunk'],
@@ -369,7 +383,7 @@ class aspp_res_encoder(Model):
             chunk = embedding[0]
             return embedding, chunk
         else:
-            return h
+            return select_output(h, mode)
 
 
     def fuse(self, out):
@@ -405,7 +419,7 @@ class Resnet50_encoder(Model):
         self.emb_dim = hidden_dim
 
 
-    def forward(self, batch, device=None):
+    def forward(self, batch, device=None, mode=None):
 
         if type(batch) == dict:
             x = torch.cat((batch['chunk'],
@@ -438,7 +452,8 @@ class Resnet50_encoder(Model):
             chunk = embedding[0]
             return embedding, chunk
         else:
-            return h
+
+            return select_output(h, mode)
 
 
 
