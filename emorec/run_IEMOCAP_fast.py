@@ -126,6 +126,11 @@ for snt_id in fea.keys():
     pase.eval()
     fea_pase[snt_id]=pase(fea[snt_id], device).to('cpu').detach()
     fea_pase[snt_id]=fea_pase[snt_id].view(fea_pase[snt_id].shape[1],fea_pase[snt_id].shape[2]).transpose(0,1)
+    avg_vect=fea_pase[snt_id].mean(0).repeat(fea_pase[snt_id].shape[0],1)
+    avg_neu=fea_pase[snt_id].mean(1)
+    std_vect=fea_pase[snt_id].std(0).repeat(fea_pase[snt_id].shape[0],1)
+    std_neu=fea_pase[snt_id].std(1)
+    fea_pase[snt_id]=torch.cat([(fea_pase[snt_id]),avg_vect],1)
 
 inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
 
@@ -134,6 +139,12 @@ fea_pase_dev={}
 for snt_id in fea_dev.keys():
     fea_pase_dev[snt_id]=pase(fea_dev[snt_id], device).detach()
     fea_pase_dev[snt_id]=fea_pase_dev[snt_id].view(fea_pase_dev[snt_id].shape[1],fea_pase_dev[snt_id].shape[2]).transpose(0,1)
+    avg_vect=fea_pase_dev[snt_id].mean(0).repeat(fea_pase_dev[snt_id].shape[0],1)
+    avg_neu=fea_pase_dev[snt_id].mean(1)
+    std_vect=fea_pase_dev[snt_id].std(0).repeat(fea_pase_dev[snt_id].shape[0],1)
+    std_neu=fea_pase_dev[snt_id].std(1)
+
+    fea_pase_dev[snt_id]=torch.cat([(fea_pase_dev[snt_id]),avg_vect],1)
 
   
 
