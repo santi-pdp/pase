@@ -58,8 +58,6 @@ dev_lst_file='timit_dev.lst'
 
 tr_lst = [line.rstrip('\n') for line in open(tr_lst_file)]
 
-tr_lst = tr_lst[0:1000]
-
 dev_lst = [line.rstrip('\n') for line in open(dev_lst_file)]
 
 # Training parameters
