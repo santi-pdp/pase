@@ -183,7 +183,10 @@ class SingleChunkWav(object):
         if len(wav) <= chksz:
             # padding time
             P = chksz - len(wav)
-            chk = F.pad(wav.view(1, 1, -1), (0, P), mode='reflect').view(-1)
+            if P < len(wav):
+                chk = F.pad(wav.view(1, 1, -1), (0, P), mode='reflect').view(-1)
+            else:
+                chk = F.pad(wav.view(1, 1, -1), (0, P), mode='replicate').view(-1)
             idx = 0
         elif reuse_bounds is not None:
             idx, end_i = reuse_bounds

@@ -193,7 +193,7 @@ class WavDataset(Dataset):
                 spks = self.data_cfg[split]['speakers']
                 print('Found {} speakers in {} split'.format(len(spks),
                                                              split))
-                self.total_wav_dur = self.data_cfg[split]['total_wav_dur']
+                self.total_wav_dur = int(self.data_cfg[split]['total_wav_dur'])
                 if 'spk2idx' in self.data_cfg and return_spk:
                     self.spk2idx = self.data_cfg['spk2idx']
                     print('Loaded spk2idx with {} '

@@ -1,4 +1,8 @@
 # from pase.models.core import Waveminionet
+
+import warnings
+warnings.filterwarnings('ignore')
+
 import librosa
 from pase.models.modules import VQEMA
 from pase.dataset import PairWavDataset, DictCollater, MetaWavConcatDataset

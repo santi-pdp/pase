@@ -29,9 +29,9 @@ def build_dataset_providers(opts):
         ToTensor(),
         MIChunkWav(opts.chunk_size),
         LPS(hop=opts.hop_size),
-        Gammatone(hop=opts.hop_size),
+        #Gammatone(hop=opts.hop_size),
         #LPC(hop=opts.hop_size),
-        FBanks(hop=opts.hop_size),
+        #FBanks(hop=opts.hop_size),
         MFCC(hop=opts.hop_size),
         Prosody(hop=opts.hop_size)
     ])
