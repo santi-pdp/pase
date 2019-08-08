@@ -190,14 +190,31 @@ class SingleChunkWav(object):
             idx = 0
         elif reuse_bounds is not None:
             idx, end_i = reuse_bounds
-            assert idx >= 0 and \
-                   idx < end_i and \
-                   wav.shape[0] >= end_i and \
-                   chksz == end_i - idx, (
-               "Cannot reuse_bounds {} for chksz {} and wav of shape {}"\
-                         .format(reuse_bounds, chksz, wav.shape)
-            )
-            chk = wav[idx:idx + chksz]
+            # padding that follows is a hack for chime, where segmenteations differ
+            # between mics (by several hundred samples at most) and there may 
+            # not be 1:1 correspondence between mics
+            # just a fix to see if it works (its quite rara though)
+            if wav.shape[0] < end_i:
+                #print ("Wshape {}, beg {}, end {}".format(wav.shape[0], idx, end_i))
+                if idx < wav.shape[0]:
+                    chktmp = wav[idx:]
+                    P = chksz - len(chktmp)
+                    #print ('Len chktmp {}, P {}'.format(len(chktmp), P))
+                    if P < len(chktmp):
+                        chk = F.pad(chktmp.view(1, 1, -1), (0, P), mode='reflect').view(-1)
+                    else:
+                        chk = F.pad(chktmp.view(1, 1, -1), (0, P), mode='replicate').view(-1)
+                else:
+                    chk = None
+            else:
+                assert idx >= 0 and \
+                       idx < end_i and \
+                       wav.shape[0] >= end_i and \
+                       chksz == end_i - idx, (
+                   "Cannot reuse_bounds {} for chksz {} and wav of shape {}"\
+                             .format(reuse_bounds, chksz, wav.shape)
+                )
+                chk = wav[idx:idx + chksz]
         else:
             # idxs = list(range(wav.size(0) - chksz))
             # idx = random.choice(idxs)
@@ -222,6 +239,9 @@ class SingleChunkWav(object):
             raw_clean = pkg['raw_clean']
             pkg['cchunk'] = self.select_chunk(raw_clean,\
                                     reuse_bounds=(beg_i, end_i))
+            if pkg['cchunk'] is None:
+                #in chime5 some parallel seg does not exist, swap clean for these
+                pkg['cchunk'] = pkg['chunk']
         if self.random_scale:
             pkg['chunk'] = norm_and_scale(pkg['chunk'])
             if 'cchunk' in pkg:
@@ -262,6 +282,8 @@ class MIChunkWav(SingleChunkWav):
         if 'raw_clean' in pkg and pkg['raw_clean'] is not None:
             raw_clean = pkg['raw_clean']
             pkg['cchunk'] = self.select_chunk(raw_clean, reuse_bounds=(beg_i, end_i))
+            if pkg['cchunk'] is None:
+                pkg['cchunk'] = pkg['chunk']
         if 'raw_ctxt' in pkg and pkg['raw_ctxt'] is not None:
             raw_ctxt = pkg['raw_ctxt']
         else:
