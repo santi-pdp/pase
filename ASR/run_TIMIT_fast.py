@@ -30,6 +30,7 @@ import json
 # import models.WorkerScheduler
 from pase.models.WorkerScheduler.encoder import *
 
+
 def get_freer_gpu(trials=10):
     for j in range(trials):
          os.system('nvidia-smi -q -d Memory |grep -A4 GPU|grep Free >tmp')
@@ -59,9 +60,6 @@ tr_lst_file='timit_tr.lst'
 dev_lst_file='timit_dev.lst'
 
 tr_lst = [line.rstrip('\n') for line in open(tr_lst_file)]
-
-tr_lst= tr_lst[0:500]
-
 dev_lst = [line.rstrip('\n') for line in open(dev_lst_file)]
 
 # Training parameters
@@ -72,8 +70,6 @@ halving_factor=0.5
 lr=0.0012
 left=1
 right=1
-
-modality='avg_norm' #avg_norm_concat
 
 # Neural network parameters
 options={}
@@ -123,19 +119,15 @@ print('Computing PASE features...')
 fea_pase={}
 for snt_id in fea.keys():
     pase.eval()
-    fea_pase[snt_id]=pase(fea[snt_id], device,mode=modality).to('cpu').detach()
+    fea_pase[snt_id]=pase(fea[snt_id], device,mode='avg_norm').to('cpu').detach()
     fea_pase[snt_id]=fea_pase[snt_id].view(fea_pase[snt_id].shape[1],fea_pase[snt_id].shape[2]).transpose(0,1)
 
-
-if modality=='avg_norm_concat' or modality=='avg_concat':
-     inp_dim=int(fea_pase[snt_id].shape[1]/2)*(left+right+2)
-else:
-    inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
+inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
 
 # Computing pase features for test
 fea_pase_dev={}
 for snt_id in fea_dev.keys():
-    fea_pase_dev[snt_id]=pase(fea_dev[snt_id], device, mode=modality).to('cpu').detach()
+    fea_pase_dev[snt_id]=pase(fea_dev[snt_id], device, mode='avg_norm').to('cpu').detach()
     fea_pase_dev[snt_id]=fea_pase_dev[snt_id].view(fea_pase_dev[snt_id].shape[1],fea_pase_dev[snt_id].shape[2]).transpose(0,1)
 
   
@@ -204,27 +196,11 @@ for snt in fea_pase_dev.keys():
 
 # feature matrix (training)
 fea_conc=np.concatenate(fea_lst)
-
-if modality=='avg_norm_concat' or modality=='avg_concat':
-    fea_conc_avg=fea_conc[:,-int(fea_conc.shape[1]/2):]
-    fea_conc_avg=fea_conc_avg[left:-right]
-    fea_conc=fea_conc[:,0:int(fea_conc.shape[1]/2)]
-    fea_conc=context_window(fea_conc,left,right)
-    fea_conc=np.concatenate([fea_conc,fea_conc_avg],axis=1)
-else:
-    fea_conc=context_window(fea_conc,left,right)
+fea_conc=context_window(fea_conc,left,right)
 
 # feature matrix (dev)
 fea_conc_dev=np.concatenate(fea_lst_dev)
-if modality=='avg_norm_concat' or modality=='avg_concat':
-    fea_conc_avg_dev=fea_conc_dev[:,-int(fea_conc_dev.shape[1]/2):]
-    fea_conc_avg_dev=fea_conc_avg_dev[left:-right]
-    fea_conc_dev=fea_conc_dev[:,0:int(fea_conc_dev.shape[1]/2)]
-    fea_conc_dev=context_window(fea_conc_dev,left,right)
-    fea_conc_dev=np.concatenate([fea_conc_dev,fea_conc_avg_dev],axis=1)
-else:
-    fea_conc_dev=context_window(fea_conc_dev,left,right)
-    
+fea_conc_dev=context_window(fea_conc_dev,left,right)
 
 # feature normalization
 fea_conc=(fea_conc-np.mean(fea_conc,axis=0))/np.std(fea_conc,axis=0)
