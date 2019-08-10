@@ -1,13 +1,13 @@
 # Mirco Ravanelli
 # Mila, June 2019
 
-# This script runs a simple speech recognition experiment on the top of PASE features. 
+# This script runs a simple speech recognition experiment on the top of MFCC features. 
 # The results are reported in terms of Frame Error Rate over phonemes (context-independent). 
-# This system is not designed for an extensive evaluation of PASE features, but mainly for quickly monitoring the performance of PASE during the self-supervised training phase.
+# This system is not designed for an extensive evaluation of MFCC features, but mainly for quickly monitoring the performance of MFCC during the self-supervised training phase.
 # The results are printed in standard output and within the text file specified in the last argument.
 
 # To run it:
-# python run_TIMIT_fast.py ../cfg/PASE.cfg ../PASE.ckpt /home/mirco/Dataset/TIMIT  TIMIT_asr_exp.res
+# python run_TIMIT_fast.py  /home/mirco/Dataset/TIMIT  TIMIT_asr_exp.res
 #
 # To run the experiment with the noisy and reverberated version of TIMIT, just change the data folder with the one containing TIMIT_rev_noise.
 
@@ -30,7 +30,6 @@ import json
 # import models.WorkerScheduler
 from pase.models.WorkerScheduler.encoder import *
 
-
 def get_freer_gpu(trials=10):
     for j in range(trials):
          os.system('nvidia-smi -q -d Memory |grep -A4 GPU|grep Free >tmp')
@@ -45,10 +44,8 @@ def get_freer_gpu(trials=10):
             exit(1)
 
 
-pase_cfg=sys.argv[1] # e.g, '../cfg/PASE.cfg'
-pase_model=sys.argv[2] # e.g, '../PASE.ckpt'
-data_folder=sys.argv[3] # e.g., '/home/mirco/Dataset/TIMIT'
-output_file=sys.argv[4] # e.g., 'TIMIT_asr_exp.res'
+data_folder=sys.argv[1] # e.g., '/home/mirco/Dataset/TIMIT'
+output_file=sys.argv[2] # e.g., 'TIMIT_asr_exp.res'
 
 
 # Label files for TIMIT
@@ -60,6 +57,7 @@ tr_lst_file='timit_tr.lst'
 dev_lst_file='timit_dev.lst'
 
 tr_lst = [line.rstrip('\n') for line in open(tr_lst_file)]
+
 dev_lst = [line.rstrip('\n') for line in open(dev_lst_file)]
 
 # Training parameters
@@ -87,11 +85,6 @@ device=get_freer_gpu()
 # folder creation
 text_file=open(output_file, "w")
 
-# Loading pase
-pase =wf_builder(pase_cfg)
-pase.load_pretrained(pase_model, load_last=True, verbose=False)
-pase.to(device)
-pase.eval()
 
 # reading the training signals
 print("Waveform reading...")
@@ -102,7 +95,7 @@ for wav_file in tr_lst:
     signal = signal.astype(np.float32)
     
     fea_id=wav_file.split('/')[-2]+'_'+wav_file.split('/')[-1].split('.')[0]
-    fea[fea_id]=torch.from_numpy(signal).float().to(device).view(1,1,-1)
+    fea[fea_id]=signal
 
 
 # reading the dev signals
@@ -111,24 +104,33 @@ for wav_file in dev_lst:
     [signal, fs] = sf.read(data_folder+'/'+wav_file)
     signal=signal/np.max(np.abs(signal))
     fea_id=wav_file.split('/')[-2]+'_'+wav_file.split('/')[-1].split('.')[0]
-    fea_dev[fea_id]=torch.from_numpy(signal).float().to(device).view(1,1,-1)
+    fea_dev[fea_id]=signal
 
 
-# Computing pase features for training
-print('Computing PASE features...')
-fea_pase={}
+# Computing mfcc
+print('Computing MFCC features...')
+fea_mfcc={}
 for snt_id in fea.keys():
-    pase.eval()
-    fea_pase[snt_id]=pase(fea[snt_id], device,mode='avg_norm').to('cpu').detach()
-    fea_pase[snt_id]=fea_pase[snt_id].view(fea_pase[snt_id].shape[1],fea_pase[snt_id].shape[2]).transpose(0,1)
+    mfcc_stat=librosa.feature.mfcc(y=fea[snt_id], sr=16000,n_mfcc=13,hop_length=160,htk=True)
+    mfcc_delta = librosa.feature.delta(mfcc_stat,order=1)
+    mfcc_delta_delta = librosa.feature.delta(mfcc_delta,order=2)
 
-inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
+    fea_mfcc[snt_id]=np.concatenate([mfcc_stat,mfcc_delta,mfcc_delta_delta]).transpose(1,0)
+    
 
-# Computing pase features for test
-fea_pase_dev={}
+
+inp_dim=fea_mfcc[snt_id].shape[1]*(left+right+1)
+
+# Computing mfcc for test
+fea_mfcc_dev={}
 for snt_id in fea_dev.keys():
-    fea_pase_dev[snt_id]=pase(fea_dev[snt_id], device, mode='avg_norm').to('cpu').detach()
-    fea_pase_dev[snt_id]=fea_pase_dev[snt_id].view(fea_pase_dev[snt_id].shape[1],fea_pase_dev[snt_id].shape[2]).transpose(0,1)
+    mfcc_stat=librosa.feature.mfcc(y=fea_dev[snt_id], sr=16000,n_mfcc=13,hop_length=160,htk=True)
+    mfcc_delta = librosa.feature.delta(mfcc_stat,order=1)
+    mfcc_delta_delta = librosa.feature.delta(mfcc_delta,order=2)
+
+    fea_mfcc_dev[snt_id]=np.concatenate([mfcc_stat,mfcc_delta,mfcc_delta_delta]).transpose(1,0)
+    
+
 
   
 # Label file reading
@@ -158,38 +160,38 @@ fea_lst=[]
 lab_lst=[]
 
 print("Data Preparation...")
-for snt in fea_pase.keys():
-    if fea_pase[snt].shape[0]-lab[snt].shape[0]!=2:
-        if fea_pase[snt].shape[0]-lab[snt].shape[0]==3:
-            fea_lst.append(fea_pase[snt][:-3])
+for snt in fea_mfcc.keys():
+    if fea_mfcc[snt].shape[0]-lab[snt].shape[0]!=2:
+        if fea_mfcc[snt].shape[0]-lab[snt].shape[0]==3:
+            fea_lst.append(fea_mfcc[snt][:-3])
             lab_lst.append(lab[snt])
-        elif fea_pase[snt].shape[0]-lab[snt].shape[0]==1:
-            fea_lst.append(fea_pase[snt][:-1])
+        elif fea_mfcc[snt].shape[0]-lab[snt].shape[0]==1:
+            fea_lst.append(fea_mfcc[snt][:-1])
             lab_lst.append(lab[snt])
         else:
             print('length error')
             sys.exit(0)
     else:
-        fea_lst.append(fea_pase[snt][:-2])
+        fea_lst.append(fea_mfcc[snt][:-2])
         lab_lst.append(lab[snt])
 
 # batch creation (dev)
 fea_lst_dev=[]
 lab_lst_dev=[]
-for snt in fea_pase_dev.keys():
-    if fea_pase_dev[snt].shape[0]-lab_dev[snt].shape[0]!=2:
-        if fea_pase_dev[snt].shape[0]-lab_dev[snt].shape[0]==3:
-            fea_lst_dev.append(fea_pase_dev[snt][:-3])
+for snt in fea_mfcc_dev.keys():
+    if fea_mfcc_dev[snt].shape[0]-lab_dev[snt].shape[0]!=2:
+        if fea_mfcc_dev[snt].shape[0]-lab_dev[snt].shape[0]==3:
+            fea_lst_dev.append(fea_mfcc_dev[snt][:-3])
             lab_lst_dev.append(lab_dev[snt])
-        elif fea_pase_dev[snt].shape[0]-lab_dev[snt].shape[0]==1:
-            fea_lst_dev.append(fea_pase_dev[snt][:-1])
+        elif fea_mfcc_dev[snt].shape[0]-lab_dev[snt].shape[0]==1:
+            fea_lst_dev.append(fea_mfcc_dev[snt][:-1])
             lab_lst_dev.append(lab_dev[snt])
         else:
             print('length error')
             sys.exit(0)
     else:
 
-        fea_lst_dev.append(fea_pase_dev[snt][:-2])
+        fea_lst_dev.append(fea_mfcc_dev[snt][:-2])
         lab_lst_dev.append(lab_dev[snt])
     
     
