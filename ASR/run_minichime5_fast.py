@@ -11,6 +11,9 @@
 # You also need to pull the repo and run the following script (change the paths according to your needs):
 # python run_minichime5_fast.py ../cfg/PASE_MAT_sinc_jiany_512.cfg #../exp_pase_aspp_stride8_512/FE_e89.ckpt /scratch/ravanelm/datasets/MiniCHiME5_5h_ct #/scratch/ravanelm/datasets/MiniCHiME5_5h_ct/lists/snt2ali_tr5h.pkl #/scratch/ravanelm/datasets/MiniCHiME5_5h_ct/lists/snt2ali_dev1h.pkl  #/scratch/ravanelm/datasets/MiniCHiME5_5h_ct/lists/list_tr_shuffled_sel5h.txt  #/scratch/ravanelm/datasets/MiniCHiME5_5h_ct/lists/list_dev_shuffled_sel1h.txt res.res
 
+import warnings
+warnings.filterwarnings('ignore')
+
 import librosa
 
 import os

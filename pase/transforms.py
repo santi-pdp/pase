@@ -279,6 +279,8 @@ class MIChunkWav(SingleChunkWav):
         #we do not make asserts here for now if raw is 
         # exactly same as raw_clean, as this was up to segmentation
         # script
+        #print ("Chunk size is {}".format(chunk.size()))
+        #print ("Squeezed chunk size is {}".format(chunk.squeeze(0).size()))
         if 'raw_clean' in pkg and pkg['raw_clean'] is not None:
             raw_clean = pkg['raw_clean']
             pkg['cchunk'] = self.select_chunk(raw_clean, reuse_bounds=(beg_i, end_i))

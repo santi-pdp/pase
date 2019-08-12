@@ -537,10 +537,14 @@ class AmiSegTupleWavDataset(PairWavDataset):
 
         if 'cchunk' in pkg:
             chunk = pkg['cchunk']
+            #print ("cchunk 1: size {}".format(chunk.size()))
             pkg['cchunk'] = pkg['chunk'].squeeze(0)
-            pkg['chunk'] = chunk
+            pkg['chunk'] = chunk.squeeze(0)
+            #print ("cchunk 1: size sq {}".format(pkg['cchunk'].size()))
         else:
+            #print ("cchunk 2: size {}".format(pkg['chunk'].size()))
             pkg['cchunk'] = pkg['chunk'].squeeze(0)
+            #print ("cchunk 2: size sq {}".format(pkg['cchunk'].size()))
 
         # initialize overlap label
         pkg['overlap'] = torch.zeros(len(pkg['chunk']) // pkg['dec_resolution']).float()

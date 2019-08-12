@@ -303,6 +303,7 @@ def train(opts):
     # should say that an epoch happened after seeing at least as many
     # chunks as total_train_wav_dur // chunk_size
     bpe = (dset.total_wav_dur // opts.chunk_size) // opts.batch_size
+    print ("Dataset has a total {} hours of training data".format(dset.total_wav_dur/16000/3600.0))
     opts.bpe = bpe
     if opts.do_eval:
         assert va_dset is not None, (
