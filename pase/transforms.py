@@ -614,11 +614,11 @@ class KaldiMFCC(KaldiFeats):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             mfcc = mfcc[:, beg_i:end_i]
-            pkg['mfcc'] = mfcc
+            pkg['kaldimfcc'] = mfcc
         else:
             # print(y.dtype)
             mfccs = self.__execute_command__(y, self.cmd)
-            pkg['mfcc'] = torch.tensor(mfccs[:,:max_frames].astype(np.float32))
+            pkg['kaldimfcc'] = torch.tensor(mfccs[:,:max_frames].astype(np.float32))
         
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
@@ -661,11 +661,11 @@ class KaldiPLP(KaldiFeats):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             plp = plp[:, beg_i:end_i]
-            pkg['plp'] = plp
+            pkg['kaldiplp'] = plp
         else:
             # print(y.dtype)
             feats = self.__execute_command__(y, self.cmd)
-            pkg['plp'] = torch.tensor(feats[:,:max_frames].astype(np.float32))
+            pkg['kaldiplp'] = torch.tensor(feats[:,:max_frames].astype(np.float32))
         
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
