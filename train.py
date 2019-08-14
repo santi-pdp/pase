@@ -75,7 +75,7 @@ def make_transforms(opts, workers_cfg):
                                     win=opts.win))
             elif name == 'mfcc':
                 znorm = True
-                trans.append(MFCC(hop=opts.hop))
+                trans.append(MFCC(hop=opts.hop, win=opts.win))
             elif name == 'prosody':
                 znorm = True
                 trans.append(Prosody(hop=opts.hop, win=opts.win))

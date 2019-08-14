@@ -507,10 +507,11 @@ class LPC(object):
 
 class MFCC(object):
 
-    def __init__(self, n_fft=2048, hop=80,
-                 order=20, sr=16000):
+    def __init__(self, n_fft=2048, hop=160,
+                 order=20, sr=16000, win=400):
         self.n_fft = n_fft
         self.hop = hop
+        self.win = win
         self.order = order
         self.sr = 16000
 
@@ -532,7 +533,8 @@ class MFCC(object):
             mfcc = librosa.feature.mfcc(y, sr=self.sr,
                                         n_mfcc=self.order,
                                         n_fft=self.n_fft,
-                                        hop_length=self.hop
+                                        hop_length=self.hop,
+                                        win_length=self.win,
                                         )[:, :max_frames]
             pkg['mfcc'] = torch.tensor(mfcc.astype(np.float32))
         # Overwrite resolution to hop length
