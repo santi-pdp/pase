@@ -507,10 +507,11 @@ class LPC(object):
 
 class MFCC(object):
 
-    def __init__(self, n_fft=2048, hop=80,
-                 order=20, sr=16000):
+    def __init__(self, n_fft=2048, hop=160,
+                 order=20, sr=16000, win=400):
         self.n_fft = n_fft
         self.hop = hop
+        self.win = win
         self.order = order
         self.sr = 16000
 
@@ -532,7 +533,8 @@ class MFCC(object):
             mfcc = librosa.feature.mfcc(y, sr=self.sr,
                                         n_mfcc=self.order,
                                         n_fft=self.n_fft,
-                                        hop_length=self.hop
+                                        hop_length=self.hop,
+                                        win_length=self.win,
                                         )[:, :max_frames]
             pkg['mfcc'] = torch.tensor(mfcc.astype(np.float32))
         # Overwrite resolution to hop length
@@ -544,6 +546,135 @@ class MFCC(object):
                                            self.sr)
         return self.__class__.__name__ + attrs
 
+class KaldiFeats(object):
+    def __init__(self, kaldi_root, hop=160, win=400, sr=16000):
+
+        if kaldi_root is None and 'KALDI_ROOT' in os.environ:
+            kaldi_root = os.environ['KALDI_ROOT']
+
+        assert kaldi_root is not None, (
+            "Set KALDI_ROOT (either pass via cmd line, or set env variable)"
+        )
+
+        try:
+            import kaldi_io as kio
+        except Exception:
+            raise ImportError('kaldi_io wrapper expected to exist, see requirnments.txt')
+    
+        self.kaldi_root = kaldi_root
+        self.hop = hop
+        self.win = win
+        self.sr = sr
+      
+        self.frame_shift = int(1000./self.sr * self.hop) #in ms
+        self.frame_length = int(1000./self.sr * self.win) #in ms
+
+    def __execute_command__(self, datain, cmd):
+        try:
+            fin, fout = kio.open_or_fd(cmd, 'wb')
+            kio.write_mat(cmd, datain, key='utt')
+            fin.close() #so its clear nothing new arrives
+            feats_ark = kio.read_mat_ark(fout)
+            for _, feats in feats_ark:
+                return feats.T #there is only one to read
+        except Exception:
+            return None
+
+    def __repr__(self):
+        return self.__class__.__name__
+
+class KaldiMFCC(KaldiFeats):
+    def __init__(self, kaldi_root, hop=160, win=400, sr=16000,
+                    num_mel_bins=20, num_ceps=20):
+
+        super(KaldiMFCC, self).__init__(kaldi_root=kaldi_root, 
+                                        how=hop, win=win, sr=sr)
+
+        self.num_mel_bins = num_mel_bins
+        self.num_ceps = num_ceps
+
+        cmd = "ark:| {}/src/featbin/compute-mfcc-feats "\
+               "--use-energy=false --num-ceps={} "\
+               "--frame-length={} --frame-shift={} "\
+               "--num-mel-bins={} --sample-frequency={}"\
+               "ark:- ark:- |"
+        
+        self.cmd = cmd.format(self.kaldi_root, self.num_ceps, 
+                              self.frame_length, self.frame_shift, 
+                              self.num_mel_bins, self.sr)      
+    
+    def __call__(self, pkg, cached_file=None):
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        y = wav.data.numpy()
+        max_frames = y.shape[0] // self.hop
+        if cached_file is not None:
+            # load pre-computed data
+            mfcc = torch.load(cached_file)
+            beg_i = pkg['chunk_beg_i'] // self.hop
+            end_i = pkg['chunk_end_i'] // self.hop
+            mfcc = mfcc[:, beg_i:end_i]
+            pkg['kaldimfcc'] = mfcc
+        else:
+            # print(y.dtype)
+            mfccs = self.__execute_command__(y, self.cmd)
+            pkg['kaldimfcc'] = torch.tensor(mfccs[:,:max_frames].astype(np.float32))
+        
+        # Overwrite resolution to hop length
+        pkg['dec_resolution'] = self.hop
+        return pkg
+
+    def __repr__(self):
+        attrs = "(bins={}, ceps={}, sr={})"\
+                  .format(self.num_mel_bins, self.num_ceps, self.sr)
+        return self.__class__.__name__ + attrs
+
+class KaldiPLP(KaldiFeats):
+    def __init__(self, kaldi_root, hop=160, win=400, sr=16000,
+                    num_mel_bins=20, num_ceps=12, lpc_order=12):
+
+        super(KaldiPLP, self).__init__(kaldi_root=kaldi_root, 
+                                        how=hop, win=win, sr=sr)
+
+        self.num_mel_bins = num_mel_bins
+        self.num_ceps = num_ceps
+        self.lpc_order = lpc_order
+
+        cmd = "ark:| {}/src/featbin/compute-plp-feats --use-energy=false "\
+               "--num-ceps={} --lpc-order={}"\
+               "--frame-length={} --frame-shift={} "\
+               "--num-mel-bins={} --sample-frequency={}"\
+               "ark:- ark:- |"
+        
+        self.cmd = cmd.format(self.kaldi_root, self.num_ceps, self.lpc_order, 
+                              self.frame_length, self.frame_shift, 
+                              self.num_mel_bins, self.num_ceps, self.sr)      
+    
+    def __call__(self, pkg, cached_file=None):
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        y = wav.data.numpy()
+        max_frames = y.shape[0] // self.hop
+        if cached_file is not None:
+            # load pre-computed data
+            plp = torch.load(cached_file)
+            beg_i = pkg['chunk_beg_i'] // self.hop
+            end_i = pkg['chunk_end_i'] // self.hop
+            plp = plp[:, beg_i:end_i]
+            pkg['kaldiplp'] = plp
+        else:
+            # print(y.dtype)
+            feats = self.__execute_command__(y, self.cmd)
+            pkg['kaldiplp'] = torch.tensor(feats[:,:max_frames].astype(np.float32))
+        
+        # Overwrite resolution to hop length
+        pkg['dec_resolution'] = self.hop
+        return pkg
+
+    def __repr__(self):
+        attrs = "(bins={}, ceps={}, sr={}, lpc={})"\
+                  .format(self.num_mel_bins, self.num_ceps, self.sr, self.lpc_order)
+        return self.__class__.__name__ + attrs
 
 class Prosody(object):
 
@@ -617,7 +748,6 @@ class Prosody(object):
                                                                self.f0_max)
         attrs += ', sr={})'.format(self.sr)
         return self.__class__.__name__ + attrs
-
 
 class Reverb(object):
 
