@@ -30,7 +30,9 @@ class DictCollater(object):
                                       'gtn',
                                       'fbank',
                                       'mfcc',
-                                      'prosody'],
+                                      'prosody',
+                                      'kaldimfcc',
+                                      'kaldiplp'],
                  labs=False):
         self.batching_keys = batching_keys
         self.labs = labs

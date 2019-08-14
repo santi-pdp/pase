@@ -1,13 +1,14 @@
 #!/bin/bash
 
 libri=false
+libri_kaldi=true
 swbd=false
 ami=false
 libri_ami=false
 libri_ami_sdm=false
 libri_ami_swbd=false
 chime5=false
-chime5_libri=true
+chime5_libri=false
 
 $libri && {
 
@@ -15,8 +16,18 @@ python make_trainset_statistics.py \
   --data_root /tmp-corpora/LibriSpeech_50h/wav_sel \
   --data_cfg  /tmp-corpora/LibriSpeech_50h/librispeech_data_50h.cfg \
   --num_workers 5 \
+  --kaldi_root /disks/data1/pawel/repos/kaldi \
   --out_file data/librispeech_tmp_stats.pkl
 
+}
+
+$libri_kaldi && {
+  python make_trainset_statistics.py \
+   --data_root /tmp-corpora/LibriSpeech_50h/wav_sel \
+   --data_cfg  /tmp-corpora/LibriSpeech_50h/librispeech_data_50h.cfg \
+   --num_workers 10 --max_batches=30 \
+   --kaldi_root /disks/data1/pawel/repos/kaldi \
+   --out_file data/librispeech_50h_stats_kaldimfcc.pkl
 }
 
 $libri_ami && {

@@ -22,6 +22,11 @@ from scipy.interpolate import interp1d
 from torchvision.transforms import Compose
 from ahoproc_tools.interpolate import interpolation
 
+try:
+    import kaldi_io as kio
+except ImportError:
+    print ('kaldi_io is optional, but required when extracting feats with kaldi')
+
 def norm_and_scale(wav):
     assert isinstance(wav, torch.Tensor), type(wav)
     wav = wav / torch.max(torch.abs(wav))
@@ -556,29 +561,25 @@ class KaldiFeats(object):
             "Set KALDI_ROOT (either pass via cmd line, or set env variable)"
         )
 
-        try:
-            import kaldi_io as kio
-        except Exception:
-            raise ImportError('kaldi_io wrapper expected to exist, see requirnments.txt')
-    
         self.kaldi_root = kaldi_root
         self.hop = hop
         self.win = win
         self.sr = sr
-      
+
         self.frame_shift = int(1000./self.sr * self.hop) #in ms
         self.frame_length = int(1000./self.sr * self.win) #in ms
 
     def __execute_command__(self, datain, cmd):
-        try:
-            fin, fout = kio.open_or_fd(cmd, 'wb')
-            kio.write_mat(cmd, datain, key='utt')
-            fin.close() #so its clear nothing new arrives
-            feats_ark = kio.read_mat_ark(fout)
-            for _, feats in feats_ark:
-                return feats.T #there is only one to read
-        except Exception:
-            return None
+        #try:
+        fin, fout = kio.open_or_fd(cmd, 'wb')
+        kio.write_wav(fin, datain, self.sr, key='utt')
+        fin.close() #so its clear nothing new arrives
+        feats_ark = kio.read_mat_ark(fout)
+        for _, feats in feats_ark:
+            return feats.T #there is only one to read
+        #except Exception as e:
+        #    print (e)
+        #    return None
 
     def __repr__(self):
         return self.__class__.__name__
@@ -588,21 +589,21 @@ class KaldiMFCC(KaldiFeats):
                     num_mel_bins=20, num_ceps=20):
 
         super(KaldiMFCC, self).__init__(kaldi_root=kaldi_root, 
-                                        how=hop, win=win, sr=sr)
+                                        hop=hop, win=win, sr=sr)
 
         self.num_mel_bins = num_mel_bins
         self.num_ceps = num_ceps
 
-        cmd = "ark:| {}/src/featbin/compute-mfcc-feats "\
-               "--use-energy=false --num-ceps={} "\
+        cmd = "ark:| {}/src/featbin/compute-mfcc-feats --print-args=false "\
+               "--use-energy=false --snip-edges=false --num-ceps={} "\
                "--frame-length={} --frame-shift={} "\
-               "--num-mel-bins={} --sample-frequency={}"\
+               "--num-mel-bins={} --sample-frequency={} "\
                "ark:- ark:- |"
-        
-        self.cmd = cmd.format(self.kaldi_root, self.num_ceps, 
-                              self.frame_length, self.frame_shift, 
-                              self.num_mel_bins, self.sr)      
-    
+
+        self.cmd = cmd.format(self.kaldi_root, self.num_ceps,
+                              self.frame_length, self.frame_shift,
+                              self.num_mel_bins, self.sr)
+
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -618,8 +619,11 @@ class KaldiMFCC(KaldiFeats):
         else:
             # print(y.dtype)
             mfccs = self.__execute_command__(y, self.cmd)
+            assert mfccs is not None, (
+                "Mfccs extraction failed"
+            )
             pkg['kaldimfcc'] = torch.tensor(mfccs[:,:max_frames].astype(np.float32))
-        
+
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -640,16 +644,17 @@ class KaldiPLP(KaldiFeats):
         self.num_ceps = num_ceps
         self.lpc_order = lpc_order
 
-        cmd = "ark:| {}/src/featbin/compute-plp-feats --use-energy=false "\
+        cmd = "ark:| {}/src/featbin/compute-plp-feats "\
+               "--print-args=false --snip-edges=false --use-energy=false "\
                "--num-ceps={} --lpc-order={}"\
                "--frame-length={} --frame-shift={} "\
-               "--num-mel-bins={} --sample-frequency={}"\
+               "--num-mel-bins={} --sample-frequency={} "\
                "ark:- ark:- |"
-        
+
         self.cmd = cmd.format(self.kaldi_root, self.num_ceps, self.lpc_order, 
                               self.frame_length, self.frame_shift, 
-                              self.num_mel_bins, self.num_ceps, self.sr)      
-    
+                              self.num_mel_bins, self.num_ceps, self.sr)
+
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
         wav = pkg['chunk']
