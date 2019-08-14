@@ -566,8 +566,8 @@ class KaldiFeats(object):
         self.win = win
         self.sr = sr
       
-        self.frame_shift = int(1000./(self.sr/self.hop)) #in ms
-        self.frame_length = int(1000./(self.sr/self.win)) #in ms
+        self.frame_shift = int(1000./self.sr * self.hop) #in ms
+        self.frame_length = int(1000./self.sr * self.win) #in ms
 
     def __execute_command__(self, datain, cmd):
         try:

@@ -32,7 +32,8 @@ def build_dataset_providers(opts):
         #Gammatone(hop=opts.hop_size),
         #LPC(hop=opts.hop_size),
         #FBanks(hop=opts.hop_size),
-        KaldiMFCC(hop=opts.hop_size),
+        #MFCC(hop=opts.hop_size),
+        KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.hop_size, win=opts.win_size),
         Prosody(hop=opts.hop_size)
     ])
 
@@ -100,6 +101,7 @@ if __name__ == '__main__':
     parser.add_argument('--win_size', type=int, default=400)
     parser.add_argument('--ihm2sdm', type=str, default=None,
                         help='Relevant only to ami-like dataset providers')
-
+    parser.add_argument('--kaldi_root', type=str, default=None,
+                        help='Absolute path to kaldi installation. Possibly of use for feature related bits.')
     opts = parser.parse_args()
     extract_stats(opts)
