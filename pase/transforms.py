@@ -22,6 +22,11 @@ from scipy.interpolate import interp1d
 from torchvision.transforms import Compose
 from ahoproc_tools.interpolate import interpolation
 
+try:
+    import kaldi_io as kio
+except ImportError:
+    print ('kaldi_io is optional, but required when extracting feats with kaldi')
+
 def norm_and_scale(wav):
     assert isinstance(wav, torch.Tensor), type(wav)
     wav = wav / torch.max(torch.abs(wav))
@@ -183,18 +188,38 @@ class SingleChunkWav(object):
         if len(wav) <= chksz:
             # padding time
             P = chksz - len(wav)
-            chk = F.pad(wav.view(1, 1, -1), (0, P), mode='reflect').view(-1)
+            if P < len(wav):
+                chk = F.pad(wav.view(1, 1, -1), (0, P), mode='reflect').view(-1)
+            else:
+                chk = F.pad(wav.view(1, 1, -1), (0, P), mode='replicate').view(-1)
             idx = 0
         elif reuse_bounds is not None:
             idx, end_i = reuse_bounds
-            assert idx >= 0 and \
-                   idx < end_i and \
-                   wav.shape[0] >= end_i and \
-                   chksz == end_i - idx, (
-               "Cannot reuse_bounds {} for chksz {} and wav of shape {}"\
-                         .format(reuse_bounds, chksz, wav.shape)
-            )
-            chk = wav[idx:idx + chksz]
+            # padding that follows is a hack for chime, where segmenteations differ
+            # between mics (by several hundred samples at most) and there may 
+            # not be 1:1 correspondence between mics
+            # just a fix to see if it works (its quite rara though)
+            if wav.shape[0] < end_i:
+                #print ("Wshape {}, beg {}, end {}".format(wav.shape[0], idx, end_i))
+                if idx < wav.shape[0]:
+                    chktmp = wav[idx:]
+                    P = chksz - len(chktmp)
+                    #print ('Len chktmp {}, P {}'.format(len(chktmp), P))
+                    if P < len(chktmp):
+                        chk = F.pad(chktmp.view(1, 1, -1), (0, P), mode='reflect').view(-1)
+                    else:
+                        chk = F.pad(chktmp.view(1, 1, -1), (0, P), mode='replicate').view(-1)
+                else:
+                    chk = None
+            else:
+                assert idx >= 0 and \
+                       idx < end_i and \
+                       wav.shape[0] >= end_i and \
+                       chksz == end_i - idx, (
+                   "Cannot reuse_bounds {} for chksz {} and wav of shape {}"\
+                             .format(reuse_bounds, chksz, wav.shape)
+                )
+                chk = wav[idx:idx + chksz]
         else:
             # idxs = list(range(wav.size(0) - chksz))
             # idx = random.choice(idxs)
@@ -219,6 +244,9 @@ class SingleChunkWav(object):
             raw_clean = pkg['raw_clean']
             pkg['cchunk'] = self.select_chunk(raw_clean,\
                                     reuse_bounds=(beg_i, end_i))
+            if pkg['cchunk'] is None:
+                #in chime5 some parallel seg does not exist, swap clean for these
+                pkg['cchunk'] = pkg['chunk']
         if self.random_scale:
             pkg['chunk'] = norm_and_scale(pkg['chunk'])
             if 'cchunk' in pkg:
@@ -256,9 +284,13 @@ class MIChunkWav(SingleChunkWav):
         #we do not make asserts here for now if raw is 
         # exactly same as raw_clean, as this was up to segmentation
         # script
+        #print ("Chunk size is {}".format(chunk.size()))
+        #print ("Squeezed chunk size is {}".format(chunk.squeeze(0).size()))
         if 'raw_clean' in pkg and pkg['raw_clean'] is not None:
             raw_clean = pkg['raw_clean']
             pkg['cchunk'] = self.select_chunk(raw_clean, reuse_bounds=(beg_i, end_i))
+            if pkg['cchunk'] is None:
+                pkg['cchunk'] = pkg['chunk']
         if 'raw_ctxt' in pkg and pkg['raw_ctxt'] is not None:
             raw_ctxt = pkg['raw_ctxt']
         else:
@@ -480,10 +512,11 @@ class LPC(object):
 
 class MFCC(object):
 
-    def __init__(self, n_fft=2048, hop=80,
-                 order=20, sr=16000):
+    def __init__(self, n_fft=2048, hop=160,
+                 order=20, sr=16000, win=400):
         self.n_fft = n_fft
         self.hop = hop
+        self.win = win
         self.order = order
         self.sr = 16000
 
@@ -505,7 +538,8 @@ class MFCC(object):
             mfcc = librosa.feature.mfcc(y, sr=self.sr,
                                         n_mfcc=self.order,
                                         n_fft=self.n_fft,
-                                        hop_length=self.hop
+                                        hop_length=self.hop,
+                                        win_length=self.win,
                                         )[:, :max_frames]
             pkg['mfcc'] = torch.tensor(mfcc.astype(np.float32))
         # Overwrite resolution to hop length
@@ -517,6 +551,135 @@ class MFCC(object):
                                            self.sr)
         return self.__class__.__name__ + attrs
 
+class KaldiFeats(object):
+    def __init__(self, kaldi_root, hop=160, win=400, sr=16000):
+
+        if kaldi_root is None and 'KALDI_ROOT' in os.environ:
+            kaldi_root = os.environ['KALDI_ROOT']
+
+        assert kaldi_root is not None, (
+            "Set KALDI_ROOT (either pass via cmd line, or set env variable)"
+        )
+
+        self.kaldi_root = kaldi_root
+        self.hop = hop
+        self.win = win
+        self.sr = sr
+
+        self.frame_shift = int(1000./self.sr * self.hop) #in ms
+        self.frame_length = int(1000./self.sr * self.win) #in ms
+
+    def __execute_command__(self, datain, cmd):
+        #try:
+        fin, fout = kio.open_or_fd(cmd, 'wb')
+        kio.write_wav(fin, datain, self.sr, key='utt')
+        fin.close() #so its clear nothing new arrives
+        feats_ark = kio.read_mat_ark(fout)
+        for _, feats in feats_ark:
+            return feats.T #there is only one to read
+        #except Exception as e:
+        #    print (e)
+        #    return None
+
+    def __repr__(self):
+        return self.__class__.__name__
+
+class KaldiMFCC(KaldiFeats):
+    def __init__(self, kaldi_root, hop=160, win=400, sr=16000,
+                    num_mel_bins=20, num_ceps=20):
+
+        super(KaldiMFCC, self).__init__(kaldi_root=kaldi_root, 
+                                        hop=hop, win=win, sr=sr)
+
+        self.num_mel_bins = num_mel_bins
+        self.num_ceps = num_ceps
+
+        cmd = "ark:| {}/src/featbin/compute-mfcc-feats --print-args=false "\
+               "--use-energy=false --snip-edges=false --num-ceps={} "\
+               "--frame-length={} --frame-shift={} "\
+               "--num-mel-bins={} --sample-frequency={} "\
+               "ark:- ark:- |"
+
+        self.cmd = cmd.format(self.kaldi_root, self.num_ceps,
+                              self.frame_length, self.frame_shift,
+                              self.num_mel_bins, self.sr)
+
+    def __call__(self, pkg, cached_file=None):
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        y = wav.data.numpy()
+        max_frames = y.shape[0] // self.hop
+        if cached_file is not None:
+            # load pre-computed data
+            mfcc = torch.load(cached_file)
+            beg_i = pkg['chunk_beg_i'] // self.hop
+            end_i = pkg['chunk_end_i'] // self.hop
+            mfcc = mfcc[:, beg_i:end_i]
+            pkg['kaldimfcc'] = mfcc
+        else:
+            # print(y.dtype)
+            mfccs = self.__execute_command__(y, self.cmd)
+            assert mfccs is not None, (
+                "Mfccs extraction failed"
+            )
+            pkg['kaldimfcc'] = torch.tensor(mfccs[:,:max_frames].astype(np.float32))
+
+        # Overwrite resolution to hop length
+        pkg['dec_resolution'] = self.hop
+        return pkg
+
+    def __repr__(self):
+        attrs = "(bins={}, ceps={}, sr={})"\
+                  .format(self.num_mel_bins, self.num_ceps, self.sr)
+        return self.__class__.__name__ + attrs
+
+class KaldiPLP(KaldiFeats):
+    def __init__(self, kaldi_root, hop=160, win=400, sr=16000,
+                    num_mel_bins=20, num_ceps=12, lpc_order=12):
+
+        super(KaldiPLP, self).__init__(kaldi_root=kaldi_root, 
+                                        how=hop, win=win, sr=sr)
+
+        self.num_mel_bins = num_mel_bins
+        self.num_ceps = num_ceps
+        self.lpc_order = lpc_order
+
+        cmd = "ark:| {}/src/featbin/compute-plp-feats "\
+               "--print-args=false --snip-edges=false --use-energy=false "\
+               "--num-ceps={} --lpc-order={}"\
+               "--frame-length={} --frame-shift={} "\
+               "--num-mel-bins={} --sample-frequency={} "\
+               "ark:- ark:- |"
+
+        self.cmd = cmd.format(self.kaldi_root, self.num_ceps, self.lpc_order, 
+                              self.frame_length, self.frame_shift, 
+                              self.num_mel_bins, self.num_ceps, self.sr)
+
+    def __call__(self, pkg, cached_file=None):
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        y = wav.data.numpy()
+        max_frames = y.shape[0] // self.hop
+        if cached_file is not None:
+            # load pre-computed data
+            plp = torch.load(cached_file)
+            beg_i = pkg['chunk_beg_i'] // self.hop
+            end_i = pkg['chunk_end_i'] // self.hop
+            plp = plp[:, beg_i:end_i]
+            pkg['kaldiplp'] = plp
+        else:
+            # print(y.dtype)
+            feats = self.__execute_command__(y, self.cmd)
+            pkg['kaldiplp'] = torch.tensor(feats[:,:max_frames].astype(np.float32))
+        
+        # Overwrite resolution to hop length
+        pkg['dec_resolution'] = self.hop
+        return pkg
+
+    def __repr__(self):
+        attrs = "(bins={}, ceps={}, sr={}, lpc={})"\
+                  .format(self.num_mel_bins, self.num_ceps, self.sr, self.lpc_order)
+        return self.__class__.__name__ + attrs
 
 class Prosody(object):
 
@@ -590,7 +753,6 @@ class Prosody(object):
                                                                self.f0_max)
         attrs += ', sr={})'.format(self.sr)
         return self.__class__.__name__ + attrs
-
 
 class Reverb(object):
 

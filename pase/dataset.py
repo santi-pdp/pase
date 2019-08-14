@@ -30,7 +30,9 @@ class DictCollater(object):
                                       'gtn',
                                       'fbank',
                                       'mfcc',
-                                      'prosody'],
+                                      'prosody',
+                                      'kaldimfcc',
+                                      'kaldiplp'],
                  labs=False):
         self.batching_keys = batching_keys
         self.labs = labs
@@ -193,7 +195,7 @@ class WavDataset(Dataset):
                 spks = self.data_cfg[split]['speakers']
                 print('Found {} speakers in {} split'.format(len(spks),
                                                              split))
-                self.total_wav_dur = self.data_cfg[split]['total_wav_dur']
+                self.total_wav_dur = int(self.data_cfg[split]['total_wav_dur'])
                 if 'spk2idx' in self.data_cfg and return_spk:
                     self.spk2idx = self.data_cfg['spk2idx']
                     print('Loaded spk2idx with {} '
@@ -537,10 +539,14 @@ class AmiSegTupleWavDataset(PairWavDataset):
 
         if 'cchunk' in pkg:
             chunk = pkg['cchunk']
+            #print ("cchunk 1: size {}".format(chunk.size()))
             pkg['cchunk'] = pkg['chunk'].squeeze(0)
-            pkg['chunk'] = chunk
+            pkg['chunk'] = chunk.squeeze(0)
+            #print ("cchunk 1: size sq {}".format(pkg['cchunk'].size()))
         else:
+            #print ("cchunk 2: size {}".format(pkg['chunk'].size()))
             pkg['cchunk'] = pkg['chunk'].squeeze(0)
+            #print ("cchunk 2: size sq {}".format(pkg['cchunk'].size()))
 
         # initialize overlap label
         pkg['overlap'] = torch.zeros(len(pkg['chunk']) // pkg['dec_resolution']).float()
