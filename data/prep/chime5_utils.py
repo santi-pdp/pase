@@ -119,7 +119,7 @@ class PasePrep4Chime5(object):
         if sdm_dir is not None:
             self.sdm = KaldiDataDir(sdm_dir)
         self.num_workers = num_workers
-        self.fs = 160000
+        self.fs = 16000
 
     def show_stats(self):
         print ("Stats for {}".format(self.name))

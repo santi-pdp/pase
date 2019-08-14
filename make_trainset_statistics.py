@@ -32,7 +32,7 @@ def build_dataset_providers(opts):
         #Gammatone(hop=opts.hop_size),
         #LPC(hop=opts.hop_size),
         #FBanks(hop=opts.hop_size),
-        MFCC(hop=opts.hop_size),
+        KaldiMFCC(hop=opts.hop_size),
         Prosody(hop=opts.hop_size)
     ])
 
@@ -97,6 +97,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_batches', type=int, default=20)
     parser.add_argument('--out_file', type=str)
     parser.add_argument('--hop_size', type=int, default=160)
+    parser.add_argument('--win_size', type=int, default=400)
     parser.add_argument('--ihm2sdm', type=str, default=None,
                         help='Relevant only to ami-like dataset providers')
 
