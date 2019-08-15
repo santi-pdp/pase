@@ -12,6 +12,9 @@
 # To run the language id experiment on minivoxforge:
 # python run_minivox_fast.py ../cfg/PASE.cfg ../PASE.ckpt /scratch/ravanelm/datasets/mini_voxforge/ minivoxforge_tr_list.txt minivoxforge_test_list.txt  utt2lang.npy  minivoxforge.res
 
+import warnings
+warnings.filterwarnings('ignore')
+
 import sys
 import os
 import json

@@ -646,7 +646,7 @@ class KaldiPLP(KaldiFeats):
 
         cmd = "ark:| {}/src/featbin/compute-plp-feats "\
                "--print-args=false --snip-edges=false --use-energy=false "\
-               "--num-ceps={} --lpc-order={}"\
+               "--num-ceps={} --lpc-order={} "\
                "--frame-length={} --frame-shift={} "\
                "--num-mel-bins={} --sample-frequency={} "\
                "ark:- ark:- |"

@@ -11,6 +11,9 @@
 #
 # To run the experiment with the noisy and reverberated version of TIMIT, just change the data folder with the one containing TIMIT_rev_noise.
 
+import warnings
+warnings.filterwarnings("ignore")
+
 import librosa
 
 import os
@@ -81,7 +84,7 @@ options['dnn_use_laynorm_inp']='True'
 options['dnn_use_batchnorm_inp']='False'
 options['dnn_act']='relu,softmax'
 
-device=get_freer_gpu()
+device=0 #get_freer_gpu()
 
 
 # folder creation

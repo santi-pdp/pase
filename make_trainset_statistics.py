@@ -34,6 +34,7 @@ def build_dataset_providers(opts):
         #FBanks(hop=opts.hop_size),
         #MFCC(hop=opts.hop_size),
         KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.hop_size, win=opts.win_size),
+        KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.hop_size, win=opts.win_size),
         Prosody(hop=opts.hop_size)
     ])
 
