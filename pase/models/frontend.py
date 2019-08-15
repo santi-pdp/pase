@@ -98,7 +98,7 @@ class TDNNFe(Model):
 
         y = self.W(h)
 
-        return format_frontend_output(y, h, self.training,
+        return format_frontend_output(y, self.training,
                                       batched, mode)
         """
         if self.training:
@@ -271,7 +271,7 @@ class WaveFe(Model):
             else:
                 return y
 
-        return format_frontend_output(y, h, self.training,
+        return format_frontend_output(y, self.training,
                                       batched, mode)
 
 
@@ -348,7 +348,7 @@ class aspp_res_encoder(Model):
         else:
             h = out
 
-        return format_frontend_output(y, h, self.training,
+        return format_frontend_output(y, self.training,
                                       batched, mode)
 
 
@@ -406,6 +406,6 @@ class Resnet50_encoder(Model):
 
         # print(h.shape)
 
-        return format_frontend_output(y, h, self.training,
+        return format_frontend_output(y, self.training,
                                       batched, mode)
 

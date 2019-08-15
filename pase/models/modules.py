@@ -26,7 +26,7 @@ def format_frontend_chunk(batch, device='cpu'):
         x = batch
     return x, batched
 
-def format_frontend_output(y, h, is_training, batched,
+def format_frontend_output(y, is_training, batched,
                            mode):
     if is_training:
         if batched:
@@ -36,7 +36,7 @@ def format_frontend_output(y, h, is_training, batched,
             chunk = embedding = y
         return embedding, chunk
     else:
-        return select_output(h, mode=mode)
+        return select_output(y, mode=mode)
         
 def select_output(h, mode=None):
     if mode == "avg_norm":
