@@ -514,9 +514,12 @@ class MFCC(object):
 
     def __init__(self, n_fft=2048, hop=160,
                  order=20, sr=16000, win=400):
-        self.n_fft = n_fft
         self.hop = hop
-        self.win = win
+        # Santi: the librosa mfcc api does not always
+        # accept a window argument, so we enforce n_fft
+        # to be window to ensure the window len restriction
+        #self.win = win
+        self.n_fft = win
         self.order = order
         self.sr = 16000
 
@@ -539,7 +542,7 @@ class MFCC(object):
                                         n_mfcc=self.order,
                                         n_fft=self.n_fft,
                                         hop_length=self.hop,
-                                        win_length=self.win,
+                                        #win_length=self.win,
                                         )[:, :max_frames]
             pkg['mfcc'] = torch.tensor(mfcc.astype(np.float32))
         # Overwrite resolution to hop length

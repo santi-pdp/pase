@@ -15,6 +15,7 @@ class pase_attention(Model):
                  minions_cfg=None,
                  cls_lst=["mi", "cmi", "spc"],
                  regr_lst=["chunk", "lps", "mfcc", "prosody"],
+                 adv_lst=[],
                  K=40,
                  att_mode="concat",
                  avg_factor=0,
@@ -33,13 +34,15 @@ class pase_attention(Model):
         self.frontend = wf_builder(frontend_cfg)
 
         # init all workers
-        # putting them into two lists
+        # putting them into 3 lists
         self.cls_lst = cls_lst
         self.reg_lst = regr_lst
+        self.adv_lst = adv_lst
 
         ninp = self.frontend.emb_dim
         self.regression_workers = nn.ModuleList()
         self.classification_workers = nn.ModuleList()
+        self.adversarial_workers = nn.ModuleList()
         self.attention_blocks = nn.ModuleList()
 
         # nn_input = self.cal_nn_input_dim(frontend_cfg['strides'], chunk_size)
@@ -60,6 +63,15 @@ class pase_attention(Model):
                     minion = minion_maker(cfg)
                     self.regression_workers.append(minion)
                     self.attention_blocks.append(attention_block(ninp, cfg['name'], att_cfg, K, frontend_cfg['strides'], chunk_size, avg_factor,att_mode))
+
+                elif type == 'adv':
+                    cfg['num_inputs'] = ninp
+                    minion = minion_maker(cfg)
+                    self.adversarial_workers.append(minion)
+                    self.attention_blocks.append(attention_block(ninp, cfg['name'], att_cfg, K, frontend_cfg['strides'], chunk_size, avg_factor,att_mode))
+
+                else:
+                    raise TypeError('Unrecognized worker type: ', type)
 
         if pretrained_ckpt is not None:
             self.load_pretrained(pretrained_ckpt, load_last=True)
@@ -282,7 +294,10 @@ class pase(Model):
         # forward the encoder
         # x[chunk, context, rand] => y[chunk, context, rand], chunk
 
-        h, chunk = self.frontend(x, device)
+        h = self.frontend(x, device)
+        if len(h) > 1:
+            assert len(h) == 2, len(h)
+            h, chunk = h
 
 
         # forward all classification workers
