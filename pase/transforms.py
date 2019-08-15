@@ -653,7 +653,7 @@ class KaldiPLP(KaldiFeats):
 
         self.cmd = cmd.format(self.kaldi_root, self.num_ceps, self.lpc_order, 
                               self.frame_length, self.frame_shift, 
-                              self.num_mel_bins, self.num_ceps, self.sr)
+                              self.num_mel_bins, self.sr)
 
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
