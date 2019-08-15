@@ -638,7 +638,7 @@ class KaldiPLP(KaldiFeats):
                     num_mel_bins=20, num_ceps=12, lpc_order=12):
 
         super(KaldiPLP, self).__init__(kaldi_root=kaldi_root, 
-                                        how=hop, win=win, sr=sr)
+                                        hop=hop, win=win, sr=sr)
 
         self.num_mel_bins = num_mel_bins
         self.num_ceps = num_ceps
@@ -646,14 +646,14 @@ class KaldiPLP(KaldiFeats):
 
         cmd = "ark:| {}/src/featbin/compute-plp-feats "\
                "--print-args=false --snip-edges=false --use-energy=false "\
-               "--num-ceps={} --lpc-order={}"\
+               "--num-ceps={} --lpc-order={} "\
                "--frame-length={} --frame-shift={} "\
                "--num-mel-bins={} --sample-frequency={} "\
                "ark:- ark:- |"
 
         self.cmd = cmd.format(self.kaldi_root, self.num_ceps, self.lpc_order, 
                               self.frame_length, self.frame_shift, 
-                              self.num_mel_bins, self.num_ceps, self.sr)
+                              self.num_mel_bins, self.sr)
 
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
