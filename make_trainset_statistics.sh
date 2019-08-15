@@ -27,7 +27,7 @@ $libri_kaldi && {
    --data_cfg  /tmp-corpora/LibriSpeech_50h/librispeech_data_50h.cfg \
    --num_workers 10 --max_batches=30 \
    --kaldi_root /disks/data1/pawel/repos/kaldi \
-   --out_file data/librispeech_50h_stats_kaldimfcc_kaldiplp.pkl
+   --out_file data/librispeech_50h_stats_kaldimfcc.pkl
 }
 
 $libri_ami && {
