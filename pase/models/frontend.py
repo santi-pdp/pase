@@ -348,7 +348,7 @@ class aspp_res_encoder(Model):
         else:
             h = out
 
-        return format_frontend_output(y, self.training,
+        return format_frontend_output(h, self.training,
                                       batched, mode)
 
 
@@ -406,6 +406,6 @@ class Resnet50_encoder(Model):
 
         # print(h.shape)
 
-        return format_frontend_output(y, self.training,
+        return format_frontend_output(h, self.training,
                                       batched, mode)
 
