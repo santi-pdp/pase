@@ -12,28 +12,28 @@ except ImportError:
     QRNN = None
 
 def format_frontend_chunk(batch, device='cpu'):
-    batched = False
     if type(batch) == dict:
         if 'chunk_ctxt' and 'chunk_rand' in batch:
             x = torch.cat((batch['chunk'],
                            batch['chunk_ctxt'],
                            batch['chunk_rand']),
                           dim=0).to(device)
-            batched = True
+            data_fmt = 0
         else:
             x = batch['chunk'].to(device)
+            data_fmt = 1
     else:
         x = batch
-    return x, batched
+        data_fmt = 2
+    return x, data_fmt
 
-def format_frontend_output(y, is_training, batched,
-                           mode):
-    if is_training:
-        if batched:
-            embedding = torch.chunk(y, 3, dim=0)
-            chunk = embedding[0]
-        else:
-            chunk = embedding = y
+def format_frontend_output(y, data_fmt, mode):
+    if data_fmt == 0:
+        embedding = torch.chunk(y, 3, dim=0)
+        chunk = embedding[0]
+        return embedding, chunk
+    elif data_fmt == 1:
+        chunk = embedding = y
         return embedding, chunk
     else:
         return select_output(y, mode=mode)
