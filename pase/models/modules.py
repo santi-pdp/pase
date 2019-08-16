@@ -11,6 +11,48 @@ try:
 except ImportError:
     QRNN = None
 
+def format_frontend_chunk(batch, device='cpu'):
+    batched = False
+    if type(batch) == dict:
+        if 'chunk_ctxt' and 'chunk_rand' in batch:
+            x = torch.cat((batch['chunk'],
+                           batch['chunk_ctxt'],
+                           batch['chunk_rand']),
+                          dim=0).to(device)
+            batched = True
+        else:
+            x = batch['chunk'].to(device)
+    else:
+        x = batch
+    return x, batched
+
+def format_frontend_output(y, is_training, batched,
+                           mode):
+    if is_training:
+        if batched:
+            embedding = torch.chunk(y, 3, dim=0)
+            chunk = embedding[0]
+        else:
+            chunk = embedding = y
+        return embedding, chunk
+    else:
+        return select_output(y, mode=mode)
+        
+def select_output(h, mode=None):
+    if mode == "avg_norm":
+        return h - torch.mean(h, dim=2, keepdim=True)
+    elif mode == "avg_concat":
+        global_avg = torch.mean(h, dim=2, keepdim=True).repeat(1, 1, h.shape[-1])
+        return torch.cat((h, global_avg), dim=1)
+    elif mode == "avg_norm_concat":
+        global_avg = torch.mean(h, dim=2, keepdim=True)
+        h = h - global_avg
+        global_feature = global_avg.repeat(1, 1, h.shape[-1])
+        return torch.cat((h, global_feature), dim=1)
+    else:
+        return h
+
+
 def build_norm_layer(norm_type, param=None, num_feats=None):
     if norm_type == 'bnorm':
         return nn.BatchNorm1d(num_feats)
@@ -360,7 +402,7 @@ class GDeconv1DBlock(NeuralBlock):
 
     def forward(self, x):
         h = self.deconv(x)
-        if self.kwidth % 2 != 0 and self.stride < self.kwidth:
+        if self.stride % 2 != 0 and self.kwidth % 2 == 0: # and self.stride > self.kwidth:
             h = h[:, :, :-1]
         h = forward_norm(h, self.norm)
         h = forward_activation(self.act, h)

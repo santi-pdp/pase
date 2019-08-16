@@ -29,8 +29,8 @@ class trainer(object):
                  att_cfg=None,
                  minions_cfg=None,
                  cfg=None,
-                 cls_lst=None,
-                 regr_lst=None,
+                 cls_lst=[],
+                 regr_lst=[],
                  pretrained_ckpt=None,
                  tensorboard=None,
                  backprop_mode=None,
@@ -38,14 +38,14 @@ class trainer(object):
                  name='Pase_base',
                  device=None):
 
-        # init the pase
-        if not cls_lst:
+        # init the pase from cfg file
+        if len(cls_lst) == 0 and 'cls' in minions_cfg:
             cls_lst = [worker['name'] for worker in minions_cfg['cls']]
-        if not regr_lst:
+        if len(regr_lst) == 0 and 'regr' in minions_cfg:
             regr_lst = [worker['name'] for worker in minions_cfg['regr']]
 
-        print(cls_lst)
-        print(regr_lst)
+        print('Cls: ', cls_lst)
+        print('Regr: ', regr_lst)
 
         if att_cfg:
             print("training pase with attention!")

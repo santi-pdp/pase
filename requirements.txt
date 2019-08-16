@@ -17,3 +17,4 @@ pynvrtc==8.0
 git+https://github.com/salesforce/pytorch-qrnn
 python_speech_features
 git+https://github.com/detly/gammatone
+https://github.com/pswietojanski/kaldi-io-for-python.git

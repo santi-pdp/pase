@@ -1,18 +1,15 @@
 # Mirco Ravanelli
 # Mila, June 2019
 
-# This script runs a simple speech recognition experiment on the top of PASE features. 
+# This script runs a simple speech recognition experiment on the top of MFCC features. 
 # The results are reported in terms of Frame Error Rate over phonemes (context-independent). 
-# This system is not designed for an extensive evaluation of PASE features, but mainly for quickly monitoring the performance of PASE during the self-supervised training phase.
+# This system is not designed for an extensive evaluation of MFCC features, but mainly for quickly monitoring the performance of MFCC during the self-supervised training phase.
 # The results are printed in standard output and within the text file specified in the last argument.
 
-# The current version uses 5 hours of binaural recordings for training and 1 hour recordings for evaluation. To use it, you have to download the data from:
-
-# You also need to pull the repo and run the following script (change the paths according to your needs):
-# python run_minichime5_fast.py ../cfg/PASE_MAT_sinc_jiany_512.cfg #../exp_pase_aspp_stride8_512/FE_e89.ckpt /scratch/ravanelm/datasets/MiniCHiME5_5h_ct #/scratch/ravanelm/datasets/MiniCHiME5_5h_ct/lists/snt2ali_tr5h.pkl #/scratch/ravanelm/datasets/MiniCHiME5_5h_ct/lists/snt2ali_dev1h.pkl  #/scratch/ravanelm/datasets/MiniCHiME5_5h_ct/lists/list_tr_shuffled_sel5h.txt  #/scratch/ravanelm/datasets/MiniCHiME5_5h_ct/lists/list_dev_shuffled_sel1h.txt res.res
-
-import warnings
-warnings.filterwarnings('ignore')
+# To run it:
+# python run_TIMIT_fast.py  /home/mirco/Dataset/TIMIT  TIMIT_asr_exp.res
+#
+# To run the experiment with the noisy and reverberated version of TIMIT, just change the data folder with the one containing TIMIT_rev_noise.
 
 import librosa
 
@@ -47,23 +44,20 @@ def get_freer_gpu(trials=10):
             exit(1)
 
 
-pase_cfg=sys.argv[1]
-pase_model=sys.argv[2]
-data_folder=sys.argv[3]
-
-# Label files for MiniCHiME5
-lab_file=sys.argv[4]
-lab_file_dev=sys.argv[5]
-
-# File list for MiniCHiME5
-tr_lst_file=dev=sys.argv[6]
-dev_lst_file=sys.argv[7]
-
-output_file=sys.argv[8]
+data_folder=sys.argv[1] # e.g., '/home/mirco/Dataset/TIMIT'
+output_file=sys.argv[2] # e.g., 'TIMIT_asr_exp.res'
 
 
+# Label files for TIMIT
+lab_file='TIMIT_lab_cd.pkl'
+lab_file_dev='TIMIT_lab_cd_dev.pkl'
+
+# File list for TIMIT
+tr_lst_file='timit_tr.lst'
+dev_lst_file='timit_dev.lst'
 
 tr_lst = [line.rstrip('\n') for line in open(tr_lst_file)]
+
 dev_lst = [line.rstrip('\n') for line in open(dev_lst_file)]
 
 # Training parameters
@@ -71,43 +65,42 @@ N_epochs=24
 seed=1234
 batch_size=128
 halving_factor=0.5
-lr=0.0012
-left=1
-right=1
+lr=0.08
+left=8
+right=8
 
 # Neural network parameters
 options={}
-options['dnn_lay']='1024,42'
-options['dnn_drop']='0.15,0.0'
-options['dnn_use_batchnorm']='False,False'
-options['dnn_use_laynorm']='True,False'
-options['dnn_use_laynorm_inp']='True'
+options['dnn_lay']='1024,1024,1024,1024,1024,1973'
+options['dnn_drop']='0.15,0.15,0.15,0.15,0.15,0.0'
+options['dnn_use_batchnorm']='True,True,True,True,True,False'
+options['dnn_use_laynorm']='False,False,False,False,False,False'
+options['dnn_use_laynorm_inp']='False'
 options['dnn_use_batchnorm_inp']='False'
-options['dnn_act']='relu,softmax'
+options['dnn_act']='relu,relu,relu,relu,relu,softmax'
 
-device=0 #get_freer_gpu()
+
+
+device=get_freer_gpu()
 
 
 # folder creation
 text_file=open(output_file, "w")
 
-# Loading pase
-pase =wf_builder(pase_cfg)
-pase.load_pretrained(pase_model, load_last=True, verbose=False)
-pase.to(device)
-pase.eval()
 
 # reading the training signals
 print("Waveform reading...")
 fea={}
 for wav_file in tr_lst:
+    # sound file
     [signal, fs] = sf.read(data_folder+'/'+wav_file)
     signal=signal/np.max(np.abs(signal))
     signal = signal.astype(np.float32)
-    
-    fea_id=wav_file.split('/')[-1].replace('.wav','')
-    
-    fea[fea_id]=torch.from_numpy(signal).float().to(device).view(1,1,-1)
+    # Librosa loader (same results, but much slower)
+    #signal, sr = librosa.load(data_folder+'/'+wav_file,sr=None)
+
+    fea_id=wav_file.split('/')[-2]+'_'+wav_file.split('/')[-1].split('.')[0]
+    fea[fea_id]=signal
 
 
 # reading the dev signals
@@ -115,24 +108,36 @@ fea_dev={}
 for wav_file in dev_lst:
     [signal, fs] = sf.read(data_folder+'/'+wav_file)
     signal=signal/np.max(np.abs(signal))
-    fea_id=wav_file.split('/')[-1].replace('.wav','')
-    fea_dev[fea_id]=torch.from_numpy(signal).float().to(device).view(1,1,-1)
+    signal = signal.astype(np.float32)
+    #signal, sr = librosa.load(data_folder+'/'+wav_file,sr=None)
+    fea_id=wav_file.split('/')[-2]+'_'+wav_file.split('/')[-1].split('.')[0]
+    fea_dev[fea_id]=signal
 
-# Computing pase features for training
-print('Computing PASE features...')
-fea_pase={}
+
+# Computing mfcc
+print('Computing MFCC features...')
+fea_mfcc={}
 for snt_id in fea.keys():
-    pase.eval()
-    fea_pase[snt_id]=pase(fea[snt_id], device).to('cpu').detach()
-    fea_pase[snt_id]=fea_pase[snt_id].view(fea_pase[snt_id].shape[1],fea_pase[snt_id].shape[2]).transpose(0,1)
+    mfcc_stat=librosa.feature.mfcc(y=fea[snt_id], sr=16000,n_mfcc=13,hop_length=160,htk=True)
+    mfcc_delta = librosa.feature.delta(mfcc_stat,order=1)
+    mfcc_delta_delta = librosa.feature.delta(mfcc_stat,order=2)
 
-inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
+    fea_mfcc[snt_id]=np.concatenate([mfcc_stat,mfcc_delta,mfcc_delta_delta]).transpose(1,0)
+    
 
-# Computing pase features for test
-fea_pase_dev={}
+
+inp_dim=fea_mfcc[snt_id].shape[1]*(left+right+1)
+
+# Computing mfcc for test
+fea_mfcc_dev={}
 for snt_id in fea_dev.keys():
-    fea_pase_dev[snt_id]=pase(fea_dev[snt_id], device).to('cpu').detach()
-    fea_pase_dev[snt_id]=fea_pase_dev[snt_id].view(fea_pase_dev[snt_id].shape[1],fea_pase_dev[snt_id].shape[2]).transpose(0,1)
+    mfcc_stat=librosa.feature.mfcc(y=fea_dev[snt_id], sr=16000,n_mfcc=13,hop_length=160,htk=True)
+    mfcc_delta = librosa.feature.delta(mfcc_stat,order=1)
+    mfcc_delta_delta = librosa.feature.delta(mfcc_stat,order=2)
+
+    fea_mfcc_dev[snt_id]=np.concatenate([mfcc_stat,mfcc_delta,mfcc_delta_delta]).transpose(1,0)
+    
+
 
   
 # Label file reading
@@ -162,38 +167,41 @@ fea_lst=[]
 lab_lst=[]
 
 print("Data Preparation...")
-for snt in fea_pase.keys():
-    #print(fea_pase[snt].shape)
-    #print(lab[snt].shape)
-
-    if fea_pase[snt].shape[0]-lab[snt].shape[0]!=2:
-        if fea_pase[snt].shape[0]-lab[snt].shape[0]==3:
-            fea_lst.append(fea_pase[snt][:-3])
+for snt in fea_mfcc.keys():
+    if fea_mfcc[snt].shape[0]-lab[snt].shape[0]!=2:
+        if fea_mfcc[snt].shape[0]-lab[snt].shape[0]==3:
+            fea_lst.append(fea_mfcc[snt][:-3])
             lab_lst.append(lab[snt])
-        elif fea_pase[snt].shape[0]-lab[snt].shape[0]==1:
-            fea_lst.append(fea_pase[snt][:-1])
+        elif fea_mfcc[snt].shape[0]-lab[snt].shape[0]==1:
+            fea_lst.append(fea_mfcc[snt][:-1])
             lab_lst.append(lab[snt])
-
+        else:
+            print('length error')
+            sys.exit(0)
     else:
-        fea_lst.append(fea_pase[snt][:-2])
+        fea_lst.append(fea_mfcc[snt][:-2])
         lab_lst.append(lab[snt])
 
 # batch creation (dev)
 fea_lst_dev=[]
 lab_lst_dev=[]
-for snt in fea_pase_dev.keys():
-    if fea_pase_dev[snt].shape[0]-lab_dev[snt].shape[0]!=2:
-        if fea_pase_dev[snt].shape[0]-lab_dev[snt].shape[0]==3:
-            fea_lst_dev.append(fea_pase_dev[snt][:-3])
+for snt in fea_mfcc_dev.keys():
+    if fea_mfcc_dev[snt].shape[0]-lab_dev[snt].shape[0]!=2:
+        if fea_mfcc_dev[snt].shape[0]-lab_dev[snt].shape[0]==3:
+            fea_lst_dev.append(fea_mfcc_dev[snt][:-3])
             lab_lst_dev.append(lab_dev[snt])
-        elif fea_pase_dev[snt].shape[0]-lab_dev[snt].shape[0]==1:
-            fea_lst_dev.append(fea_pase_dev[snt][:-1])
-            lab_lst_dev.append(lab_dev[snt])       
+        elif fea_mfcc_dev[snt].shape[0]-lab_dev[snt].shape[0]==1:
+            fea_lst_dev.append(fea_mfcc_dev[snt][:-1])
+            lab_lst_dev.append(lab_dev[snt])
+        else:
+            print('length error')
+            sys.exit(0)
     else:
-        fea_lst_dev.append(fea_pase_dev[snt][:-2])
+
+        fea_lst_dev.append(fea_mfcc_dev[snt][:-2])
         lab_lst_dev.append(lab_dev[snt])
     
-
+    
 
 # feature matrix (training)
 fea_conc=np.concatenate(fea_lst)
@@ -267,8 +275,7 @@ for ep in range(N_epochs):
         # Batch selection
         end_batch=beg_batch+batch_size
         batch=dataset[beg_batch:end_batch]
-        batch=batch.to(device)
-        
+        batch=batch.to(device)        
         fea_batch=batch[:,:-1]
         lab_batch=batch[:,-1].long()
         

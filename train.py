@@ -1,4 +1,10 @@
 # from pase.models.core import Waveminionet
+
+import warnings
+# Pawel: this one is for nightly build of pytorch, as it
+# spits out massive number of warnings
+warnings.filterwarnings('ignore')
+
 import librosa
 from pase.models.modules import VQEMA
 from pase.dataset import PairWavDataset, DictCollater, MetaWavConcatDataset
@@ -69,12 +75,18 @@ def make_transforms(opts, workers_cfg):
                                     win=opts.win))
             elif name == 'mfcc':
                 znorm = True
-                trans.append(MFCC(hop=opts.hop))
+                trans.append(MFCC(hop=opts.hop, win=opts.win))
             elif name == 'prosody':
                 znorm = True
                 trans.append(Prosody(hop=opts.hop, win=opts.win))
             elif name == 'chunk' or name == 'cchunk':
                 znorm = False
+            elif name == "kaldimfcc":
+                znorm = True
+                trans.append(KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.hop, win=opts.win))
+            elif name == "kaldiplp":
+                znorm = True
+                trans.append(KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.hop, win=opts.win))
             else:
                 raise TypeError('Unrecognized module \"{}\"'
                                 'whilst building transfromations'.format(name))
@@ -299,6 +311,7 @@ def train(opts):
     # should say that an epoch happened after seeing at least as many
     # chunks as total_train_wav_dur // chunk_size
     bpe = (dset.total_wav_dur // opts.chunk_size) // opts.batch_size
+    print ("Dataset has a total {} hours of training data".format(dset.total_wav_dur/16000/3600.0))
     opts.bpe = bpe
     if opts.do_eval:
         assert va_dset is not None, (
@@ -461,6 +474,9 @@ if __name__ == '__main__':
                             help="Pick random of one of these channels."
                                  "Can be empty or None in which case only"
                                  "ihm channel gets used for chunk and cchunk")
+    #some transformations rely on kaldi to extract feats
+    parser.add_argument('--kaldi_root', type=str, default=None,
+                        help='Absolute path to kaldi installation. Possibly of use for feature related bits.')
 
     opts = parser.parse_args()
     opts.ckpt_continue = not str2bool(opts.no_continue)

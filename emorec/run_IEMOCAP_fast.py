@@ -9,6 +9,8 @@
 # To run it:
 # python run_IEMOCAP_fast.py ../cfg/PASE.cfg ../PASE.ckpt /home/mirco/Dataset/IEMOCAP_processed iemocap_exp.res
 
+import warnings
+warnings.filterwarnings('ignore')
 
 import sys
 from neural_networks import MLP,context_window
