@@ -589,23 +589,24 @@ class KaldiFeats(object):
 
 class KaldiMFCC(KaldiFeats):
     def __init__(self, kaldi_root, hop=160, win=400, sr=16000,
-                    num_mel_bins=20, num_ceps=20):
+                    num_mel_bins=20, num_ceps=20, der_order=0):
 
         super(KaldiMFCC, self).__init__(kaldi_root=kaldi_root, 
                                         hop=hop, win=win, sr=sr)
 
         self.num_mel_bins = num_mel_bins
         self.num_ceps = num_ceps
+        self.der_order=der_order
 
         cmd = "ark:| {}/src/featbin/compute-mfcc-feats --print-args=false "\
                "--use-energy=false --snip-edges=false --num-ceps={} "\
                "--frame-length={} --frame-shift={} "\
                "--num-mel-bins={} --sample-frequency={} "\
-               "ark:- ark:- |"
+               "ark:- ark:- | add-deltas --delta-order={} ark:- ark:- |"
 
         self.cmd = cmd.format(self.kaldi_root, self.num_ceps,
                               self.frame_length, self.frame_shift,
-                              self.num_mel_bins, self.sr)
+                             self.num_mel_bins, self.sr,self.der_order)
 
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
