@@ -28,20 +28,20 @@ def build_dataset_providers(opts):
     trans = Compose([
         ToTensor(),
         MIChunkWav(opts.chunk_size),
-        LPS(hop=opts.hop_size, win=opts.win_size),
-        Gammatone(hop=opts.hop_size),
+        #LPS(hop=opts.hop_size, win=opts.win_size),
+        #Gammatone(hop=opts.hop_size),
         #LPC(hop=opts.hop_size),
-        FBanks(hop=opts.hop_size),
-        MFCC(hop=opts.hop_size, win=opts.win_size),
+        #FBanks(hop=opts.hop_size),
+        #MFCC(hop=opts.hop_size, win=opts.win_size),
         #KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.hop_size, win=opts.win_size),
         #KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.hop_size, win=opts.win_size),
-        Prosody(hop=opts.hop_size)
+        #Prosody(hop=opts.hop_size)
         LPS(hop=opts.LPS_hop,win=opts.LPS_win),
         Gammatone(hop=opts.gammatone_hop,win=opts.gammatone_win),
         #LPC(hop=opts.LPC_hop),
         FBanks(hop=opts.fbanks_hop,win=opts.fbanks_win),
         MFCC(hop=opts.mfccs_hop,win=opts.mfccs_win,order=opts.mfccs_order),
-        KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.kaldimfccs_hop, win=opts.kaldimfccs_win,num_mel_bins=opts.kaldimfccs_order,der_order=opts.kaldimfccs_der_order),
+        KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.kaldimfccs_hop, win=opts.kaldimfccs_win,num_mel_bins=opts.kaldimfccs_num_mel_bins,num_ceps=opts.kaldimfccs_num_ceps,der_order=opts.kaldimfccs_der_order),
         #KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.kaldiplp_hop, win=opts.kaldiplp_win),
         Prosody(hop=opts.prosody_hop, win=opts.prosody_win)
     ])
@@ -126,7 +126,8 @@ if __name__ == '__main__':
     parser.add_argument('--kaldimfccs_hop', type=int, default=160)
     parser.add_argument('--kaldimfccs_win', type=int, default=400)
     parser.add_argument('--kaldimfccs_der_order', type=int, default=0)
-    parser.add_argument('--kaldimfccs_order', type=int, default=20)
+    parser.add_argument('--kaldimfccs_num_mel_bins', type=int, default=20)
+    parser.add_argument('--kaldimfccs_num_ceps', type=int, default=20)
     parser.add_argument('--kaldiplp_hop', type=int, default=160)
     parser.add_argument('--kaldiplp_win', type=int, default=400)
 
