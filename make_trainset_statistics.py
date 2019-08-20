@@ -28,12 +28,12 @@ def build_dataset_providers(opts):
     trans = Compose([
         ToTensor(),
         MIChunkWav(opts.chunk_size),
-        LPS(hop=opts.hop_size),
-        #Gammatone(hop=opts.hop_size),
+        LPS(hop=opts.hop_size, win=opts.win_size),
+        Gammatone(hop=opts.hop_size),
         #LPC(hop=opts.hop_size),
-        #FBanks(hop=opts.hop_size),
-        #MFCC(hop=opts.hop_size),
-        KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.hop_size, win=opts.win_size),
+        FBanks(hop=opts.hop_size),
+        MFCC(hop=opts.hop_size, win=opts.win_size),
+        #KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.hop_size, win=opts.win_size),
         #KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.hop_size, win=opts.win_size),
         Prosody(hop=opts.hop_size)
     ])
