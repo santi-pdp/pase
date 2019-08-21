@@ -638,7 +638,7 @@ class KaldiMFCC(KaldiFeats):
 
 class KaldiPLP(KaldiFeats):
     def __init__(self, kaldi_root, hop=160, win=400, sr=16000,
-                    num_mel_bins=20, num_ceps=12, lpc_order=12):
+                    num_mel_bins=20, num_ceps=20, lpc_order=20):
 
         super(KaldiPLP, self).__init__(kaldi_root=kaldi_root, 
                                         hop=hop, win=win, sr=sr)
