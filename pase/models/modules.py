@@ -37,6 +37,22 @@ def format_frontend_output(y, data_fmt, mode):
         return embedding, chunk
     else:
         return select_output(y, mode=mode)
+
+def build_rnn_block(in_size, rnn_size, rnn_layers, rnn_type,
+                    bidirectional=True,
+                    dropout=0):
+    if (rnn_type.lower() == 'qrnn') and QRNN is not None:
+        if bidirectional:
+            print('WARNING: QRNN ignores bidirectional flag')
+            rnn_size = 2 * rnn_size
+        rnn = QRNN(in_size, rnn_size, rnn_layers, dropout=dropout, window=2)
+    elif rnn_type.lower() == 'lstm' or rnn_type.lower() == 'gru':
+        rnn = getattr(nn, rnn_type.upper())(in_size, rnn_size, rnn_layers,
+                                            dropout=dropout,
+                                            bidirectional=bidirectional)
+    else:
+        raise TypeError('Unrecognized rnn type: ', rnn_type)
+    return rnn
         
 def select_output(h, mode=None):
     if mode == "avg_norm":
@@ -375,6 +391,19 @@ class GConv1DBlock(NeuralBlock):
         h = forward_norm(h, self.norm)
         #h = self.act(h)
         return h
+
+class MLPBlock(NeuralBlock):
+
+    def __init__(self, ninp, fmaps, dout=0, name='MLPBlock'):
+        super().__init__(name=name)
+        self.ninp = ninp
+        self.fmaps = fmaps
+        self.W = nn.Conv1d(ninp, fmaps, 1)
+        self.act = nn.PReLU(fmaps)
+        self.dout = nn.Dropout(dout)
+
+    def forward(self, x, device=None):
+        return self.dout(self.act(self.W(x)))
 
 class GDeconv1DBlock(NeuralBlock):
 
@@ -958,21 +987,100 @@ class VQEMA(nn.Module):
         PP = torch.exp(-torch.sum(avg_probs * torch.log(avg_probs + 1e-10)))
         return loss, Q.permute(0, 2, 1).contiguous(), PP, enc
 
-def build_rnn_block(in_size, rnn_size, rnn_layers, rnn_type,
-                    bidirectional=True,
-                    dropout=0):
-    if (rnn_type.lower() == 'qrnn') and QRNN is not None:
-        if bidirectional:
-            print('WARNING: QRNN ignores bidirectional flag')
-            rnn_size = 2 * rnn_size
-        rnn = QRNN(in_size, rnn_size, rnn_layers, dropout=dropout, window=2)
-    elif rnn_type.lower() == 'lstm' or rnn_type.lower() == 'gru':
-        rnn = getattr(nn, rnn_type.upper())(in_size, rnn_size, rnn_layers,
-                                            dropout=dropout,
-                                            bidirectional=bidirectional)
-    else:
-        raise TypeError('Unrecognized rnn type: ', rnn_type)
-    return rnn
+class SimpleResBlock1D(nn.Module):
+    """ Based on WaveRNN a publicly available WaveRNN implementation:
+        https://github.com/fatchord/WaveRNN/blob/master/models/fatchord_version.py
+    """
+
+    def __init__(self, dims):
+        super().__init__()
+        self.conv1 = nn.Conv1d(dims, dims, kernel_size=1, bias=False)
+        self.conv2 = nn.Conv1d(dims, dims, kernel_size=1, bias=False)
+        self.batch_norm1 = nn.BatchNorm1d(dims)
+        self.batch_norm2 = nn.BatchNorm1d(dims)
+
+    def forward(self, x):
+        residual = x
+        x = self.conv1(x)
+        x = self.batch_norm1(x)
+        x = F.relu(x)
+        x = self.conv2(x)
+        x = self.batch_norm2(x)
+        return x + residual
+
+
+class MelResNet(nn.Module):
+    """ Based on WaveRNN a publicly available WaveRNN implementation:
+        https://github.com/fatchord/WaveRNN/blob/master/models/fatchord_version.py
+    """
+
+    def __init__(self, res_blocks, in_dims, compute_dims, res_out_dims, pad):
+        super().__init__()
+        k_size = pad * 2 + 1
+        self.conv_in = nn.Conv1d(in_dims, compute_dims, kernel_size=k_size, bias=False)
+        self.batch_norm = nn.BatchNorm1d(compute_dims)
+        self.layers = nn.ModuleList()
+        for i in range(res_blocks):
+            self.layers.append(SimpleResBlock1D(compute_dims))
+        self.conv_out = nn.Conv1d(compute_dims, res_out_dims, kernel_size=1)
+
+    def forward(self, x):
+        x = self.conv_in(x)
+        x = self.batch_norm(x)
+        x = F.relu(x)
+        for f in self.layers: x = f(x)
+        x = self.conv_out(x)
+        return x
+
+class Stretch2d(nn.Module):
+    """ Based on WaveRNN a publicly available WaveRNN implementation:
+        https://github.com/fatchord/WaveRNN/blob/master/models/fatchord_version.py
+    """
+
+    def __init__(self, x_scale, y_scale):
+        super().__init__()
+        self.x_scale = x_scale
+        self.y_scale = y_scale
+
+    def forward(self, x):
+        b, c, h, w = x.size()
+        x = x.unsqueeze(-1).unsqueeze(3)
+        # y_scale is feat dim, x_scale is time
+        x = x.repeat(1, 1, 1, self.y_scale, 1, self.x_scale)
+        return x.view(b, c, h * self.y_scale, w * self.x_scale)
+
+class UpsampleNetwork(nn.Module):
+    """ Based on WaveRNN a publicly available WaveRNN implementation:
+        https://github.com/fatchord/WaveRNN/blob/master/models/fatchord_version.py
+    """
+
+    def __init__(self, feat_dims, upsample_scales=[4, 4, 10], compute_dims=128,
+                 res_blocks=10, res_out_dims=128, pad=2):
+        super().__init__()
+        self.num_outputs = res_out_dims
+        total_scale = np.cumproduct(upsample_scales)[-1]
+        self.indent = pad * total_scale
+        self.resnet = MelResNet(res_blocks, feat_dims, compute_dims, res_out_dims, pad)
+        self.resnet_stretch = Stretch2d(total_scale, 1)
+        self.up_layers = nn.ModuleList()
+        for scale in upsample_scales:
+            k_size = (1, scale * 2 + 1)
+            padding = (0, scale)
+            stretch = Stretch2d(scale, 1)
+            conv = nn.Conv2d(1, 1, kernel_size=k_size, padding=padding, bias=False)
+            conv.weight.data.fill_(1. / k_size[1])
+            self.up_layers.append(stretch)
+            self.up_layers.append(conv)
+
+    def forward(self, m):
+        aux = self.resnet(m).unsqueeze(1)
+        aux = self.resnet_stretch(aux)
+        aux = aux.squeeze(1)
+        m = m.unsqueeze(1)
+        for f in self.up_layers: m = f(m)
+        m = m.squeeze(1)[:, :, self.indent:-self.indent]
+        return m.transpose(1, 2), aux.transpose(1, 2)
+
 
 
 if __name__ == '__main__':
@@ -1036,11 +1144,16 @@ if __name__ == '__main__':
 #                         stride=160)
     #conv = GConv1DBlock(1, 10, 21, 1)
     #conv = FeResBlock(1, 10, 3, 1, 1)
-    conv = ResDilatedModule(1, 50, 256, 3, 1024)
-    x = torch.randn(1, 1, 16000)
-    print(conv)
-    y, res = conv(x)
-    print(y.size())
+    #conv = ResDilatedModule(1, 50, 256, 3, 1024)
+    #x = torch.randn(1, 1, 16000)
+    #print(conv)
+    #y, res = conv(x)
+    #print(y.size())
+    upnet = UpsampleNetwork(100, [4, 4, 10], 256, 10, 100, 2)
+    print(upnet)
+    x = torch.randn(1, 100, 200)
+    z, y = upnet(x)
+    print(x.shape, z.shape, y.shape)
 
 
 

@@ -28,14 +28,22 @@ def build_dataset_providers(opts):
     trans = Compose([
         ToTensor(),
         MIChunkWav(opts.chunk_size),
-        LPS(hop=opts.hop_size),
+        #LPS(hop=opts.hop_size, win=opts.win_size),
         #Gammatone(hop=opts.hop_size),
         #LPC(hop=opts.hop_size),
         #FBanks(hop=opts.hop_size),
-        #MFCC(hop=opts.hop_size),
-        KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.hop_size, win=opts.win_size),
-        KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.hop_size, win=opts.win_size),
-        Prosody(hop=opts.hop_size)
+        #MFCC(hop=opts.hop_size, win=opts.win_size),
+        #KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.hop_size, win=opts.win_size),
+        #KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.hop_size, win=opts.win_size),
+        #Prosody(hop=opts.hop_size)
+        LPS(hop=opts.LPS_hop,win=opts.LPS_win),
+        Gammatone(hop=opts.gammatone_hop,win=opts.gammatone_win),
+        #LPC(hop=opts.LPC_hop),
+        FBanks(hop=opts.fbanks_hop,win=opts.fbanks_win),
+        MFCC(hop=opts.mfccs_hop,win=opts.mfccs_win,order=opts.mfccs_order),
+        KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.kaldimfccs_hop, win=opts.kaldimfccs_win,num_mel_bins=opts.kaldimfccs_num_mel_bins,num_ceps=opts.kaldimfccs_num_ceps,der_order=opts.kaldimfccs_der_order),
+        #KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.kaldiplp_hop, win=opts.kaldiplp_win),
+        Prosody(hop=opts.prosody_hop, win=opts.prosody_win)
     ])
 
     dsets = []
@@ -98,8 +106,32 @@ if __name__ == '__main__':
     parser.add_argument('--chunk_size', type=int, default=16000)
     parser.add_argument('--max_batches', type=int, default=20)
     parser.add_argument('--out_file', type=str)
-    parser.add_argument('--hop_size', type=int, default=160)
-    parser.add_argument('--win_size', type=int, default=400)
+    #parser.add_argument('--hop_size', type=int, default=160)
+    #parser.add_argument('--win_size', type=int, default=400)
+    
+    # setting hop/wlen for each features
+    parser.add_argument('--LPS_hop', type=int, default=160)
+    parser.add_argument('--LPS_win', type=int, default=400)
+    parser.add_argument('--gammatone_hop', type=int, default=160)
+    parser.add_argument('--gammatone_win', type=int, default=400)
+    parser.add_argument('--LPC_hop', type=int, default=160)
+    parser.add_argument('--LPC_win', type=int, default=400)
+    parser.add_argument('--fbanks_hop', type=int, default=160)
+    parser.add_argument('--fbanks_win', type=int, default=400)
+    parser.add_argument('--mfccs_hop', type=int, default=160)
+    parser.add_argument('--mfccs_win', type=int, default=400)
+    parser.add_argument('--mfccs_order', type=int, default=20)
+    parser.add_argument('--prosody_hop', type=int, default=160)
+    parser.add_argument('--prosody_win', type=int, default=400)
+    parser.add_argument('--kaldimfccs_hop', type=int, default=160)
+    parser.add_argument('--kaldimfccs_win', type=int, default=400)
+    parser.add_argument('--kaldimfccs_der_order', type=int, default=0)
+    parser.add_argument('--kaldimfccs_num_mel_bins', type=int, default=20)
+    parser.add_argument('--kaldimfccs_num_ceps', type=int, default=20)
+    parser.add_argument('--kaldiplp_hop', type=int, default=160)
+    parser.add_argument('--kaldiplp_win', type=int, default=400)
+
+    
     parser.add_argument('--ihm2sdm', type=str, default=None,
                         help='Relevant only to ami-like dataset providers')
     parser.add_argument('--kaldi_root', type=str, default=None,

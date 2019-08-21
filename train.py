@@ -58,35 +58,35 @@ def make_transforms(opts, workers_cfg):
                 continue
             elif name == 'lps':
                 znorm = True
-                trans.append(LPS(opts.nfft, hop=opts.hop, win=opts.win))
+                trans.append(LPS(opts.nfft, hop=opts.LPS_hop, win=opts.LPS_win))
             elif name == 'gtn':
                 znorm = True
                 trans.append(Gammatone(opts.gtn_fmin, opts.gtn_channels, 
-                                       hop=opts.hop, win=opts.win))
+                                       hop=opts.gammatone_hop, win=opts.gammatone_win))
             elif name == 'lpc':
                 znorm = True
-                trans.append(LPC(opts.lpc_order, hop=opts.hop,
-                                 win=opts.win))
+                trans.append(LPC(opts.lpc_order, hop=opts.LPC_hop,
+                                 win=opts.LPC_win))
             elif name == 'fbank':
                 znorm = True
                 trans.append(FBanks(n_filters=opts.fbank_filters, 
                                     n_fft=opts.nfft,
-                                    hop=opts.hop,
-                                    win=opts.win))
+                                    hop=opts.fbanks_hop,
+                                    win=opts.fbanks_win))
             elif name == 'mfcc':
                 znorm = True
-                trans.append(MFCC(hop=opts.hop, win=opts.win))
+                trans.append(MFCC(hop=opts.mfccs_hop, win=opts.mfccs_win, order=opts.mfccs_order))
             elif name == 'prosody':
                 znorm = True
-                trans.append(Prosody(hop=opts.hop, win=opts.win))
+                trans.append(Prosody(hop=opts.prosody_hop, win=opts.prosody_win))
             elif name == 'chunk' or name == 'cchunk':
                 znorm = False
             elif name == "kaldimfcc":
                 znorm = True
-                trans.append(KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.hop, win=opts.win))
+                trans.append(KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.kaldimfccs_hop, win=opts.kaldimfccs_win,num_mel_bins=opts.kaldimfccs_num_mel_bins,num_ceps=opts.kaldimfccs_num_ceps,der_order=opts.kaldimfccs_der_order))
             elif name == "kaldiplp":
                 znorm = True
-                trans.append(KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.hop, win=opts.win))
+                trans.append(KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.kaldiplp_hop, win=opts.kaldiplp_win))
             else:
                 raise TypeError('Unrecognized module \"{}\"'
                                 'whilst building transfromations'.format(name))
@@ -447,8 +447,32 @@ if __name__ == '__main__':
                         help='Do VQ quantization of enc output (Def: False).')
     parser.add_argument('--cchunk_prior', action='store_true', default=False)
     parser.add_argument('--sup_exec', type=str, default=None)
-    parser.add_argument('--hop', type=int, default=160)
-    parser.add_argument('--win', type=int, default=400)
+    
+    # hop/wlen of the various feature regressors
+    parser.add_argument('--LPS_hop', type=int, default=160)
+    parser.add_argument('--LPS_win', type=int, default=400)
+    parser.add_argument('--gammatone_hop', type=int, default=160)
+    parser.add_argument('--gammatone_win', type=int, default=400)
+    parser.add_argument('--LPC_hop', type=int, default=160)
+    parser.add_argument('--LPC_win', type=int, default=400)
+    parser.add_argument('--fbanks_hop', type=int, default=160)
+    parser.add_argument('--fbanks_win', type=int, default=400)
+
+    parser.add_argument('--mfccs_hop', type=int, default=160)
+    parser.add_argument('--mfccs_win', type=int, default=400)
+    parser.add_argument('--mfccs_order', type=int, default=20)
+
+    parser.add_argument('--prosody_hop', type=int, default=160)
+    parser.add_argument('--prosody_win', type=int, default=400)
+    parser.add_argument('--kaldimfccs_hop', type=int, default=160)
+    parser.add_argument('--kaldimfccs_win', type=int, default=400)
+    parser.add_argument('--kaldimfccs_num_mel_bins', type=int, default=20)
+    parser.add_argument('--kaldimfccs_num_ceps', type=int, default=20)
+    parser.add_argument('--kaldimfccs_der_order', type=int, default=0)
+    parser.add_argument('--kaldiplp_hop', type=int, default=160)
+    parser.add_argument('--kaldiplp_win', type=int, default=400)
+
+
     parser.add_argument('--sup_freq', type=int, default=1)
     parser.add_argument('--preload_wav', action='store_true', default=False,
                         help='Preload wav files in Dataset (Def: False).')
