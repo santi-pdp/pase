@@ -394,11 +394,13 @@ class GConv1DBlock(NeuralBlock):
 
 class MLPBlock(NeuralBlock):
 
-    def __init__(self, ninp, fmaps, dout=0, name='MLPBlock'):
+    def __init__(self, ninp, fmaps, dout=0, context=1, 
+                 name='MLPBlock'):
         super().__init__(name=name)
         self.ninp = ninp
         self.fmaps = fmaps
-        self.W = nn.Conv1d(ninp, fmaps, 1)
+        assert context % 2 != 0, context
+        self.W = nn.Conv1d(ninp, fmaps, context, padding=context//2)
         self.act = nn.PReLU(fmaps)
         self.dout = nn.Dropout(dout)
 

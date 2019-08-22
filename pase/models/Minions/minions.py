@@ -402,6 +402,7 @@ class MLPMinion(Model):
                  num_outputs,
                  dropout, hidden_size=256,
                  hidden_layers=2,
+                 context=1,
                  skip=True,
                  loss=None,
                  loss_weight=1.,
@@ -412,6 +413,8 @@ class MLPMinion(Model):
         # transpose anything in time, such that
         # frontend and minions are attached very simply
         self.num_inputs = num_inputs
+        assert context % 2 != 0, context
+        self.context = context
         self.num_outputs = num_outputs
         self.dropout = dropout
         self.skip = skip
@@ -424,12 +427,17 @@ class MLPMinion(Model):
             keys = [name]
         self.blocks = nn.ModuleList()
         ninp = num_inputs
-        for _ in range(hidden_layers):
+        for hi in range(hidden_layers):
             self.blocks.append(MLPBlock(ninp,
                                         hidden_size,
-                                        dropout))
+                                        dropout, 
+                                        context=context))
             ninp = hidden_size
-        self.W = nn.Conv1d(ninp, num_outputs, 1)
+            # in case context has been assigned,
+            # it is overwritten to 1
+            context = 1
+        self.W = nn.Conv1d(ninp, num_outputs, context,
+                           padding=context//2)
         self.sg = ScaleGrad()
 
     def forward(self, x, alpha=1, device=None):
