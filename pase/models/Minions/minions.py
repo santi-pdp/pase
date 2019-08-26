@@ -6,12 +6,13 @@ import torch.nn.functional as F
 import json
 import random
 from pase.utils import *
-
+import sys
 
 def minion_maker(cfg):
     if isinstance(cfg, str):
         with open(cfg, "r") as f:
             cfg = json.load(f)
+
     mtype = cfg.pop('type', 'mlp')
     if mtype == 'mlp':
         minion = MLPMinion(**cfg)
@@ -340,7 +341,9 @@ class DecoderMinion(Model):
 
     def __init__(self, num_inputs,
                  num_outputs,
-                 dropout, hidden_size=256,
+                 dropout, 
+                 dropout_time=0.0,
+                 hidden_size=256,
                  hidden_layers=2,
                  fmaps=[256, 256, 128, 128, 128, 64, 64],
                  strides=[2, 2, 2, 2, 2, 5],
@@ -355,6 +358,7 @@ class DecoderMinion(Model):
         self.num_inputs = num_inputs
         self.num_outputs = num_outputs
         self.dropout = dropout
+        self.dropout_time = dropout_time
         self.skip = skip
         self.hidden_size = hidden_size
         self.hidden_layers = hidden_layers
@@ -365,6 +369,7 @@ class DecoderMinion(Model):
         self.loss = loss
         self.loss_weight = loss_weight
         self.keys = keys
+
         if keys is None:
             keys = [name]
         self.blocks = nn.ModuleList()
@@ -384,7 +389,16 @@ class DecoderMinion(Model):
         self.sg = ScaleGrad()
 
     def forward(self, x, alpha=1, device=None):
+        
         self.sg.apply(x, alpha)
+        
+        # The following part of the code drops out some time steps, but the worker should reconstruct all of them (i.e, the original signal)
+        # This way we encourage learning features with a larger contextual information
+        if self.dropout_time > 0:
+            self.dropout_time=1.0
+            mask=(torch.FloatTensor(x.shape[0],x.shape[2]).to('cuda').uniform_() > self.dropout_time).float().unsqueeze(1)
+            x=x*mask
+
         h = x
         for bi, block in enumerate(self.blocks, start=1):
             h_ = h
