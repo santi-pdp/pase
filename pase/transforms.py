@@ -601,12 +601,14 @@ class KaldiMFCC(KaldiFeats):
         cmd = "ark:| {}/src/featbin/compute-mfcc-feats --print-args=false "\
                "--use-energy=false --snip-edges=false --num-ceps={} "\
                "--frame-length={} --frame-shift={} "\
-               "--num-mel-bins={} --sample-frequency={} "\
-               "ark:- ark:- | add-deltas --delta-order={} ark:- ark:- |"
+               "--num-mel-bins={} --sample-frequency={} ark:- ark:- |"\
+               " {}/src/featbin/add-deltas --print-args=false "\
+               "--delta-order={} ark:- ark:- |"
 
         self.cmd = cmd.format(self.kaldi_root, self.num_ceps,
                               self.frame_length, self.frame_shift,
-                             self.num_mel_bins, self.sr,self.der_order)
+                              self.num_mel_bins, self.sr, self.kaldi_root,
+                              self.der_order)
 
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)

@@ -1,13 +1,13 @@
 #!/bin/bash
 
 libri=false
-libri_kaldi=false
+libri_kaldi=true
 swbd=false
 ami=false
 libri_ami=false
 libri_ami_sdm=false
 libri_ami_swbd=false
-chime5=true
+chime5=false
 chime5_libri=false
 
 $libri && {
@@ -27,7 +27,8 @@ $libri_kaldi && {
    --data_cfg  /tmp-corpora/LibriSpeech_50h/librispeech_data_50h.cfg \
    --num_workers 10 --max_batches=30 \
    --kaldi_root /disks/data1/pawel/repos/kaldi \
-   --out_file data/librispeech_50h_stats_kaldimfcc_40dim.pkl
+   --kaldimfccs_num_mel_bins 40 --kaldimfccs_num_ceps 13 --kaldimfccs_der_order 2 \
+   --out_file data/librispeech_50h_stats_kaldimfcc_der.pkl
 }
 
 $libri_ami && {

@@ -41,7 +41,9 @@ def build_dataset_providers(opts):
         #LPC(hop=opts.LPC_hop),
         FBanks(hop=opts.fbanks_hop,win=opts.fbanks_win),
         MFCC(hop=opts.mfccs_hop,win=opts.mfccs_win,order=opts.mfccs_order),
-        KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.kaldimfccs_hop, win=opts.kaldimfccs_win,num_mel_bins=opts.kaldimfccs_num_mel_bins,num_ceps=opts.kaldimfccs_num_ceps,der_order=opts.kaldimfccs_der_order),
+        KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.kaldimfccs_hop, win=opts.kaldimfccs_win, \
+                  num_mel_bins=opts.kaldimfccs_num_mel_bins, num_ceps=opts.kaldimfccs_num_ceps, \
+                  der_order=opts.kaldimfccs_der_order),
         #KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.kaldiplp_hop, win=opts.kaldiplp_win),
         Prosody(hop=opts.prosody_hop, win=opts.prosody_win)
     ])

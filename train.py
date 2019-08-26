@@ -97,6 +97,7 @@ def make_transforms(opts, workers_cfg):
     if opts.trans_cache is None:
         trans = Compose(trans)
     else:
+        print (keys, trans)
         trans = CachedCompose(trans, keys, opts.trans_cache)
     return trans
 
