@@ -62,7 +62,7 @@ def make_transforms(opts, workers_cfg):
             elif name == 'gtn':
                 znorm = True
                 trans.append(Gammatone(opts.gtn_fmin, opts.gtn_channels, 
-                                       hop=opts.gammatone_hop, win=opts.gammatone_win))
+                                       hop=opts.gammatone_hop, win=opts.gammatone_win,der_order=opts.gammatone_der_order))
             elif name == 'lpc':
                 znorm = True
                 trans.append(LPC(opts.lpc_order, hop=opts.LPC_hop,
@@ -72,10 +72,11 @@ def make_transforms(opts, workers_cfg):
                 trans.append(FBanks(n_filters=opts.fbank_filters, 
                                     n_fft=opts.nfft,
                                     hop=opts.fbanks_hop,
-                                    win=opts.fbanks_win))
+                                    win=opts.fbanks_win,
+                                    der_order=opts.fbanks_der_order))
             elif name == 'mfcc':
                 znorm = True
-                trans.append(MFCC(hop=opts.mfccs_hop, win=opts.mfccs_win, order=opts.mfccs_order))
+                trans.append(MFCC(hop=opts.mfccs_hop, win=opts.mfccs_win, order=opts.mfccs_order, der_order=opts.mfccs_der_order))
             elif name == 'prosody':
                 znorm = True
                 trans.append(Prosody(hop=opts.prosody_hop, win=opts.prosody_win))
@@ -453,14 +454,16 @@ if __name__ == '__main__':
     parser.add_argument('--LPS_win', type=int, default=400)
     parser.add_argument('--gammatone_hop', type=int, default=160)
     parser.add_argument('--gammatone_win', type=int, default=400)
+    parser.add_argument('--gammatone_der_order', type=int, default=0)
     parser.add_argument('--LPC_hop', type=int, default=160)
     parser.add_argument('--LPC_win', type=int, default=400)
     parser.add_argument('--fbanks_hop', type=int, default=160)
     parser.add_argument('--fbanks_win', type=int, default=400)
-
+    parser.add_argument('--fbanks_der_order', type=int, default=0)
     parser.add_argument('--mfccs_hop', type=int, default=160)
     parser.add_argument('--mfccs_win', type=int, default=400)
     parser.add_argument('--mfccs_order', type=int, default=20)
+    parser.add_argument('--mfccs_der_order', type=int, default=0)
 
     parser.add_argument('--prosody_hop', type=int, default=160)
     parser.add_argument('--prosody_win', type=int, default=400)

@@ -37,10 +37,10 @@ def build_dataset_providers(opts):
         #KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.hop_size, win=opts.win_size),
         #Prosody(hop=opts.hop_size)
         LPS(hop=opts.LPS_hop,win=opts.LPS_win),
-        Gammatone(hop=opts.gammatone_hop,win=opts.gammatone_win),
+        Gammatone(hop=opts.gammatone_hop,win=opts.gammatone_win,der_order=opts.gammatone_der_order),
         #LPC(hop=opts.LPC_hop),
-        FBanks(hop=opts.fbanks_hop,win=opts.fbanks_win),
-        MFCC(hop=opts.mfccs_hop,win=opts.mfccs_win,order=opts.mfccs_order),
+        FBanks(hop=opts.fbanks_hop,win=opts.fbanks_win,der_order=opts.fbanks_der_order),
+        MFCC(hop=opts.mfccs_hop,win=opts.mfccs_win,order=opts.mfccs_order,der_order=opts.mfccs_der_order),
         KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.kaldimfccs_hop, win=opts.kaldimfccs_win,num_mel_bins=opts.kaldimfccs_num_mel_bins,num_ceps=opts.kaldimfccs_num_ceps,der_order=opts.kaldimfccs_der_order),
         #KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.kaldiplp_hop, win=opts.kaldiplp_win),
         Prosody(hop=opts.prosody_hop, win=opts.prosody_win)
@@ -114,13 +114,16 @@ if __name__ == '__main__':
     parser.add_argument('--LPS_win', type=int, default=400)
     parser.add_argument('--gammatone_hop', type=int, default=160)
     parser.add_argument('--gammatone_win', type=int, default=400)
+    parser.add_argument('--gammatone_der_order', type=int, default=0)
     parser.add_argument('--LPC_hop', type=int, default=160)
     parser.add_argument('--LPC_win', type=int, default=400)
     parser.add_argument('--fbanks_hop', type=int, default=160)
     parser.add_argument('--fbanks_win', type=int, default=400)
+    parser.add_argument('--fbanks_der_order', type=int, default=0)
     parser.add_argument('--mfccs_hop', type=int, default=160)
     parser.add_argument('--mfccs_win', type=int, default=400)
     parser.add_argument('--mfccs_order', type=int, default=20)
+    parser.add_argument('--mfccs_der_order', type=int, default=0)
     parser.add_argument('--prosody_hop', type=int, default=160)
     parser.add_argument('--prosody_win', type=int, default=400)
     parser.add_argument('--kaldimfccs_hop', type=int, default=160)
