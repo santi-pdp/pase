@@ -417,6 +417,7 @@ class MLPMinion(Model):
                  dropout, hidden_size=256,
                  hidden_layers=2,
                  context=1,
+                 tie_context_weights=False,
                  skip=True,
                  loss=None,
                  loss_weight=1.,
@@ -429,6 +430,7 @@ class MLPMinion(Model):
         self.num_inputs = num_inputs
         assert context % 2 != 0, context
         self.context = context
+        self.tie_context_weights = tie_context_weights
         self.num_outputs = num_outputs
         self.dropout = dropout
         self.skip = skip
@@ -444,8 +446,9 @@ class MLPMinion(Model):
         for hi in range(hidden_layers):
             self.blocks.append(MLPBlock(ninp,
                                         hidden_size,
-                                        dropout, 
-                                        context=context))
+                                        dropout,
+                                        context=context,
+                                        tie_context_weights=tie_context_weights))
             ninp = hidden_size
             # in case context has been assigned,
             # it is overwritten to 1

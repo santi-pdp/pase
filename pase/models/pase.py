@@ -299,7 +299,6 @@ class pase(Model):
             assert len(h) == 2, len(h)
             h, chunk = h
 
-
         # forward all classification workers
         # h => chunk
 

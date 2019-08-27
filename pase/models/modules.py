@@ -395,16 +395,25 @@ class GConv1DBlock(NeuralBlock):
 class MLPBlock(NeuralBlock):
 
     def __init__(self, ninp, fmaps, dout=0, context=1, 
-                 name='MLPBlock'):
+                 tie_context_weights=False, name='MLPBlock'):
         super().__init__(name=name)
         self.ninp = ninp
         self.fmaps = fmaps
+        self.tie_context_weights = tie_context_weights
         assert context % 2 != 0, context
-        self.W = nn.Conv1d(ninp, fmaps, context, padding=context//2)
+        if tie_context_weights:
+            #print ("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Tied context weigts.")
+            self.W = nn.Conv1d(ninp, fmaps, 1)
+            self.pool = nn.AvgPool1d(kernel_size=context, stride=1,
+                                      padding=context//2, count_include_pad=False)
+        else:
+            self.W = nn.Conv1d(ninp, fmaps, context, padding=context//2)
         self.act = nn.PReLU(fmaps)
         self.dout = nn.Dropout(dout)
 
     def forward(self, x, device=None):
+        if self.tie_context_weights:
+            return self.dout(self.act(self.pool(self.W(x))))
         return self.dout(self.act(self.W(x)))
 
 class GDeconv1DBlock(NeuralBlock):
