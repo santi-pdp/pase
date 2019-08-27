@@ -603,6 +603,7 @@ class KaldiFeats(object):
         fin.close() #so its clear nothing new arrives
         feats_ark = kio.read_mat_ark(fout)
         for _, feats in feats_ark:
+            fout.close()
             return feats.T #there is only one to read
         #except Exception as e:
         #    print (e)
