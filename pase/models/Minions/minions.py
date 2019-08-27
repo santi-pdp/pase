@@ -343,6 +343,8 @@ class DecoderMinion(Model):
                  num_outputs,
                  dropout, 
                  dropout_time=0.0,
+                 shuffle = False,
+                 shuffle_depth = 7,
                  hidden_size=256,
                  hidden_layers=2,
                  fmaps=[256, 256, 128, 128, 128, 64, 64],
@@ -359,6 +361,8 @@ class DecoderMinion(Model):
         self.num_outputs = num_outputs
         self.dropout = dropout
         self.dropout_time = dropout_time
+        self.shuffle = shuffle
+        self.shuffle_depth = shuffle_depth
         self.skip = skip
         self.hidden_size = hidden_size
         self.hidden_layers = hidden_layers
@@ -398,6 +402,17 @@ class DecoderMinion(Model):
             self.dropout_time=1.0
             mask=(torch.FloatTensor(x.shape[0],x.shape[2]).to('cuda').uniform_() > self.dropout_time).float().unsqueeze(1)
             x=x*mask
+
+        # The following function (when active) shuffles the time order of the input PASE features. Note that the shuffle has a certain depth (shuffle_depth). 
+        # This allows shuffling features that are reasonably close, hopefully encouraging PASE to learn a longer context.
+        if self.shuffle:
+            x = torch.split(x, self.shuffle_depth, dim=2)
+            shuffled_x=[]
+            for elem in x:
+                    r=torch.randperm(elem.shape[2])
+                    shuffled_x.append(elem[:,:,r])
+
+            x=torch.cat(shuffled_x,dim=2)
 
         h = x
         for bi, block in enumerate(self.blocks, start=1):
