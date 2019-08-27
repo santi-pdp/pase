@@ -85,7 +85,7 @@ class TDNNFe(Model):
     def forward(self, batch, device=None, mode=None):
 
         # batch possible chunk and contexts, or just forward non-dict tensor
-        x, batched = format_frontend_chunk(batch, device)
+        x, data_fmt = format_frontend_chunk(batch, device)
         if hasattr(self, 'feblock'): 
             h = self.feblock(x)
         
@@ -98,8 +98,7 @@ class TDNNFe(Model):
 
         y = self.W(h)
 
-        return format_frontend_output(y, self.training,
-                                      batched, mode)
+        return format_frontend_output(y, data_fmt, mode)
         """
         if self.training:
             if batched:
@@ -228,7 +227,7 @@ class WaveFe(Model):
         
     def forward(self, batch, device=None, mode=None):
         # batch possible chunk and contexts, or just forward non-dict tensor
-        x, batched = format_frontend_chunk(batch, device)
+        x, data_fmt = format_frontend_chunk(batch, device)
         h = x
         denseskips = hasattr(self, 'denseskips')
         if denseskips:
@@ -271,8 +270,7 @@ class WaveFe(Model):
             else:
                 return y
 
-        return format_frontend_output(y, self.training,
-                                      batched, mode)
+        return format_frontend_output(y, data_fmt, mode)
 
 
 class aspp_res_encoder(Model):
@@ -317,7 +315,7 @@ class aspp_res_encoder(Model):
     def forward(self, batch, device=None, mode=None):
 
         # batch possible chunk and contexts, or just forward non-dict tensor
-        x, batched = format_frontend_chunk(batch, device)
+        x, data_fmt = format_frontend_chunk(batch, device)
 
         sinc_out = self.sinc(x)
 
@@ -348,8 +346,7 @@ class aspp_res_encoder(Model):
         else:
             h = out
 
-        return format_frontend_output(h, self.training,
-                                      batched, mode)
+        return format_frontend_output(h, data_fmt, mode)
 
 
     def fuse(self, out):
@@ -388,7 +385,7 @@ class Resnet50_encoder(Model):
     def forward(self, batch, device=None, mode=None):
 
         # batch possible chunk and contexts, or just forward non-dict tensor
-        x, batched = format_frontend_chunk(batch, device)
+        x, data_fmt = format_frontend_chunk(batch, device)
 
         sinc_out = self.sinc(x).unsqueeze(1)
 
@@ -406,6 +403,5 @@ class Resnet50_encoder(Model):
 
         # print(h.shape)
 
-        return format_frontend_output(h, self.training,
-                                      batched, mode)
+        return format_frontend_output(h, data_fmt, mode)
 

@@ -354,13 +354,14 @@ class LPS(object):
 class FBanks(object):
 
     def __init__(self, n_filters=40, n_fft=512, hop=80,
-                 win=320, rate=16000,
+                 win=320, rate=16000, der_order=0,
                  device='cpu'):
         self.n_fft = n_fft
         self.n_filters = n_filters
         self.rate = rate
         self.hop = hop
         self.win = win
+        self.der_order=der_order
 
     # @profile
     def __call__(self, pkg, cached_file=None):
@@ -382,6 +383,13 @@ class FBanks(object):
             X = logfbank(wav, self.rate, winlen, winstep,
                          self.n_filters, self.n_fft).T
             expected_frames = len(wav) // self.hop
+
+            if self.der_order > 0 :
+                deltas=[X]
+                for n in range(1,self.der_order+1):
+                    deltas.append(librosa.feature.delta(X,order=n))
+                X=np.concatenate(deltas)
+
             fbank = torch.FloatTensor(X)
             if fbank.shape[1] < expected_frames:
                 P = expected_frames - fbank.shape[1]
@@ -404,13 +412,14 @@ class FBanks(object):
 class Gammatone(object):
 
     def __init__(self, f_min=500, n_channels=40, hop=80,
-                 win=320,  rate=16000,
+                 win=320,  der_order=0, rate=16000,
                  device='cpu'):
         self.hop = hop
         self.win = win
         self.n_channels = n_channels
         self.rate = rate
         self.f_min = f_min
+        self.der_order = der_order
 
     # @profile
     def __call__(self, pkg, cached_file=None):
@@ -434,6 +443,13 @@ class Gammatone(object):
                                           self.n_channels,
                                           self.f_min)
             gtn = np.log(gtn + 1e-10)
+ 
+            if self.der_order > 0 :
+                deltas=[gtn]
+                for n in range(1,self.der_order+1):
+                    deltas.append(librosa.feature.delta(gtn,order=n))
+                gtn=np.concatenate(deltas)
+
             expected_frames = len(wav) // self.hop
             gtn = torch.FloatTensor(gtn)
             if gtn.shape[1] < expected_frames:
@@ -442,6 +458,7 @@ class Gammatone(object):
                 gtn = F.pad(gtn.unsqueeze(0), (0, P), mode='replicate')
                 gtn = gtn.squeeze(0)
             #pkg['gtn'] = torch.FloatTensor(gtn[:, :total_frames])
+
             pkg['gtn'] = torch.FloatTensor(gtn)
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
@@ -513,7 +530,7 @@ class LPC(object):
 class MFCC(object):
 
     def __init__(self, n_fft=2048, hop=160,
-                 order=20, sr=16000, win=400):
+                 order=20, sr=16000, win=400,der_order=0):
         self.hop = hop
         # Santi: the librosa mfcc api does not always
         # accept a window argument, so we enforce n_fft
@@ -522,6 +539,7 @@ class MFCC(object):
         self.n_fft = win
         self.order = order
         self.sr = 16000
+        self.der_order=der_order
 
     # @profile
     def __call__(self, pkg, cached_file=None):
@@ -544,6 +562,12 @@ class MFCC(object):
                                         hop_length=self.hop,
                                         #win_length=self.win,
                                         )[:, :max_frames]
+            if self.der_order > 0 :
+                deltas=[mfcc]
+                for n in range(1,self.der_order+1):
+                    deltas.append(librosa.feature.delta(mfcc,order=n))
+                mfcc=np.concatenate(deltas)
+    
             pkg['mfcc'] = torch.tensor(mfcc.astype(np.float32))
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
@@ -579,6 +603,7 @@ class KaldiFeats(object):
         fin.close() #so its clear nothing new arrives
         feats_ark = kio.read_mat_ark(fout)
         for _, feats in feats_ark:
+            fout.close()
             return feats.T #there is only one to read
         #except Exception as e:
         #    print (e)
@@ -589,23 +614,26 @@ class KaldiFeats(object):
 
 class KaldiMFCC(KaldiFeats):
     def __init__(self, kaldi_root, hop=160, win=400, sr=16000,
-                    num_mel_bins=20, num_ceps=20):
+                    num_mel_bins=20, num_ceps=20, der_order=0):
 
         super(KaldiMFCC, self).__init__(kaldi_root=kaldi_root, 
                                         hop=hop, win=win, sr=sr)
 
         self.num_mel_bins = num_mel_bins
         self.num_ceps = num_ceps
+        self.der_order=der_order
 
         cmd = "ark:| {}/src/featbin/compute-mfcc-feats --print-args=false "\
                "--use-energy=false --snip-edges=false --num-ceps={} "\
                "--frame-length={} --frame-shift={} "\
-               "--num-mel-bins={} --sample-frequency={} "\
-               "ark:- ark:- |"
+               "--num-mel-bins={} --sample-frequency={} ark:- ark:- |"\
+               " {}/src/featbin/add-deltas --print-args=false "\
+               "--delta-order={} ark:- ark:- |"
 
         self.cmd = cmd.format(self.kaldi_root, self.num_ceps,
                               self.frame_length, self.frame_shift,
-                              self.num_mel_bins, self.sr)
+                              self.num_mel_bins, self.sr, self.kaldi_root,
+                              self.der_order)
 
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
@@ -638,7 +666,7 @@ class KaldiMFCC(KaldiFeats):
 
 class KaldiPLP(KaldiFeats):
     def __init__(self, kaldi_root, hop=160, win=400, sr=16000,
-                    num_mel_bins=20, num_ceps=12, lpc_order=12):
+                    num_mel_bins=20, num_ceps=20, lpc_order=20):
 
         super(KaldiPLP, self).__init__(kaldi_root=kaldi_root, 
                                         hop=hop, win=win, sr=sr)
