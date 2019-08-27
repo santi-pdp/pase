@@ -402,6 +402,7 @@ class MLPBlock(NeuralBlock):
         self.tie_context_weights = tie_context_weights
         assert context % 2 != 0, context
         if tie_context_weights:
+            print ("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Tied context weigts.")
             self.W = nn.Conv1d(ninp, fmaps, 1)
             self.pool = nn.AvgPool1d(kernel_size=context, stride=1,
                                       padding=context//2, count_include_pad=False)
