@@ -1,11 +1,39 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
-class RegressionLoss(object):
+class ContextualizedLoss(object):
+    """ With a possible composition of r
+        consecutive frames
+    """
+
+    def __init__(self, criterion, r=None):
+        self.criterion = criterion
+        self.r = r
+
+    def contextualize_r(self, tensor):
+        if self.r is None:
+            return tensor
+        assert isinstance(self.r, int), type(self.r)
+        # ensure it is a 3-D tensor
+        assert len(tensor.shape) == 3, tensor.shape
+        # pad tensor in the edges with zeros
+        pad_ = F.pad(tensor, (self.r // 2, self.r // 2))
+        pt = []
+        # Santi:
+        # TODO: improve this with some proper transposition and stuff
+        # rather than looping, at the expense of more memory I guess
+        for t in range(pad_.size(2) - (self.r - 1)):
+            chunk = pad_[:, :, t:t+self.r].contiguous().view(pad_.size(0),
+                                                             -1).unsqueeze(2)
+            pt.append(chunk)
+        pt = torch.cat(pt, dim=2)
+        return pt
 
     def __call__(self, pred, gtruth):
-        loss = self.criterion(pred, gtruth)
+        gtruth_r = self.contextualize_r(gtruth)
+        loss = self.criterion(pred, gtruth_r)
         return loss
 
 
@@ -184,3 +212,8 @@ class WaveAdversarialLoss(nn.Module):
         else:
             return {'g_loss':g_real_loss}
 
+if __name__ == '__main__':
+    loss = ContextualizedLoss(nn.MSELoss(), r=3)
+    pred = torch.randn(1, 3, 5)
+    gtruth= torch.randn(1, 1, 5)
+    loss(pred, gtruth)
