@@ -58,11 +58,11 @@ def make_transforms(opts, workers_cfg):
                 continue
             elif name == 'lps':
                 znorm = True
-                trans.append(LPS(opts.nfft, hop=opts.LPS_hop, win=opts.LPS_win))
+                trans.append(LPS(opts.nfft, hop=opts.LPS_hop, win=opts.LPS_win, der_order=opts.LPS_der_order))
             elif name == 'gtn':
                 znorm = True
                 trans.append(Gammatone(opts.gtn_fmin, opts.gtn_channels, 
-                                       hop=opts.gammatone_hop, win=opts.gammatone_win))
+                                       hop=opts.gammatone_hop, win=opts.gammatone_win,der_order=opts.gammatone_der_order))
             elif name == 'lpc':
                 znorm = True
                 trans.append(LPC(opts.lpc_order, hop=opts.LPC_hop,
@@ -72,10 +72,17 @@ def make_transforms(opts, workers_cfg):
                 trans.append(FBanks(n_filters=opts.fbank_filters, 
                                     n_fft=opts.nfft,
                                     hop=opts.fbanks_hop,
-                                    win=opts.fbanks_win))
+                                    win=opts.fbanks_win,
+                                    der_order=opts.fbanks_der_order))
             elif name == 'mfcc':
                 znorm = True
-                trans.append(MFCC(hop=opts.mfccs_hop, win=opts.mfccs_win, order=opts.mfccs_order))
+                trans.append(MFCC(hop=opts.mfccs_hop, win=opts.mfccs_win, order=opts.mfccs_order, der_order=opts.mfccs_der_order))
+            
+            elif name == 'mfcc_librosa':
+                znorm = True
+                trans.append(MFCC_librosa(hop=opts.mfccs_librosa_hop, win=opts.mfccs_librosa_win, order=opts.mfccs_librosa_order, der_order=opts.mfccs_librosa_der_order, n_mels=opts.mfccs_librosa_n_mels, htk=opts.mfccs_librosa_htk))
+
+		
             elif name == 'prosody':
                 znorm = True
                 trans.append(Prosody(hop=opts.prosody_hop, win=opts.prosody_win))
@@ -97,6 +104,7 @@ def make_transforms(opts, workers_cfg):
     if opts.trans_cache is None:
         trans = Compose(trans)
     else:
+        print (keys, trans)
         trans = CachedCompose(trans, keys, opts.trans_cache)
     return trans
 
@@ -378,16 +386,26 @@ if __name__ == '__main__':
     # hop/wlen of the various feature regressors
     parser.add_argument('--LPS_hop', type=int, default=160)
     parser.add_argument('--LPS_win', type=int, default=400)
+    parser.add_argument('--LPS_der_order', type=int, default=0)
     parser.add_argument('--gammatone_hop', type=int, default=160)
     parser.add_argument('--gammatone_win', type=int, default=400)
+    parser.add_argument('--gammatone_der_order', type=int, default=0)
     parser.add_argument('--LPC_hop', type=int, default=160)
     parser.add_argument('--LPC_win', type=int, default=400)
     parser.add_argument('--fbanks_hop', type=int, default=160)
     parser.add_argument('--fbanks_win', type=int, default=400)
-
+    parser.add_argument('--fbanks_der_order', type=int, default=0)
     parser.add_argument('--mfccs_hop', type=int, default=160)
     parser.add_argument('--mfccs_win', type=int, default=400)
     parser.add_argument('--mfccs_order', type=int, default=20)
+    parser.add_argument('--mfccs_der_order', type=int, default=0)
+
+    parser.add_argument('--mfccs_librosa_hop', type=int, default=160)
+    parser.add_argument('--mfccs_librosa_win', type=int, default=400)
+    parser.add_argument('--mfccs_librosa_order', type=int, default=20)
+    parser.add_argument('--mfccs_librosa_der_order', type=int, default=0)
+    parser.add_argument('--mfccs_librosa_n_mels', type=int, default=40)
+    parser.add_argument('--mfccs_librosa_htk', type=int, default=True)
 
     parser.add_argument('--prosody_hop', type=int, default=160)
     parser.add_argument('--prosody_win', type=int, default=400)

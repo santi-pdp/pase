@@ -30,6 +30,7 @@ class DictCollater(object):
                                       'gtn',
                                       'fbank',
                                       'mfcc',
+                                      'mfcc_librosa',
                                       'prosody',
                                       'kaldimfcc',
                                       'kaldiplp'],
