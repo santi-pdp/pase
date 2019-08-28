@@ -58,7 +58,7 @@ def make_transforms(opts, workers_cfg):
                 continue
             elif name == 'lps':
                 znorm = True
-                trans.append(LPS(opts.nfft, hop=opts.LPS_hop, win=opts.LPS_win))
+                trans.append(LPS(opts.nfft, hop=opts.LPS_hop, win=opts.LPS_win, der_order=opts.LPS_der_order))
             elif name == 'gtn':
                 znorm = True
                 trans.append(Gammatone(opts.gtn_fmin, opts.gtn_channels, 
@@ -77,6 +77,12 @@ def make_transforms(opts, workers_cfg):
             elif name == 'mfcc':
                 znorm = True
                 trans.append(MFCC(hop=opts.mfccs_hop, win=opts.mfccs_win, order=opts.mfccs_order, der_order=opts.mfccs_der_order))
+            
+            elif name == 'mfcc_librosa':
+                znorm = True
+                trans.append(MFCC_librosa(hop=opts.mfccs_librosa_hop, win=opts.mfccs_librosa_win, order=opts.mfccs_librosa_order, der_order=opts.mfccs_librosa_der_order, n_mels=opts.mfccs_librosa_n_mels, htk=opts.mfccs_librosa_htk))
+
+		
             elif name == 'prosody':
                 znorm = True
                 trans.append(Prosody(hop=opts.prosody_hop, win=opts.prosody_win))
@@ -453,6 +459,7 @@ if __name__ == '__main__':
     # hop/wlen of the various feature regressors
     parser.add_argument('--LPS_hop', type=int, default=160)
     parser.add_argument('--LPS_win', type=int, default=400)
+    parser.add_argument('--LPS_der_order', type=int, default=0)
     parser.add_argument('--gammatone_hop', type=int, default=160)
     parser.add_argument('--gammatone_win', type=int, default=400)
     parser.add_argument('--gammatone_der_order', type=int, default=0)
@@ -465,6 +472,13 @@ if __name__ == '__main__':
     parser.add_argument('--mfccs_win', type=int, default=400)
     parser.add_argument('--mfccs_order', type=int, default=20)
     parser.add_argument('--mfccs_der_order', type=int, default=0)
+
+    parser.add_argument('--mfccs_librosa_hop', type=int, default=160)
+    parser.add_argument('--mfccs_librosa_win', type=int, default=400)
+    parser.add_argument('--mfccs_librosa_order', type=int, default=20)
+    parser.add_argument('--mfccs_librosa_der_order', type=int, default=0)
+    parser.add_argument('--mfccs_librosa_n_mels', type=int, default=40)
+    parser.add_argument('--mfccs_librosa_htk', type=int, default=True)
 
     parser.add_argument('--prosody_hop', type=int, default=160)
     parser.add_argument('--prosody_win', type=int, default=400)

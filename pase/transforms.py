@@ -314,11 +314,12 @@ class MIChunkWav(SingleChunkWav):
 class LPS(object):
 
     def __init__(self, n_fft=2048, hop=80,
-                 win=320,
+                 win=320, der_order=0,
                  device='cpu'):
         self.n_fft = n_fft
         self.hop = hop
         self.win = win
+        self.der_order=der_order
         self.device = device
 
     # @profile
@@ -339,7 +340,14 @@ class LPS(object):
             X = torch.stft(wav, self.n_fft,
                            self.hop, self.win)
             X = torch.norm(X, 2, dim=2).cpu()[:, :max_frames]
-            pkg['lps'] = 10 * torch.log10(X ** 2 + 10e-20).cpu()
+            X = 10 * torch.log10(X ** 2 + 10e-20).cpu()
+            if self.der_order > 0 :
+                deltas=[X]
+                for n in range(1,self.der_order+1):
+                    deltas.append(librosa.feature.delta(X.numpy(),order=n))
+                X=torch.from_numpy(np.concatenate(deltas))
+     
+            pkg['lps'] = X
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -569,6 +577,61 @@ class MFCC(object):
                 mfcc=np.concatenate(deltas)
     
             pkg['mfcc'] = torch.tensor(mfcc.astype(np.float32))
+        # Overwrite resolution to hop length
+        pkg['dec_resolution'] = self.hop
+        return pkg
+
+    def __repr__(self):
+        attrs = '(order={}, sr={})'.format(self.order,
+                                           self.sr)
+        return self.__class__.__name__ + attrs
+
+class MFCC_librosa(object):
+
+    def __init__(self, n_fft=2048, hop=160,
+                 order=20, sr=16000, win=400,der_order=0,n_mels=40,htk=True):
+        self.hop = hop
+        # Santi: the librosa mfcc api does not always
+        # accept a window argument, so we enforce n_fft
+        # to be window to ensure the window len restriction
+        #self.win = win
+        self.n_fft = win
+        self.order = order
+        self.sr = 16000
+        self.der_order=der_order
+        self.n_mels=n_mels
+        self.htk=True
+
+    # @profile
+    def __call__(self, pkg, cached_file=None):
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        y = wav.data.numpy()
+        max_frames = y.shape[0] // self.hop
+        if cached_file is not None:
+            # load pre-computed data
+            mfcc = torch.load(cached_file)
+            beg_i = pkg['chunk_beg_i'] // self.hop
+            end_i = pkg['chunk_end_i'] // self.hop
+            mfcc = mfcc[:, beg_i:end_i]
+            pkg['mfcc_librosa'] = mfcc
+        else:
+            # print(y.dtype)
+            mfcc = librosa.feature.mfcc(y, sr=self.sr,
+                                        n_mfcc=self.order,
+                                        n_fft=self.n_fft,
+                                        hop_length=self.hop,
+                                        #win_length=self.win,
+					n_mels=self.n_mels,
+                                        htk=self.htk,
+                                        )[:, :max_frames]
+            if self.der_order > 0 :
+                deltas=[mfcc]
+                for n in range(1,self.der_order+1):
+                    deltas.append(librosa.feature.delta(mfcc,order=n))
+                mfcc=np.concatenate(deltas)
+
+            pkg['mfcc_librosa'] = torch.tensor(mfcc.astype(np.float32))
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
