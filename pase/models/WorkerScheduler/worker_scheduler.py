@@ -56,6 +56,11 @@ class backprop_scheduler(object):
             losses[worker.name] = loss
             tot_loss += loss
 
+        for worker in self.model.regularizer_workers:
+            loss = worker.loss(preds[worker.name], label[worker.name])
+            losses[worker.name] = loss
+            tot_loss += loss
+
         tot_loss.backward()
 
         for _, optim in cls_optim.items():

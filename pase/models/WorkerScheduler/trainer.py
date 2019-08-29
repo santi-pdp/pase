@@ -5,6 +5,7 @@ from .lr_scheduler import LR_Scheduler
 from ..pase import pase, pase_attention, pase_chunking
 from .worker_scheduler import backprop_scheduler
 from ...utils import AuxiliarSuperviser, get_grad_norms
+from radam import *
 import torch
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
@@ -63,11 +64,11 @@ class trainer(object):
         else:
             print("training pase...")
             self.model = pase(frontend=frontend,
-                            frontend_cfg=frontend_cfg,
-                            minions_cfg=minions_cfg,
-                            cls_lst=cls_lst, regr_lst=regr_lst,
-                            pretrained_ckpt=pretrained_ckpt,
-                            name=name)
+                              frontend_cfg=frontend_cfg,
+                              minions_cfg=minions_cfg,
+                              cls_lst=cls_lst, regr_lst=regr_lst,
+                              pretrained_ckpt=pretrained_ckpt,
+                              name=name)
 
         # init param
         self.epoch = cfg['epoch']
@@ -82,9 +83,13 @@ class trainer(object):
 
 
 
-        # init front end optim
-        self.frontend_optim = getattr(optim, cfg['fe_opt'])(self.model.frontend.parameters(),
-                                              lr=cfg['fe_lr'])
+        if cfg['fe_opt'].lower() == 'radam':
+            self.frontend_optim = RAdam(self.model.frontend.parameters(),
+                                        lr=cfg['fe_lr'])
+        else:
+            # init front end optim
+            self.frontend_optim = getattr(optim, cfg['fe_opt'])(self.model.frontend.parameters(),
+                                                  lr=cfg['fe_lr'])
         self.fe_scheduler = LR_Scheduler(lr_mode, lr_step=cfg['lrdec_step'], optim_name="frontend", base_lr=cfg['fe_lr'],
                                     num_epochs=self.epoch,
                                     iters_per_epoch=self.bpe)
@@ -99,8 +104,12 @@ class trainer(object):
         for worker in self.model.classification_workers:
             min_opt = cfg['min_opt']
             min_lr = cfg['min_lr']
-            self.cls_optim[worker.name] = getattr(optim, min_opt)(worker.parameters(),
-                                                             lr=min_lr)
+            if min_opt.lower() == 'radam':
+                self.cls_optim[worker.name] = RAdam(worker.parameters(),
+                                                    lr=min_lr)
+            else:
+                self.cls_optim[worker.name] = getattr(optim, min_opt)(worker.parameters(),
+                                                                      lr=min_lr)
 
             worker_scheduler = LR_Scheduler(lr_mode, lr_step=cfg['lrdec_step'],optim_name=worker.name, base_lr=min_lr,
                                             num_epochs=self.epoch,
@@ -108,8 +117,8 @@ class trainer(object):
             self.cls_scheduler[worker.name] = worker_scheduler
             
             self.savers.append(Saver(worker, self.save_path, max_ckpts=cfg['max_ckpts'],
-                                optimizer=self.cls_optim[worker.name],
-                                prefix='M-{}-'.format(worker.name)))
+                                     optimizer=self.cls_optim[worker.name],
+                                     prefix='M-{}-'.format(worker.name)))
 
 
         self.regr_optim = {}
@@ -117,16 +126,21 @@ class trainer(object):
         for worker in self.model.regression_workers:
             min_opt = cfg['min_opt']
             min_lr = cfg['min_lr']
-            self.regr_optim[worker.name] = getattr(optim, min_opt)(worker.parameters(),
-                                                              lr=min_lr)
+            # could be a regularizer minion
+            if min_opt.lower() == 'radam':
+                self.regr_optim[worker.name] = RAdam(worker.parameters(),
+                                                     lr=min_lr)
+            else:
+                self.regr_optim[worker.name] = getattr(optim, min_opt)(worker.parameters(),
+                                                                       lr=min_lr)
             worker_scheduler = LR_Scheduler(lr_mode, lr_step=cfg['lrdec_step'], optim_name=worker.name, base_lr=min_lr,
                                             num_epochs=self.epoch,
                                             iters_per_epoch=self.bpe)
             self.regr_scheduler[worker.name] = worker_scheduler
 
             self.savers.append(Saver(worker, self.save_path, max_ckpts=cfg['max_ckpts'],
-                                optimizer=self.regr_optim[worker.name],
-                                prefix='M-{}-'.format(worker.name)))
+                                     optimizer=self.regr_optim[worker.name],
+                                     prefix='M-{}-'.format(worker.name)))
 
         self.epoch_beg = 0
 
@@ -210,22 +224,23 @@ class trainer(object):
                     except StopIteration:
                         iterator = iter(dataloader)
                         batch = next(iterator)
+                    print(list(batch.keys()))
 
                     # inference
                     h, chunk, preds, labels = self.model.forward(batch, self.alphaSG, device)
 
                     # backprop using scheduler
                     losses, self.alphaSG = self.backprop(preds,
-                                           labels,
-                                            self.cls_optim,
-                                            self.regr_optim,
-                                            self.frontend_optim,
-                                            device=device,
-                                           dropout_rate=self.worker_drop_rate,
-                                           delta=self.delta,
-                                           temperture=self.temp,
-                                           alpha=self.alpha,
-                                           batch = batch)
+                                                         labels,
+                                                         self.cls_optim,
+                                                         self.regr_optim,
+                                                         self.frontend_optim,
+                                                         device=device,
+                                                         dropout_rate=self.worker_drop_rate,
+                                                         delta=self.delta,
+                                                         temperture=self.temp,
+                                                         alpha=self.alpha,
+                                                         batch = batch)
 
 
                     if bidx % self.log_freq == 0 or bidx >= self.bpe:
@@ -238,6 +253,10 @@ class trainer(object):
 
                         for name, scheduler in self.regr_scheduler.items():
                             lrs[name] = scheduler(self.regr_optim[name], bidx, e, losses[name].item())
+
+                        for k in losses.keys():
+                            if k not in lrs:
+                                lrs[k] = 0
 
                         # print out info
                         self.train_logger(preds, labels, losses, e, bidx, lrs, pbar)

@@ -14,22 +14,24 @@ except ImportError:
 def format_frontend_chunk(batch, device='cpu'):
     if type(batch) == dict:
         if 'chunk_ctxt' and 'chunk_rand' in batch:
-            x = torch.cat((batch['chunk'],
-                           batch['chunk_ctxt'],
-                           batch['chunk_rand']),
-                          dim=0).to(device)
-            data_fmt = 0
+            keys = ['chunk', 'chunk_ctxt', 'chunk_rand', 'cchunk']
+            # cluster all 'chunk's, including possible 'cchunk'
+            batches = [batch[k] for k in keys if k in batch]
+            x = torch.cat(batches, dim=0).to(device)
+            # store the number of batches condensed as format
+            data_fmt = len(batches)
         else:
             x = batch['chunk'].to(device)
             data_fmt = 1
     else:
         x = batch
-        data_fmt = 2
+        data_fmt = 0
     return x, data_fmt
 
 def format_frontend_output(y, data_fmt, mode):
-    if data_fmt == 0:
-        embedding = torch.chunk(y, 3, dim=0)
+    #assert data_fmt >= 0
+    if data_fmt > 1:
+        embedding = torch.chunk(y, data_fmt, dim=0)
         chunk = embedding[0]
         return embedding, chunk
     elif data_fmt == 1:
