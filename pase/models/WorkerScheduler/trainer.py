@@ -5,7 +5,7 @@ from .lr_scheduler import LR_Scheduler
 from ..pase import pase, pase_attention, pase_chunking
 from .worker_scheduler import backprop_scheduler
 from ...utils import AuxiliarSuperviser, get_grad_norms
-from radam import *
+from .radam import *
 import torch
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
