@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 import torch.nn.functional as F
+from torch.distributions import Binomial
 from torch.nn.utils.spectral_norm import spectral_norm
 import numpy as np
 import json
@@ -117,6 +118,70 @@ def forward_activation(activation, tensor):
         return y
     else:
         return activation(tensor)
+
+class FixedPatternDropout(nn.Module):
+    def __init__(self, ninputs, p=0.5, 
+                  ratio_dropped=0.5, 
+                  drop_fixed_channels=True,
+                  drop_channels=False):
+        """Applies a fixed pattern of dropout for the whole training
+        session (i.e applies different only among pre-specified dimensions)
+        """
+        super(FixedPatternDropout, self).__init__()
+
+        if p < 0 or p > 1:
+            raise ValueError("dropout probability has to be between 0 and 1, "
+                             "but got {}".format(p))
+
+        self.ratio_dropped = ratio_dropped
+        self.drop_fixed_channels = drop_fixed_channels
+        self.drop_channels = drop_channels
+        self.fixed_dimsize = int(ninputs*ratio_dropped)
+
+        if self.drop_fixed_channels:
+            tot_idx = np.arange(ninputs)
+            sel_idx = np.sort(np.random.choice(tot_idx, 
+                              size=self.fixed_dimsize, replace=False))
+            self.dindexes = torch.LongTensor(sel_idx) 
+            print ("Selected dropout indices are: ", sel_idx)
+            self.p = p
+            self.p_scale = 1. / (1. - self.p)
+        else:
+            # when backing off to standard dropout, make sure the %
+            # of droppped units in a layer is comparable to the case
+            # where dropout is applied to a fixed subset only
+            self.p =  p*self.ratio_dropped
+            print ("Using std dropout, thus scaled p to {}".format(self.p))
+    
+    def forward(self, x):
+
+        if self.p == 0 or not self.training:
+            return x
+
+        if self.drop_fixed_channels and self.training:
+            self.dindexes = self.dindexes.to(x.device)
+            assert len(x.size()) == 3, (
+                "Expected to get 3 dimensional tensor, got {}"\
+                   .format(len(x.size()))
+            )
+            bsize, _, tsize = x.size()
+            #print (bsize, esize, tsize)
+            if self.drop_channels:
+                probs = torch.full(size=(bsize, self.fixed_dimsize),
+                                  fill_value=1.-self.p)
+                b = Binomial(total_count=1, probs=probs)
+                mask = b.sample()
+                x[:,self.dindexes,:] *= mask.view(bsize, 
+                                                   self.fixed_dimsize, -1)                            
+            else:
+                probs = torch.full(size=(bsize, self.fixed_dimsize, tsize), 
+                                 fill_value=1.-self.p)
+                b = Binomial(total_count=1, probs=probs)
+                mask = b.sample()
+                x[:,self.dindexes,:] *= mask 
+            return x * self.p_scale
+        else:
+            return F.dropout(x, p=self.p, training=self.training)
 
 class NeuralBlock(nn.Module):
 
@@ -397,7 +462,7 @@ class GConv1DBlock(NeuralBlock):
 
 class MLPBlock(NeuralBlock):
 
-    def __init__(self, ninp, fmaps, dout=0, context=1, 
+    def __init__(self, ninp, fmaps, din=0.5, dout=0, context=1, 
                  tie_context_weights=False, name='MLPBlock'):
         super().__init__(name=name)
         self.ninp = ninp
@@ -411,13 +476,15 @@ class MLPBlock(NeuralBlock):
                                       padding=context//2, count_include_pad=False)
         else:
             self.W = nn.Conv1d(ninp, fmaps, context, padding=context//2)
+
+        self.din = FixedPatternDropout(self.ninp, p=din)
         self.act = nn.PReLU(fmaps)
         self.dout = nn.Dropout(dout)
 
     def forward(self, x, device=None):
         if self.tie_context_weights:
-            return self.dout(self.act(self.pool(self.W(x))))
-        return self.dout(self.act(self.W(x)))
+            return self.dout(self.act(self.pool(self.W(self.din(x)))))
+        return self.dout(self.act(self.W(self.din(x))))
 
 class GDeconv1DBlock(NeuralBlock):
 
