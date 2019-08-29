@@ -40,12 +40,13 @@ def format_frontend_output(y, data_fmt, mode):
 
 def build_rnn_block(in_size, rnn_size, rnn_layers, rnn_type,
                     bidirectional=True,
-                    dropout=0):
+                    dropout=0, use_cuda=True):
     if (rnn_type.lower() == 'qrnn') and QRNN is not None:
         if bidirectional:
             print('WARNING: QRNN ignores bidirectional flag')
             rnn_size = 2 * rnn_size
-        rnn = QRNN(in_size, rnn_size, rnn_layers, dropout=dropout, window=2)
+        rnn = QRNN(in_size, rnn_size, rnn_layers, dropout=dropout, window=2,
+                   use_cuda=use_cuda)
     elif rnn_type.lower() == 'lstm' or rnn_type.lower() == 'gru':
         rnn = getattr(nn, rnn_type.upper())(in_size, rnn_size, rnn_layers,
                                             dropout=dropout,
@@ -442,7 +443,8 @@ class GDeconv1DBlock(NeuralBlock):
 
     def forward(self, x):
         h = self.deconv(x)
-        if self.stride % 2 != 0 and self.kwidth % 2 == 0: # and self.stride > self.kwidth:
+        if (self.stride % 2 != 0 and self.kwidth % 2 == 0) or \
+           (self.stride % 2 == 0 and self.kwidth % 2 != 0): # and self.stride > self.kwidth:
             h = h[:, :, :-1]
         h = forward_norm(h, self.norm)
         h = forward_activation(self.act, h)

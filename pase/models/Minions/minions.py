@@ -437,6 +437,7 @@ class MLPMinion(Model):
                  loss=None,
                  loss_weight=1.,
                  keys=None,
+                 r=1, 
                  name='MLPMinion'):
         super().__init__(name=name)
         # Implemented with Conv1d layers to not
@@ -446,7 +447,6 @@ class MLPMinion(Model):
         assert context % 2 != 0, context
         self.context = context
         self.tie_context_weights = tie_context_weights
-        self.num_outputs = num_outputs
         self.dropout = dropout
         self.skip = skip
         self.hidden_size = hidden_size
@@ -456,6 +456,10 @@ class MLPMinion(Model):
         self.keys = keys
         if keys is None:
             keys = [name]
+        # r frames predicted at once in the output
+        self.r = r
+        # multiplies number of output dims
+        self.num_outputs = num_outputs * r
         self.blocks = nn.ModuleList()
         ninp = num_inputs
         for hi in range(hidden_layers):
@@ -468,7 +472,7 @@ class MLPMinion(Model):
             # in case context has been assigned,
             # it is overwritten to 1
             context = 1
-        self.W = nn.Conv1d(ninp, num_outputs, context,
+        self.W = nn.Conv1d(ninp, self.num_outputs, context,
                            padding=context//2)
         self.sg = ScaleGrad()
 

@@ -27,6 +27,81 @@ try:
 except ImportError:
     print ('kaldi_io is optional, but required when extracting feats with kaldi')
 
+# Make a configurator for the distortions
+def config_distortions(reverb_irfiles=[], 
+                       reverb_fmt='imp',
+                       reverb_data_root='.',
+                       reverb_p=0.5,
+                       overlap_dir=None,
+                       overlap_list=None,
+                       overlap_snrs=[0, 5, 10],
+                       overlap_reverb=False,
+                       overlap_p=0.5,
+                       noises_dir=None,
+                       noises_snrs=[0, 5, 10],
+                       noises_p=0.5,
+                       speed_range=None,
+                       speed_p=0.5,
+                       resample_factors=[],
+                       resample_p=0.5,
+                       bandrop_irfiles=[],
+                       bandrop_fmt='npy',
+                       bandrop_data_root='.',
+                       bandrop_p=0.5,
+                       downsample_irfiles=[],
+                       downsample_fmt='npy',
+                       downsample_data_root='.',
+                       downsample_p=0.5,
+                       clip_factors=[], 
+                       clip_p=0.5,
+                       chop_factors=[],
+                       #chop_factors=[(0.05, 0.025), (0.1, 0.05)], 
+                       max_chops=5,
+                       chop_p=0.5):
+    trans = []
+    probs = []
+    # this can be shared in two different stages of the pipeline
+    reverb = Reverb(reverb_irfiles, ir_fmt=reverb_fmt,
+                    data_root=reverb_data_root)
+    if reverb_p > 0. and len(reverb_irfiles) > 0:
+        trans.append(reverb)
+        probs.append(reverb_p)
+    if overlap_p > 0. and overlap_dir is not None:
+        noise_trans = reverb if overlap_reverb else None
+        trans.append(SimpleAdditiveShift(overlap_dir, overlap_snrs,
+                                         noises_list=overlap_list,
+                                         noise_transform=noise_trans))
+        probs.append(overlap_p)
+    if noises_p > 0. and noises_dir is not None:
+        trans.append(SimpleAdditive(noises_dir, noises_snrs))
+        probs.append(noises_p)
+    if speed_p > 0. and speed_range is not None:
+        # speed changer
+        trans.append(SpeedChange(speed_range))
+        probs.append(speed_p)
+    if resample_p > 0. and len(resample_factors) > 0:
+        trans.append(Resample(resample_factors))
+        probs.append(resample_p)
+    if clip_p > 0. and len(clip_factors) > 0:
+        trans.append(Clipping(clip_factors))
+        probs.append(clip_p)
+    if chop_p > 0. and len(chop_factors) > 0:
+        trans.append(Chopper(max_chops=max_chops,
+                             chop_factors=chop_factors))
+        probs.append(chop_p)
+    if bandrop_p > 0. and len(bandrop_irfiles) > 0:
+        trans.append(BandDrop(bandrop_irfiles,filt_fmt=bandrop_fmt, data_root=bandrop_data_root))
+        probs.append(bandrop_p)
+
+    if downsample_p > 0. and len(downsample_irfiles) > 0:
+        trans.append(Downsample(downsample_irfiles,filt_fmt=downsample_fmt, data_root=downsample_data_root))
+        probs.append(downsample_p)
+
+    if len(trans) > 0:
+        return PCompose(trans, probs=probs)
+    else:
+        return None
+
 def norm_and_scale(wav):
     assert isinstance(wav, torch.Tensor), type(wav)
     wav = wav / torch.max(torch.abs(wav))
@@ -314,11 +389,12 @@ class MIChunkWav(SingleChunkWav):
 class LPS(object):
 
     def __init__(self, n_fft=2048, hop=80,
-                 win=320,
+                 win=320, der_order=0,
                  device='cpu'):
         self.n_fft = n_fft
         self.hop = hop
         self.win = win
+        self.der_order=der_order
         self.device = device
 
     # @profile
@@ -339,7 +415,14 @@ class LPS(object):
             X = torch.stft(wav, self.n_fft,
                            self.hop, self.win)
             X = torch.norm(X, 2, dim=2).cpu()[:, :max_frames]
-            pkg['lps'] = 10 * torch.log10(X ** 2 + 10e-20).cpu()
+            X = 10 * torch.log10(X ** 2 + 10e-20).cpu()
+            if self.der_order > 0 :
+                deltas=[X]
+                for n in range(1,self.der_order+1):
+                    deltas.append(librosa.feature.delta(X.numpy(),order=n))
+                X=torch.from_numpy(np.concatenate(deltas))
+     
+            pkg['lps'] = X
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -569,6 +652,61 @@ class MFCC(object):
                 mfcc=np.concatenate(deltas)
     
             pkg['mfcc'] = torch.tensor(mfcc.astype(np.float32))
+        # Overwrite resolution to hop length
+        pkg['dec_resolution'] = self.hop
+        return pkg
+
+    def __repr__(self):
+        attrs = '(order={}, sr={})'.format(self.order,
+                                           self.sr)
+        return self.__class__.__name__ + attrs
+
+class MFCC_librosa(object):
+
+    def __init__(self, n_fft=2048, hop=160,
+                 order=20, sr=16000, win=400,der_order=0,n_mels=40,htk=True):
+        self.hop = hop
+        # Santi: the librosa mfcc api does not always
+        # accept a window argument, so we enforce n_fft
+        # to be window to ensure the window len restriction
+        #self.win = win
+        self.n_fft = win
+        self.order = order
+        self.sr = 16000
+        self.der_order=der_order
+        self.n_mels=n_mels
+        self.htk=True
+
+    # @profile
+    def __call__(self, pkg, cached_file=None):
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        y = wav.data.numpy()
+        max_frames = y.shape[0] // self.hop
+        if cached_file is not None:
+            # load pre-computed data
+            mfcc = torch.load(cached_file)
+            beg_i = pkg['chunk_beg_i'] // self.hop
+            end_i = pkg['chunk_end_i'] // self.hop
+            mfcc = mfcc[:, beg_i:end_i]
+            pkg['mfcc_librosa'] = mfcc
+        else:
+            # print(y.dtype)
+            mfcc = librosa.feature.mfcc(y, sr=self.sr,
+                                        n_mfcc=self.order,
+                                        n_fft=self.n_fft,
+                                        hop_length=self.hop,
+                                        #win_length=self.win,
+					n_mels=self.n_mels,
+                                        htk=self.htk,
+                                        )[:, :max_frames]
+            if self.der_order > 0 :
+                deltas=[mfcc]
+                for n in range(1,self.der_order+1):
+                    deltas.append(librosa.feature.delta(mfcc,order=n))
+                mfcc=np.concatenate(deltas)
+
+            pkg['mfcc_librosa'] = torch.tensor(mfcc.astype(np.float32))
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -1381,7 +1519,8 @@ class SimpleAdditive(object):
             P = len(wav) - len(sel_noise)
             sel_noise = F.pad(torch.tensor(sel_noise).view(1, 1, -1),
                               (0, P),
-                              mode='reflect').view(-1).data.numpy()
+                              ).view(-1).data.numpy()
+                              #mode='reflect').view(-1).data.numpy()
         T = end_i - beg_i
         # TODO: not pre-loading noises from files?
         if len(sel_noise) > T:
