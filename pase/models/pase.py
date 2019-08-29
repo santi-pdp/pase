@@ -279,9 +279,6 @@ class pase(Model):
         for type, cfg_lst in minions_cfg.items():
 
             for cfg in cfg_lst:
-                if 'cchunk' in cfg['name']:
-                    # cchunk will be necessary
-                    self.fwd_cchunk = True
 
                 if type == 'cls':
                     cfg['num_inputs'] = ninp
@@ -293,6 +290,9 @@ class pase(Model):
                     self.regression_workers.append(minion)
                 
                 elif type == 'regu':
+                    if 'cchunk' in cfg['name']:
+                        # cchunk will be necessary
+                        self.fwd_cchunk = True
                     minion = minion_maker(cfg)
                     self.regularizer_workers.append(minion)
 
