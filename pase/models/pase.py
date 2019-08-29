@@ -303,11 +303,11 @@ class pase(Model):
 
         # forward the encoder
         # x[chunk, context, rand, cchunk] => y[chunk, context, rand, cchunk], chunk
-        cchunk = x.get('cchunk', None)
+        x_ = dict((k, v) for k, v in x.items())
         if not self.fwd_cchunk:
             # remove key if it exists
-            x.pop('cchunk', None)
-        h = self.frontend(x, device)
+            x_.pop('cchunk', None)
+        h = self.frontend(x_, device)
         if len(h) > 1:
             assert len(h) == 2, len(h)
             h, chunk = h
@@ -329,7 +329,7 @@ class pase(Model):
             preds[worker.name] = y
             labels[worker.name] = x[worker.name].to(device).detach()
             if worker.name == 'chunk':
-                labels[worker.name] = cchunk.to(device).detach()
+                labels[worker.name] = x[worker.name].to(device).detach()
 
         # forward all regression workers
         # h => y, label
