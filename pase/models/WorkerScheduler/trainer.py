@@ -224,7 +224,6 @@ class trainer(object):
                     except StopIteration:
                         iterator = iter(dataloader)
                         batch = next(iterator)
-                    print(list(batch.keys()))
 
                     # inference
                     h, chunk, preds, labels = self.model.forward(batch, self.alphaSG, device)
