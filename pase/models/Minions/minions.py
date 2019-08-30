@@ -26,9 +26,32 @@ def minion_maker(cfg):
         minion = GapMinion(**cfg)
     elif mtype == 'gru':
         minion = GRUMinion(**cfg)
+    elif mtype == 'regularizer':
+        minion = RegularizerMinion(**cfg)
     else:
         raise TypeError('Unrecognized minion type {}'.format(mtype))
     return minion
+
+class RegularizerMinion(object):
+
+
+    def __init__(self, num_inputs=None,
+                 loss='MSELoss',
+                 loss_weight=1.,
+                 name=''):
+        if isinstance(loss, str):
+            self.loss = getattr(nn, loss)()
+        else:
+            self.loss = loss
+        self.loss_weight = loss_weight
+        self.name = name
+
+    def __call__(self, x, alpha=1, device=None):
+        return self.forward(x, alpha=alpha, device=device)
+
+    def forward(self, x, alpha=1, device=None):
+        # identity function
+        return x
 
 class WaveRNNMinion(Model):
 

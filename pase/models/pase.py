@@ -240,7 +240,6 @@ class pase(Model):
                  regr_lst=["chunk", "lps", "mfcc", "prosody"],
                  pretrained_ckpt=None,
                  name="adversarial"):
-
         super().__init__(name=name)
         if minions_cfg is None or len(minions_cfg) < 1:
             raise ValueError('Please specify a stack of minions'
@@ -251,6 +250,7 @@ class pase(Model):
         print("pase config ==>", frontend_cfg)
         self.frontend = wf_builder(frontend_cfg)
 
+
         # init all workers
         # putting them into two lists
         self.cls_lst = cls_lst
@@ -259,6 +259,9 @@ class pase(Model):
         ninp = self.frontend.emb_dim
         self.regression_workers = nn.ModuleList()
         self.classification_workers = nn.ModuleList()
+        # these are unparameterized
+        self.regularizer_workers = []
+        self.fwd_cchunk = False
 
         count_cat = 0
         if "concat" in frontend_cfg.keys():
@@ -285,6 +288,13 @@ class pase(Model):
                     cfg['num_inputs'] = ninp
                     minion = minion_maker(cfg)
                     self.regression_workers.append(minion)
+                
+                elif type == 'regu':
+                    if 'cchunk' in cfg['name']:
+                        # cchunk will be necessary
+                        self.fwd_cchunk = True
+                    minion = minion_maker(cfg)
+                    self.regularizer_workers.append(minion)
 
         if pretrained_ckpt is not None:
             self.load_pretrained(pretrained_ckpt, load_last=True)
@@ -292,24 +302,34 @@ class pase(Model):
     def forward(self, x, alpha=1, device=None):
 
         # forward the encoder
-        # x[chunk, context, rand] => y[chunk, context, rand], chunk
-
-        h = self.frontend(x, device)
+        # x[chunk, context, rand, cchunk] => y[chunk, context, rand, cchunk], chunk
+        x_ = dict((k, v) for k, v in x.items())
+        if not self.fwd_cchunk:
+            # remove key if it exists
+            x_.pop('cchunk', None)
+        h = self.frontend(x_, device)
         if len(h) > 1:
             assert len(h) == 2, len(h)
             h, chunk = h
 
         # forward all classification workers
         # h => chunk
-
         preds = {}
         labels = {}
+
+        for worker in self.regularizer_workers:
+            preds[worker.name] = chunk
+            # select forwarded data from the PASE frontend according to 
+            # from last position which must be 'cchunk'
+            # This way PASE(chunk) is enforced to fall over PASE(cchunk)
+            labels[worker.name] = h[-1].to(device).detach()
+
         for worker in self.regression_workers:
             y = worker(chunk, alpha)
             preds[worker.name] = y
             labels[worker.name] = x[worker.name].to(device).detach()
             if worker.name == 'chunk':
-                labels[worker.name] = x['cchunk'].to(device).detach()
+                labels[worker.name] = x[worker.name].to(device).detach()
 
         # forward all regression workers
         # h => y, label
