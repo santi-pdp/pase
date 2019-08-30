@@ -48,6 +48,7 @@ class LIM(Model):
 
         self.minion = minion_maker(cfg)
         self.loss = self.minion.loss
+        self.loss_weight = self.minion.loss_weight
 
     def forward(self, x, alpha=1, device=None):
         x_pos, x_neg = make_samples(x)
@@ -65,6 +66,7 @@ class GIM(Model):
 
         self.minion = minion_maker(cfg)
         self.loss = self.minion.loss
+        self.loss_weight = self.minion.loss_weight
 
     def forward(self, x, alpha=1, device=None):
         x_pos, x_neg = make_samples(x)
@@ -83,6 +85,7 @@ class SPC(Model):
         self.minion = minion_maker(cfg)
 
         self.loss = self.minion.loss
+        self.loss_weight = self.minion.loss_weight
 
     def forward(self, x, alpha=1, device=None):
         y = self.minion(x, alpha)
@@ -98,9 +101,23 @@ class Gap(Model):
 
         self.minion = minion_maker(cfg)
         self.loss = self.minion.loss
+        self.loss_weight = self.minion.loss_weight
 
     def forward(self, x, alpha=1, device=None):
         y, label = self.minion(x, alpha)
         label = label.float().to(device)
         return y, label
 
+class AdversarialChunk(Model):
+
+    def __init__(self, cfg, emb_dim):
+        super().__init__(name=cfg['name'])
+
+        self.minion = minion_maker(cfg)
+        self.loss = self.minion.loss
+        self.loss_weight = self.minion.loss_weight
+
+    def forward(self, x, alpha=1, device=None):
+        y, label = self.minion(x, alpha)
+        label = label.float().to(device)
+        return y, label
