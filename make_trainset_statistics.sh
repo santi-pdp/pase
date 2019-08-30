@@ -1,7 +1,8 @@
 #!/bin/bash
 
 libri=false
-libri_kaldi=true
+libri_alldeltas=true
+libri_kaldi=false
 swbd=false
 ami=false
 libri_ami=false
@@ -19,6 +20,16 @@ python make_trainset_statistics.py \
   --kaldi_root /disks/data1/pawel/repos/kaldi \
   --out_file data/librispeech_tmp_stats.pkl
 
+}
+
+$libri_alldeltas && {
+  python make_trainset_statistics.py \
+   --data_root data/LibriSpeech_50h/wav_sel \
+   --data_cfg  data/LibriSpeech_50h/librispeech_data_50h.cfg \
+   --num_workers 10 --max_batches=30 \
+   --mfccs_order 13 \
+   --LPS_der_order 2 --gammatone_der_order 2 --fbanks_der_order 2 --mfccs_der_order 2 \
+   --out_file data/librispeech_50h_stats_libri_allder2.pkl
 }
 
 $libri_kaldi && {
