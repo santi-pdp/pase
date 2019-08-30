@@ -44,7 +44,7 @@ def build_dataset_providers(opts):
         MFCC_librosa(hop=opts.mfccs_librosa_hop,win=opts.mfccs_librosa_win,order=opts.mfccs_librosa_order,der_order=opts.mfccs_librosa_der_order,n_mels=opts.mfccs_librosa_n_mels,htk=opts.mfccs_librosa_htk),
         #KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.kaldimfccs_hop, win=opts.kaldimfccs_win,num_mel_bins=opts.kaldimfccs_num_mel_bins,num_ceps=opts.kaldimfccs_num_ceps,der_order=opts.kaldimfccs_der_order),
         #KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.kaldiplp_hop, win=opts.kaldiplp_win),
-        Prosody(hop=opts.prosody_hop, win=opts.prosody_win)
+        Prosody(hop=opts.prosody_hop, win=opts.prosody_win, der_order=opts.prosody_der_order)
     ])
 
     dsets = []
@@ -128,6 +128,7 @@ if __name__ == '__main__':
     parser.add_argument('--mfccs_der_order', type=int, default=0)
     parser.add_argument('--prosody_hop', type=int, default=160)
     parser.add_argument('--prosody_win', type=int, default=400)
+    parser.add_argument('--prosody_der_order', type=int, default=0)
     parser.add_argument('--kaldimfccs_hop', type=int, default=160)
     parser.add_argument('--kaldimfccs_win', type=int, default=400)
     parser.add_argument('--kaldimfccs_der_order', type=int, default=0)

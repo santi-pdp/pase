@@ -852,13 +852,14 @@ class KaldiPLP(KaldiFeats):
 
 class Prosody(object):
 
-    def __init__(self, hop=80, win=320, f0_min=60, f0_max=300,
+    def __init__(self, hop=80, win=320, f0_min=60, f0_max=300,der_order=0,
                  sr=16000):
         self.hop = hop
         self.win = win
         self.f0_min = f0_min
         self.f0_max = f0_max
         self.sr = sr
+        self.der_order = der_order
 
     # @profile
     def __call__(self, pkg, cached_file=None):
@@ -910,6 +911,13 @@ class Prosody(object):
             egy = torch.tensor(egy.astype(np.float32))
             egy = egy[:, :max_frames]
             proso = torch.cat((lf0, uv, egy, zcr), dim=0)
+  
+            if self.der_order > 0 :
+                deltas=[proso]
+                for n in range(1,self.der_order+1):
+                    deltas.append(librosa.feature.delta(proso.numpy(),order=n))
+                proso=torch.from_numpy(np.concatenate(deltas))
+
             pkg['prosody'] = proso
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
