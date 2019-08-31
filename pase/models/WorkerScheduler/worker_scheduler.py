@@ -46,18 +46,18 @@ class backprop_scheduler(object):
         losses = {}
         for worker in self.model.classification_workers:
             cls_optim[worker.name].zero_grad()
-            loss = worker.loss(preds[worker.name], label[worker.name])
+            loss = worker.loss_weight * worker.loss(preds[worker.name], label[worker.name])
             losses[worker.name] = loss
             tot_loss += loss
 
         for worker in self.model.regression_workers:
             regr_optim[worker.name].zero_grad()
-            loss = worker.loss(preds[worker.name], label[worker.name])
+            loss = worker.loss_weight * worker.loss(preds[worker.name], label[worker.name])
             losses[worker.name] = loss
             tot_loss += loss
 
         for worker in self.model.regularizer_workers:
-            loss = worker.loss(preds[worker.name], label[worker.name])
+            loss = worker.loss_weight * worker.loss(preds[worker.name], label[worker.name])
             losses[worker.name] = loss
             tot_loss += loss
 
