@@ -422,7 +422,6 @@ class DecoderMinion(Model):
         # The following part of the code drops out some time steps, but the worker should reconstruct all of them (i.e, the original signal)
         # This way we encourage learning features with a larger contextual information
         if self.dropout_time > 0:
-            self.dropout_time=1.0
             mask=(torch.FloatTensor(x.shape[0],x.shape[2]).to('cuda').uniform_() > self.dropout_time).float().unsqueeze(1)
             x=x*mask
 
@@ -452,7 +451,8 @@ class MLPMinion(Model):
 
     def __init__(self, num_inputs,
                  num_outputs,
-                 dropout, hidden_size=256,
+                 dropout, dropout_time=0.0,hidden_size=256,
+                 dropin=0.0,
                  hidden_layers=2,
                  context=1,
                  tie_context_weights=False,
@@ -461,7 +461,9 @@ class MLPMinion(Model):
                  loss_weight=1.,
                  keys=None,
                  r=1, 
-                 name='MLPMinion'):
+                 name='MLPMinion',
+                 ratio_fixed=None, range_fixed=None, 
+                 dropin_mode='std', drop_channels=False, emb_size=100):
         super().__init__(name=name)
         # Implemented with Conv1d layers to not
         # transpose anything in time, such that
@@ -471,6 +473,7 @@ class MLPMinion(Model):
         self.context = context
         self.tie_context_weights = tie_context_weights
         self.dropout = dropout
+        self.dropout_time = dropout_time
         self.skip = skip
         self.hidden_size = hidden_size
         self.hidden_layers = hidden_layers
@@ -488,9 +491,15 @@ class MLPMinion(Model):
         for hi in range(hidden_layers):
             self.blocks.append(MLPBlock(ninp,
                                         hidden_size,
-                                        dropout,
+                                        din=dropin,
+                                        dout=dropout,
                                         context=context,
-                                        tie_context_weights=tie_context_weights))
+                                        tie_context_weights=tie_context_weights,
+                                        emb_size=emb_size, 
+                                        dropout_mode=dropin_mode,
+                                        range_fixed=range_fixed,
+                                        ratio_fixed=ratio_fixed,
+                                        drop_whole_channels=drop_channels))
             ninp = hidden_size
             # in case context has been assigned,
             # it is overwritten to 1
@@ -501,6 +510,11 @@ class MLPMinion(Model):
 
     def forward(self, x, alpha=1, device=None):
         self.sg.apply(x, alpha)
+        
+        if self.dropout_time > 0 and self.context > 1:
+            mask=(torch.FloatTensor(x.shape[0],x.shape[2]).to('cuda').uniform_() > self.dropout_time).float().unsqueeze(1)
+            x=x*mask
+
         h = x
         for bi, block in enumerate(self.blocks, start=1):
             h = block(h)
