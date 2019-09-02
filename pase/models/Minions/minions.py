@@ -499,7 +499,7 @@ class MLPMinion(Model):
                                         dropout_mode=dropin_mode,
                                         range_fixed=range_fixed,
                                         ratio_fixed=ratio_fixed,
-                                        drop_whole_channels=drop_channels))
+                                        drop_channels=drop_channels))
             ninp = hidden_size
             # in case context has been assigned,
             # it is overwritten to 1

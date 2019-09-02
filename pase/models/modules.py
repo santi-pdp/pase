@@ -473,7 +473,7 @@ class PatternedDropout(nn.Module):
                 self.p =  p
                 print ("Using std dropout")
         else:
-            print ('Dropout at the inputs disables, as p={}'.format(self.p))
+            print ('Dropout at the inputs disabled, as p={}'.format(self.p))
     
     def forward(self, x):
 
