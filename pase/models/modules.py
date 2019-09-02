@@ -410,63 +410,70 @@ class PatternedDropout(nn.Module):
         if p < 0 or p > 1:
             raise ValueError("dropout probability has to be between 0 and 1, "
                              "but got {}".format(p))
+        self.p = p
+    
+        if self.p > 0:
 
-        d_modes = ['std', 'fixed_rand', 'fixed_given']
-        assert dropout_mode in d_modes, (
-            "Expected dropout mode in {}, got {}".format(d_modes, dropout_mode)
-        )
-
-        self.drop_whole_channels = drop_whole_channels
-        self.dropout_fixed = False
-
-        if dropout_mode == 'fixed_rand':
-
-            self.dropout_fixed = True
-            assert ratio_fixed is not None, (
-                "{} needs 'ratio_fixed' arg set.".format(dropout_mode)
+            d_modes = ['std', 'fixed_rand', 'fixed_given']
+            assert dropout_mode in d_modes, (
+                "Expected dropout mode in {}, got {}".format(d_modes, dropout_mode)
             )
-            if ratio_fixed <= 0  or ratio_fixed > 1:
-                raise ValueError("{} mode needs 'ratio_fixed' to be"\
-                                 " set and in (0, 1) range, got {}"\
-                                 .format(dropout_mode, ratio_fixed))
-            self.ratio_fixed = ratio_fixed
-            self.dropped_dimsize = int(emb_size - emb_size*ratio_fixed)
-            tot_idx = np.arange(emb_size)
-            sel_idx = np.sort(np.random.choice(tot_idx, 
-                              size=self.dropped_dimsize, replace=False))
+            self.drop_whole_channels = drop_whole_channels
+            self.dropout_fixed = False
 
-        elif dropout_mode == 'fixed_given':
+            if dropout_mode == 'fixed_rand':
 
-            self.dropout_fixed = True
-            if range_fixed is None or \
-                 not isinstance(range_fixed, str) or \
-                 len(range_fixed.split(":")) < 2:
-                raise ValueError("{} mode needs 'range_dropped' to be"\
-                                 " set (i.e. 10:20)".format(dropout_mode))
-            rng = range_fixed.split(":")
-            beg = int(rng[0])
-            end = int(rng[1])
-            assert beg < end and end <= emb_size, (
-                "Incorrect range {}".format(range_fixed)
-            )
-            self.dropped_dimsize = int(emb_size - (end -beg))
-            tot_idx = np.arange(emb_size)
-            fixed_idx = np.arange(beg, end, 1)
-            sel_idx = np.setdiff1d(tot_idx, fixed_idx, assume_unique=True)
+                self.dropout_fixed = True
+                assert ratio_fixed is not None, (
+                    "{} needs 'ratio_fixed' arg set.".format(dropout_mode)
+                )
+                if ratio_fixed <= 0  or ratio_fixed > 1:
+                    raise ValueError("{} mode needs 'ratio_fixed' to be"\
+                                    " set and in (0, 1) range, got {}"\
+                                    .format(dropout_mode, ratio_fixed))
+                self.ratio_fixed = ratio_fixed
+                self.dropped_dimsize = int(emb_size - emb_size*ratio_fixed)
+                tot_idx = np.arange(emb_size)
+                sel_idx = np.sort(np.random.choice(tot_idx, 
+                                size=self.dropped_dimsize, replace=False))
 
-        if self.dropout_fixed:
-            print ("Enabled dropout mode: {}. Selected indices to apply dropout are: {}"\
-                    .format(dropout_mode, sel_idx))
-            self.dindexes = torch.LongTensor(sel_idx) 
-            self.p = p
-            self.p_scale = 1. / (1. - self.p)
+            elif dropout_mode == 'fixed_given':
+
+                self.dropout_fixed = True
+                if range_fixed is None or \
+                    not isinstance(range_fixed, str) or \
+                    len(range_fixed.split(":")) < 2:
+                    raise ValueError("{} mode needs 'range_dropped' to be"\
+                                    " set (i.e. 10:20)".format(dropout_mode))
+                rng = range_fixed.split(":")
+                beg = int(rng[0])
+                end = int(rng[1])
+                assert beg < end and end <= emb_size, (
+                    "Incorrect range {}".format(range_fixed)
+                )
+                self.dropped_dimsize = int(emb_size - (end -beg))
+                tot_idx = np.arange(emb_size)
+                fixed_idx = np.arange(beg, end, 1)
+                sel_idx = np.setdiff1d(tot_idx, fixed_idx, assume_unique=True)
+
+            if self.dropout_fixed:
+                assert len(sel_idx) > 0, (
+                    "Asked for fixed dropout, but sel_idx {}".format(sel_idx)
+                )
+                print ("Enabled dropout mode: {}. Selected indices to apply dropout are: {}"\
+                        .format(dropout_mode, sel_idx))
+                self.dindexes = torch.LongTensor(sel_idx) 
+                self.p = p
+                self.p_scale = 1. / (1. - self.p)
+            else:
+                # notice, it is up to the user to make sure experiments between
+                # fixed dropout and regular one are comparabe w.r.t p (i.e. for
+                # fixed mode we only keep droping a subset of units (i.e. 50%),
+                # thus p is effectively lower when compared to regular dropout)
+                self.p =  p
+                print ("Using std dropout")
         else:
-            # notice, it is up to the user to make sure experiments between
-            # fixed dropout and regular one are comparabe w.r.t p (i.e. for
-            # fixed mode we only keep droping a subset of units (i.e. 50%),
-            # thus p is effectively lower when compared to regular dropout)
-            self.p =  p
-            print ("Using std dropout")
+            print ('Dropout at the inputs disables, as p={}'.format(self.p))
     
     def forward(self, x):
 
@@ -503,9 +510,10 @@ class PatternedDropout(nn.Module):
 
 class MLPBlock(NeuralBlock):
 
-    def __init__(self, ninp, fmaps, dout=0, context=1, 
+    def __init__(self, ninp, fmaps, din=0, dout=0, context=1, 
                  tie_context_weights=False, name='MLPBlock',
-                 **kwargs):
+                 ratio_fixed=None, range_fixed=None, 
+                 dropin_mode='std', drop_channels=False, emb_size=100):
         super().__init__(name=name)
         self.ninp = ninp
         self.fmaps = fmaps
@@ -518,7 +526,11 @@ class MLPBlock(NeuralBlock):
         else:
             self.W = nn.Conv1d(ninp, fmaps, context, padding=context//2)
 
-        self.din = PatternedDropout(p=din)
+        self.din = PatternedDropout(emb_size=emb_size, p=din, 
+                                    dropout_mode=dropin_mode,
+                                    range_fixed=range_fixed,
+                                    ratio_fixed=ratio_fixed,
+                                    drop_whole_channels=drop_channels)
         self.act = nn.PReLU(fmaps)
         self.dout = nn.Dropout(dout)
 
