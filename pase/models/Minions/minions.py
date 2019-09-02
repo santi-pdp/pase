@@ -12,7 +12,9 @@ def minion_maker(cfg):
     if isinstance(cfg, str):
         with open(cfg, "r") as f:
             cfg = json.load(f)
-
+    print("=" * 50)
+    print("name", cfg["name"])
+    print("=" * 50)
     mtype = cfg.pop('type', 'mlp')
     if mtype == 'mlp':
         minion = MLPMinion(**cfg)
