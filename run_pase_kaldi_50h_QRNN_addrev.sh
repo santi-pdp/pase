@@ -1,10 +1,10 @@
 #!/bin/bash
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 
 #kernprof -v -l train.py --batch_size 32 --epoch 50 --save_path ckpt_PASE_50h_newMI_noW_QRNN_100addrev_dev-version \
-python -u train.py --batch_size 32 --epoch 50 --save_path ckpt_PASE_50h_libri_kaldimfcc_znrom_ctx3_tied \
-       	--num_workers 25 --warmup 10000000 --net_cfg cfg/workers_kaldi_ctxt3.cfg \
+python -u train.py --batch_size 32 --epoch 50 --save_path ckpt_PASE_50h_libri_kaldimfcc_znrom_ctx1_fpd05 \
+       	--num_workers 25 --warmup 10000000 --net_cfg cfg/workers_kaldi.cfg \
 	--fe_cfg cfg/PASE_dense_QRNN.cfg --do_eval \
         --data_cfg data/LibriSpeech_50h/librispeech_data_50h.cfg \
 	--min_lr 0.0005 --fe_lr 0.0005 \
