@@ -496,7 +496,7 @@ class MLPMinion(Model):
                                         context=context,
                                         tie_context_weights=tie_context_weights,
                                         emb_size=emb_size, 
-                                        dropout_mode=dropin_mode,
+                                        dropin_mode=dropin_mode,
                                         range_fixed=range_fixed,
                                         ratio_fixed=ratio_fixed,
                                         drop_channels=drop_channels))
