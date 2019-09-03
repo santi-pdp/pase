@@ -411,7 +411,7 @@ class PatternedDropout(nn.Module):
             raise ValueError("dropout probability has to be between 0 and 1, "
                              "but got {}".format(p))
         self.p = p
-    
+
         if self.p > 0:
 
             d_modes = ['std', 'fixed_rand', 'fixed_given']
@@ -462,7 +462,7 @@ class PatternedDropout(nn.Module):
                 )
                 print ("Enabled dropout mode: {}. Selected indices to apply dropout are: {}"\
                         .format(dropout_mode, sel_idx))
-                self.dindexes = torch.LongTensor(sel_idx) 
+                self.dindexes = torch.LongTensor(sel_idx)
                 self.p = p
                 self.p_scale = 1. / (1. - self.p)
             else:
@@ -474,7 +474,7 @@ class PatternedDropout(nn.Module):
                 print ("Using std dropout")
         else:
             print ('Dropout at the inputs disabled, as p={}'.format(self.p))
-    
+
     def forward(self, x):
 
         if self.p == 0 or not self.training:
@@ -486,24 +486,33 @@ class PatternedDropout(nn.Module):
                 "Expected to get 3 dimensional tensor, got {}"\
                    .format(len(x.size()))
             )
-            bsize, _, tsize = x.size()
+            bsize, emb_size, tsize = x.size()
             #print (bsize, esize, tsize)
             if self.drop_whole_channels:
+                batch_mask = torch.full(size=(bsize, embsize), device=x.device)
                 probs = torch.full(size=(bsize, self.dropped_dimsize),
                                   fill_value=1.-self.p)
                 b = Binomial(total_count=1, probs=probs)
                 mask = b.sample()
+                mask = mask.to(x.device)
+                batch_mask[:,self.dindexes,:] *= (mask.view(bsize, self.dropped_dimsize, -1)\
+                                                  * self.p_scale)
                 #print ('mask dc', mask)
                 #print ('maks dcv', mask.view(bsize, self.dropped_dimsize, -1))
-                x[:,self.dindexes,:] *= (self.p_scale * mask.view(bsize, 
-                                                  self.dropped_dimsize, -1))
+                #x[:,self.dindexes,:] = x[:,self.dindexes,:].clone() * self.p_scale\
+                #                         * mask.view(bsize, self.dropped_dimsize, -1)
+                x = x * batch_mask
             else:
+                batch_mask = torch.ones_like(x, device=x.device)
                 probs = torch.full(size=(bsize, self.dropped_dimsize, tsize), 
                                  fill_value=1.-self.p)
                 b = Binomial(total_count=1, probs=probs)
                 mask = b.sample()
-                #print ('mask', mask)
-                x[:,self.dindexes,:] *= (mask * self.p_scale) 
+                mask = mask.to(x.device)
+                batch_mask[:,self.dindexes,:] *= (mask * self.p_scale)
+                x = x * batch_mask
+                #xx = x.data.clone()
+                #x[:,self.dindexes,:] = x[:,self.dindexes,:].clone() * mask * self.p_scale
             return x
         else:
             return F.dropout(x, p=self.p, training=self.training)

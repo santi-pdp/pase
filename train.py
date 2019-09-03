@@ -230,6 +230,8 @@ def train(opts):
         print('[!] Using CPU')
     print('Seeds initialized to {}'.format(opts.seed))
 
+    #torch.autograd.set_detect_anomaly(True)
+
     # ---------------------
     # Build Model
 
