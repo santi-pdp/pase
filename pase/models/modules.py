@@ -460,8 +460,8 @@ class PatternedDropout(nn.Module):
                 assert len(sel_idx) > 0, (
                     "Asked for fixed dropout, but sel_idx {}".format(sel_idx)
                 )
-                print ("Enabled dropout mode: {}. Selected indices to apply dropout are: {}"\
-                        .format(dropout_mode, sel_idx))
+                print ("Enabled dropout mode: {}. Drop channels {}. Selected indices to apply dropout are: {}"\
+                        .format(dropout_mode, drop_whole_channels, sel_idx))
                 self.dindexes = torch.LongTensor(sel_idx)
                 self.p = p
                 self.p_scale = 1. / (1. - self.p)
@@ -489,19 +489,18 @@ class PatternedDropout(nn.Module):
             bsize, emb_size, tsize = x.size()
             #print (bsize, esize, tsize)
             if self.drop_whole_channels:
-                batch_mask = torch.full(size=(bsize, embsize), device=x.device)
+                batch_mask = torch.full(size=(bsize, emb_size), fill_value=1.0, device=x.device)
                 probs = torch.full(size=(bsize, self.dropped_dimsize),
                                   fill_value=1.-self.p)
                 b = Binomial(total_count=1, probs=probs)
                 mask = b.sample()
                 mask = mask.to(x.device)
-                batch_mask[:,self.dindexes,:] *= (mask.view(bsize, self.dropped_dimsize, -1)\
-                                                  * self.p_scale)
+                batch_mask[:,self.dindexes] *= (mask * self.p_scale)
                 #print ('mask dc', mask)
                 #print ('maks dcv', mask.view(bsize, self.dropped_dimsize, -1))
                 #x[:,self.dindexes,:] = x[:,self.dindexes,:].clone() * self.p_scale\
                 #                         * mask.view(bsize, self.dropped_dimsize, -1)
-                x = x * batch_mask
+                x = x * batch_mask.view(bsize, emb_size, -1)
             else:
                 batch_mask = torch.ones_like(x, device=x.device)
                 probs = torch.full(size=(bsize, self.dropped_dimsize, tsize), 
