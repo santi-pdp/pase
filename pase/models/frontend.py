@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 import json
-from .aspp import aspp_resblock
+from .aspp import aspp_resblock, ASPP
 from .tdnn import TDNN
 from pase.models.WorkerScheduler.encoder import encoder
 import torchvision.models as models
@@ -10,7 +10,7 @@ try:
     from modules import *
 except ImportError:
     from .modules import *
-
+from .gated_cnn import GatedCNN, ResBasicBlock1D
 
 
 def wf_builder(cfg_path):
@@ -28,6 +28,8 @@ def wf_builder(cfg_path):
                     return Resnet50_encoder(**cfg_path)
                 elif model_name == "tdnn":
                     return TDNNFe(**cfg_path)
+                elif model_name == "T-MAT":
+                    return T_MAT_encoder(**cfg_path)
                 else:
                     raise TypeError('Unrecognized frontend type: ', model_name)
             else:
@@ -272,10 +274,105 @@ class WaveFe(Model):
 
         return format_frontend_output(y, data_fmt, mode)
 
+class T_MAT_encoder(Model):
+
+  def __init__(self, chunk_size=32000, hidden_dim=512, 
+                 kernel_sizes=[11, 11, 11, 11], 
+                 strides=[5, 4, 2, 2, 2], fmaps=[64, 64, 128, 512, 1024, 512], 
+                 sinc_kernel=251, sinc_stride=1,  
+                 dilations=[1, 6, 12, 18], 
+                 aspp_fmaps=48, 
+                 GCNN_layers=2,
+                 GCNN_kernel=1,
+                 res_block_count=2,
+                 name="T-MAT"):
+      super().__init__(name=name)
+
+      if len(strides) % 2 != 1:
+        raise ValueError("Number of Conv layers must be odd!!")
+
+      self.sinc = SincConv_fast(1, fmaps[0], sinc_kernel,
+                                  sample_rate=16000,
+                                  padding='SAME',
+                                  stride=sinc_stride,
+                                  pad_mode='reflect'
+                                  )
+
+      self.regr_stream = nn.ModuleList()
+      for i in range(len(strides)):
+        self.regr_stream.append(nn.Sequential(nn.Conv1d(fmaps[i], fmaps[i+1], kernel_sizes[i], strides[i], kernel_sizes[i]//2),
+                                                     nn.BatchNorm1d(fmaps[i+1]),
+                                                     nn.CELU()))
+
+
+      self.GCNNs = nn.ModuleList()
+      self.resblocks = nn.ModuleList()
+      compress_factor = sinc_stride
+      for i in range(len(strides)):
+          compress_factor = compress_factor * strides[i]
+          if i % 2 == 0:
+              self.GCNNs.append(GatedCNN(seq_len=chunk_size // compress_factor,
+                                          n_layers=GCNN_layers,
+                                          kernel=GCNN_kernel,
+                                          in_chs=fmaps[i+1],
+                                          out_chs=fmaps[i+1],
+                                          res_block_count=res_block_count,
+                                          ans_size=chunk_size // compress_factor))
+              
+          else:
+              self.resblocks.append(ResBasicBlock1D(inplanes=fmaps[i], planes=fmaps[i+2], kwidth=1, stride=strides[i] * strides[i+1],norm_layer=nn.BatchNorm1d))
+
+      # self.cls_stream = zip(self.GCNNs, self.resblocks)
+      self.regr_conv = nn.Sequential(nn.Conv1d(hidden_dim, hidden_dim, 1),
+                                    nn.BatchNorm1d(hidden_dim),
+                                    nn.CELU())
+      self.cls_conv = nn.Sequential(nn.Conv1d(hidden_dim, hidden_dim, 1),
+                                    nn.BatchNorm1d(hidden_dim),
+                                    nn.CELU())
+      self.fusion_module = ASPP(hidden_dim, hidden_dim, dilations, aspp_fmaps)
+
+      self.emb_dim = hidden_dim
+
+  def forward(self, batch, device=None, mode=None, output_for_representation=False):
+
+      # output_for_representation = True
+      # if self.training:
+      #     output_for_representation = False
+
+      x, data_fmt = format_frontend_chunk(batch, device)
+
+      sinc_out = self.sinc(x)
+
+      h = sinc_out
+      gcnn_out = 0
+      res_out = 0
+      for i, conv in enumerate(self.regr_stream):
+          h = conv(h)
+
+          if i % 2 == 0:
+              gcnn_out = self.GCNNs[i // 2](h + res_out)
+          
+          else:
+              res_out = self.resblocks[i // 2](gcnn_out)
+
+      cls_out = self.cls_conv(gcnn_out)
+      regr_out = self.fusion_module(h + self.regr_conv(cls_out))
+
+      if not output_for_representation:
+          return format_frontend_output(regr_out, data_fmt, mode), format_frontend_output(cls_out, data_fmt, mode)
+      else:
+          return format_frontend_output(regr_out, data_fmt, mode)
+
+
+
+
+
+
+
 
 class aspp_res_encoder(Model):
 
-    def __init__(self, sinc_out, hidden_dim, kernel_sizes=[11, 11, 11, 11], sinc_kernel=251,sinc_stride=1,strides=[10, 4, 2, 2], dilations=[1, 6, 12, 18], fmaps=48, name='aspp_encoder', pool2d=False, rnn_pool=False, rnn_add=False, concat=[False, False, False, True], dense=False):
+    def __init__(self, sinc_out, hidden_dim, kernel_sizes=[11, 11, 11, 11], sinc_kernel=251, sinc_stride=1,strides=[10, 4, 2, 2], dilations=[1, 6, 12, 18], fmaps=48, name='aspp_encoder', pool2d=False, rnn_pool=False, rnn_add=False, concat=[False, False, False, True], dense=False):
         super().__init__(name=name)
         self.sinc = SincConv_fast(1, sinc_out, sinc_kernel,
                                   sample_rate=16000,
