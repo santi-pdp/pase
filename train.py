@@ -85,7 +85,7 @@ def make_transforms(opts, workers_cfg):
 		
             elif name == 'prosody':
                 znorm = True
-                trans.append(Prosody(hop=opts.prosody_hop, win=opts.prosody_win, der_order=opts.prosody_der_order))
+                trans.append(Prosody(hop=opts.prosody_hop, win=opts.prosody_win))
             elif name == 'chunk' or name == 'cchunk':
                 znorm = False
             elif name == "kaldimfcc":
@@ -409,8 +409,6 @@ if __name__ == '__main__':
 
     parser.add_argument('--prosody_hop', type=int, default=160)
     parser.add_argument('--prosody_win', type=int, default=400)
-    parser.add_argument('--prosody_der_order', type=int, default=0)
-
     parser.add_argument('--kaldimfccs_hop', type=int, default=160)
     parser.add_argument('--kaldimfccs_win', type=int, default=400)
     parser.add_argument('--kaldimfccs_num_mel_bins', type=int, default=20)
