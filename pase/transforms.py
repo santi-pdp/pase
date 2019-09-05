@@ -2,11 +2,8 @@ import torch
 import torch.nn.functional as F
 import tqdm
 import gammatone
-import tempfile
 from gammatone.gtgram import gtgram
 import numpy as np
-import subprocess
-import shlex
 import random
 import pysptk
 import os
@@ -24,7 +21,6 @@ from scipy.signal import lfilter
 from scipy.interpolate import interp1d
 from torchvision.transforms import Compose
 from ahoproc_tools.interpolate import interpolation
-from ahoproc_tools.io import *
 
 try:
     import kaldi_io as kio
@@ -856,14 +852,13 @@ class KaldiPLP(KaldiFeats):
 
 class Prosody(object):
 
-    def __init__(self, hop=80, win=320, f0_min=60, f0_max=300,der_order=0,
+    def __init__(self, hop=80, win=320, f0_min=60, f0_max=300,
                  sr=16000):
         self.hop = hop
         self.win = win
         self.f0_min = f0_min
         self.f0_max = f0_max
         self.sr = sr
-        self.der_order = der_order
 
     # @profile
     def __call__(self, pkg, cached_file=None):
@@ -915,13 +910,6 @@ class Prosody(object):
             egy = torch.tensor(egy.astype(np.float32))
             egy = egy[:, :max_frames]
             proso = torch.cat((lf0, uv, egy, zcr), dim=0)
-  
-            if self.der_order > 0 :
-                deltas=[proso]
-                for n in range(1,self.der_order+1):
-                    deltas.append(librosa.feature.delta(proso.numpy(),order=n))
-                proso=torch.from_numpy(np.concatenate(deltas))
-
             pkg['prosody'] = proso
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
@@ -1920,135 +1908,7 @@ class Additive(object):
         )
         return self.__class__.__name__ + attrs
 
-class Whisperize(object):
 
-    def __init__(self, sr=16000, report=False):
-        self.report = report
-        self.sr = 16000
-        self.AHOCODE = 'ahocoder16_64 $infile $f0file $ccfile $fvfile'
-        self.AHODECODE = 'ahodecoder16_64 $f0file $ccfile $fvfile $outfile'
-
-    def __call__(self, pkg):
-        pkg = format_package(pkg)
-        wav = pkg['chunk']
-        wav = wav.data.numpy().reshape(-1).astype(np.float32)
-        tf = tempfile.NamedTemporaryFile()
-        tfname = tf.name
-        # save wav to file
-        infile = tfname + '.wav'
-        ccfile = tfname + '.cc'
-        f0file = tfname + '.lf0'
-        fvfile = tfname + '.fv'
-        # overwrite infile
-        outfile = infile
-        # save wav
-        sf.write(infile, wav, self.sr)
-        # encode with vocoder
-        ahocode = self.AHOCODE.replace('$infile', infile)
-        ahocode = ahocode.replace('$f0file', f0file)
-        ahocode = ahocode.replace('$fvfile', fvfile)
-        ahocode = ahocode.replace('$ccfile', ccfile)
-        p = subprocess.Popen(shlex.split(ahocode))
-        p.wait()
-        # read vocoder to know the length
-        lf0 = read_aco_file(f0file, (-1,))
-        nsamples = lf0.shape[0]
-        # Unvoice everything generating -1e10 for logF0 and 
-        # 1e3 for FV params
-        lf0 = -1e10 * np.ones(nsamples)
-        fv = 1e3 * np.ones(nsamples)
-        # Write the unvoiced frames overwriting voiced ones
-        write_aco_file(fvfile, fv)
-        write_aco_file(f0file, lf0)
-        # decode with vododer
-        ahodecode = self.AHODECODE.replace('$f0file', f0file)
-        ahodecode = ahodecode.replace('$ccfile', ccfile)
-        ahodecode = ahodecode.replace('$fvfile', fvfile)
-        ahodecode = ahodecode.replace('$outfile', outfile)
-        p = subprocess.Popen(shlex.split(ahodecode))
-        p.wait()
-        wav, _ = sf.read(outfile)
-        tf.close()
-        if self.report:
-            if 'report' not in pkg:
-                pkg['report'] = {}
-            pkg['report']['whisper'] = True
-        pkg['chunk'] = torch.FloatTensor(wav)
-        return pkg
-
-
-    def __repr__(self):
-        attrs = '()'
-        return self.__class__.__name__ + attrs
-
-
-class Codec2(object):
-
-    def __init__(self, kbps=1600, sr=16000, report=False):
-        self.kbps = kbps
-        self.report = report
-        self.sr = sr
-        self.SOX_ENCODE = 'sox $infile -r 8k -b 16 -e signed-integer -c 1 $raw_efile'
-        self.C2_ENCODE = 'c2enc $kbps $raw_efile $c2file'
-        self.C2_DECODE = 'c2dec $kbps $c2file $raw_dfile'
-        self.SOX_DECODE = 'sox -r 8k -b 16 -e signed-integer -c 1 $raw_dfile -r $sr -b 16 -e signed-integer -c 1 $outfile'
-
-    def __call__(self, pkg):
-        pkg = format_package(pkg)
-        wav = pkg['chunk']
-        wav = wav.data.numpy().reshape(-1).astype(np.float32)
-        tf = tempfile.NamedTemporaryFile()
-        tfname = tf.name
-        # save wav to file
-        infile = tfname + '.wav'
-        raw_efile = tfname + '.raw'
-        c2file = tfname + '.c2'
-        raw_dfile = tfname + '_out.raw'
-        outfile = tfname + '_out.wav'
-        # save wav
-        sf.write(infile, wav, self.sr)
-        # convert to proper codec 2 input format as raw data with SoX
-        sox_encode = self.SOX_ENCODE.replace('$infile', infile)
-        sox_encode = sox_encode.replace('$raw_efile', raw_efile)
-        p = subprocess.Popen(shlex.split(sox_encode))
-        p.wait()
-        #print(sox_encode)
-        # Encode with Codec 2
-        c2_encode = self.C2_ENCODE.replace('$kbps', str(self.kbps))
-        c2_encode = c2_encode.replace('$raw_efile', raw_efile)
-        c2_encode = c2_encode.replace('$c2file', c2file)
-        #print(c2_encode)
-        p = subprocess.Popen(shlex.split(c2_encode))
-        p.wait()
-        # Decode with Codec 2
-        c2_decode = self.C2_DECODE.replace('$kbps', str(self.kbps))
-        c2_decode = c2_decode.replace('$c2file', c2file)
-        c2_decode = c2_decode.replace('$raw_dfile', raw_dfile)
-        #print(c2_decode)
-        p = subprocess.Popen(shlex.split(c2_decode))
-        p.wait()
-        # Convert back to <sr> sampling rate wav
-        sox_decode = self.SOX_DECODE.replace('$raw_dfile', raw_dfile)
-        sox_decode = sox_decode.replace('$sr', str(self.sr))
-        sox_decode = sox_decode.replace('$outfile', outfile)
-        #print(sox_decode)
-        p = subprocess.Popen(shlex.split(sox_decode))
-        p.wait()
-        wav, rate = sf.read(outfile)
-        tf.close()
-        if self.report:
-            if 'report' not in pkg:
-                pkg['report'] = {}
-            pkg['report']['kbps'] = self.kbps
-        pkg['chunk'] = torch.FloatTensor(wav)
-        return pkg
-
-    def __repr__(self):
-        attrs = '(kbps={})'.format(
-            self.kbps
-        )
-        return self.__class__.__name__ + attrs
-        
 class SpeedChange(object):
 
     def __init__(self, factor_range=(-0.15, 0.15), report=False):
