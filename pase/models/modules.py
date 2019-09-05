@@ -460,8 +460,8 @@ class PatternedDropout(nn.Module):
                 assert len(sel_idx) > 0, (
                     "Asked for fixed dropout, but sel_idx {}".format(sel_idx)
                 )
-                print ("Enabled dropout mode: {}. Drop channels {}. Selected indices to apply dropout are: {}"\
-                        .format(dropout_mode, drop_whole_channels, sel_idx))
+                print ("Enabled dropout mode: {}. p={}, drop channels {}. Selected indices to apply dropout are: {}"\
+                        .format(dropout_mode, self.p, drop_whole_channels, sel_idx))
                 self.dindexes = torch.LongTensor(sel_idx)
                 self.p = p
                 self.p_scale = 1. / (1. - self.p)
@@ -471,7 +471,7 @@ class PatternedDropout(nn.Module):
                 # fixed mode we only keep droping a subset of units (i.e. 50%),
                 # thus p is effectively lower when compared to regular dropout)
                 self.p =  p
-                print ("Using std dropout")
+                print ("Using std dropout with p={}".format(self.p))
         else:
             print ('Dropout at the inputs disabled, as p={}'.format(self.p))
 
