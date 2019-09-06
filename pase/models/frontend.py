@@ -323,13 +323,13 @@ class T_MAT_encoder(Model):
               self.resblocks.append(ResBasicBlock1D(inplanes=fmaps[i], planes=fmaps[i+2], kwidth=1, stride=strides[i] * strides[i+1],norm_layer=nn.BatchNorm1d))
 
       # self.cls_stream = zip(self.GCNNs, self.resblocks)
-      self.regr_conv = nn.Sequential(nn.Conv1d(hidden_dim, hidden_dim, 1),
+      self.regr_conv = nn.Sequential(nn.Conv1d(fmaps[-1], hidden_dim, 1),
                                     nn.BatchNorm1d(hidden_dim),
                                     nn.CELU())
-      self.cls_conv = nn.Sequential(nn.Conv1d(hidden_dim, hidden_dim, 1),
+      self.cls_conv = nn.Sequential(nn.Conv1d(fmaps[-1], hidden_dim, 1),
                                     nn.BatchNorm1d(hidden_dim),
                                     nn.CELU())
-      self.fusion_module = ASPP(hidden_dim, hidden_dim, dilations, aspp_fmaps)
+      self.fusion_module = ASPP(fmaps[-1], hidden_dim, dilations, aspp_fmaps)
 
       self.emb_dim = hidden_dim
 
