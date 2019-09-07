@@ -34,15 +34,18 @@ class DictCollater(object):
                                       'prosody',
                                       'kaldimfcc',
                                       'kaldiplp'],
+                 meta_keys=[],
                  labs=False):
         self.batching_keys = batching_keys
         self.labs = labs
+        self.meta_keys = meta_keys
 
     def __call__(self, batch):
         batches = {}
         lab_b = False
         labs = None
         lab_batches = []
+        meta = {}
         for sample in batch:
             if len(sample) > 1 and self.labs:
                 labs = sample[1:]
@@ -51,6 +54,10 @@ class DictCollater(object):
                     for lab in labs:
                         lab_batches.append([])
             for k, v in sample.items():
+                if k in self.meta_keys:
+                    if k not in meta:
+                        meta[k] = []
+                    meta[k].append(v)
                 if k not in self.batching_keys:
                     continue
                 if k not in batches:
@@ -68,15 +75,18 @@ class DictCollater(object):
                     lab_batches[lab_i].append(lab)
         for k in batches.keys():
             batches[k] = torch.cat(batches[k], dim=0)
+        rets = [batches]
         if labs is not None:
-            rets = [batches]
             for li in range(len(lab_batches)):
                 lab_batches_T = lab_batches[li]
                 lab_batches_T = torch.tensor(lab_batches_T)
                 rets.append(lab_batches_T)
+        if len(meta) > 0:
+            rets.append(meta)
+        if len(rets) == 1:
+            return rets[0]
         else:
-            rets = batches
-        return rets
+            return rets
 
 
 def uttwav_collater(batch):
