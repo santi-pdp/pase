@@ -1937,9 +1937,11 @@ class Whisperize(object):
     def __call__(self, pkg):
         pkg = format_package(pkg)
         wav = pkg['chunk']
-        # look for the uttname in whisper format first
-        wuttname = os.path.basename(pkg['uttname'])
-        if os.path.exists(self.cache_dir):
+        if 'uttname' in pkg:
+            # look for the uttname in whisper format first
+            wuttname = os.path.basename(pkg['uttname'])
+        if self.cache_dir is not None and \
+                os.path.exists(self.cache_dir) and 'uttname' in pkg:
             wfpath = os.path.join(self.cache_dir, wuttname)
             if not os.path.exists(wfpath):
                 raise ValueError('Path {} does not exist'.format(wfpath))
@@ -1997,6 +1999,10 @@ class Whisperize(object):
             if len(wav) > len(inwav):
                 wav = wav[:len(inwav)]
             tf.close()
+            os.unlink(infile)
+            os.unlink(ccfile)
+            os.unlink(f0file)
+            os.unlink(fvfile)
         if self.report:
             if 'report' not in pkg:
                 pkg['report'] = {}
@@ -2072,6 +2078,11 @@ class Codec2(object):
         wav, rate = sf.read(outfile)
         wav = norm_energy(wav.astype(np.float32), inwav)
         tf.close()
+        os.unlink(infile)
+        os.unlink(raw_efile)
+        os.unlink(c2file)
+        os.unlink(raw_dfile)
+        os.unlink(outfile)
         if self.report:
             if 'report' not in pkg:
                 pkg['report'] = {}
