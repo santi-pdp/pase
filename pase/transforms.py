@@ -112,6 +112,11 @@ def norm_and_scale(wav):
     return wav * torch.rand(1)
 
 
+def norm_energy(out_signal, in_signal, eps=1e-14):
+    ienergy = np.dot(in_signal, in_signal)
+    oenergy = np.dot(out_signal, out_signal)
+    return np.sqrt(ienergy / (oenergy + eps)) * out_signal
+
 def format_package(x):
     if not isinstance(x, dict):
         return {'raw': x}
@@ -1922,53 +1927,76 @@ class Additive(object):
 
 class Whisperize(object):
 
-    def __init__(self, sr=16000, report=False):
+    def __init__(self, sr=16000, cache_dir=None, report=False):
         self.report = report
         self.sr = 16000
         self.AHOCODE = 'ahocoder16_64 $infile $f0file $ccfile $fvfile'
         self.AHODECODE = 'ahodecoder16_64 $f0file $ccfile $fvfile $outfile'
+        self.cache_dir = cache_dir
 
     def __call__(self, pkg):
         pkg = format_package(pkg)
         wav = pkg['chunk']
-        wav = wav.data.numpy().reshape(-1).astype(np.float32)
-        tf = tempfile.NamedTemporaryFile()
-        tfname = tf.name
-        # save wav to file
-        infile = tfname + '.wav'
-        ccfile = tfname + '.cc'
-        f0file = tfname + '.lf0'
-        fvfile = tfname + '.fv'
-        # overwrite infile
-        outfile = infile
-        # save wav
-        sf.write(infile, wav, self.sr)
-        # encode with vocoder
-        ahocode = self.AHOCODE.replace('$infile', infile)
-        ahocode = ahocode.replace('$f0file', f0file)
-        ahocode = ahocode.replace('$fvfile', fvfile)
-        ahocode = ahocode.replace('$ccfile', ccfile)
-        p = subprocess.Popen(shlex.split(ahocode))
-        p.wait()
-        # read vocoder to know the length
-        lf0 = read_aco_file(f0file, (-1,))
-        nsamples = lf0.shape[0]
-        # Unvoice everything generating -1e10 for logF0 and 
-        # 1e3 for FV params
-        lf0 = -1e10 * np.ones(nsamples)
-        fv = 1e3 * np.ones(nsamples)
-        # Write the unvoiced frames overwriting voiced ones
-        write_aco_file(fvfile, fv)
-        write_aco_file(f0file, lf0)
-        # decode with vododer
-        ahodecode = self.AHODECODE.replace('$f0file', f0file)
-        ahodecode = ahodecode.replace('$ccfile', ccfile)
-        ahodecode = ahodecode.replace('$fvfile', fvfile)
-        ahodecode = ahodecode.replace('$outfile', outfile)
-        p = subprocess.Popen(shlex.split(ahodecode))
-        p.wait()
-        wav, _ = sf.read(outfile)
-        tf.close()
+        # look for the uttname in whisper format first
+        wuttname = os.path.basename(pkg['uttname'])
+        if os.path.exists(self.cache_dir):
+            wfpath = os.path.join(self.cache_dir, wuttname)
+            if not os.path.exists(wfpath):
+                raise ValueError('Path {} does not exist'.format(wfpath))
+            # The cached whisper file exists, load it and chunk it
+            # to match pkg boundaries
+            wav, rate = sf.read(wfpath)
+            beg_i = pkg['chunk_beg_i']
+            end_i = pkg['chunk_end_i']
+            L_ = end_i - beg_i
+            if len(wav) < L_:
+                P = L_ - len(wav)
+                wav = np.concatenate((wav, np.zeros((P,))), axis=0)
+            assert end_i - beg_i <= len(wav), len(wav)
+            wav = wav[beg_i:end_i]
+        else:
+            wav = wav.data.numpy().reshape(-1).astype(np.float32)
+            tf = tempfile.NamedTemporaryFile()
+            tfname = tf.name
+            # save wav to file
+            infile = tfname + '.wav'
+            ccfile = tfname + '.cc'
+            f0file = tfname + '.lf0'
+            fvfile = tfname + '.fv'
+            # overwrite infile
+            outfile = infile
+            inwav = np.array(wav).astype(np.float32)
+            # save wav
+            sf.write(infile, wav, self.sr)
+            # encode with vocoder
+            ahocode = self.AHOCODE.replace('$infile', infile)
+            ahocode = ahocode.replace('$f0file', f0file)
+            ahocode = ahocode.replace('$fvfile', fvfile)
+            ahocode = ahocode.replace('$ccfile', ccfile)
+            p = subprocess.Popen(shlex.split(ahocode))
+            p.wait()
+            # read vocoder to know the length
+            lf0 = read_aco_file(f0file, (-1,))
+            nsamples = lf0.shape[0]
+            # Unvoice everything generating -1e10 for logF0 and 
+            # 1e3 for FV params
+            lf0 = -1e10 * np.ones(nsamples)
+            fv = 1e3 * np.ones(nsamples)
+            # Write the unvoiced frames overwriting voiced ones
+            write_aco_file(fvfile, fv)
+            write_aco_file(f0file, lf0)
+            # decode with vododer
+            ahodecode = self.AHODECODE.replace('$f0file', f0file)
+            ahodecode = ahodecode.replace('$ccfile', ccfile)
+            ahodecode = ahodecode.replace('$fvfile', fvfile)
+            ahodecode = ahodecode.replace('$outfile', outfile)
+            p = subprocess.Popen(shlex.split(ahodecode))
+            p.wait()
+            wav, _ = sf.read(outfile)
+            wav = norm_energy(wav.astype(np.float32), inwav)
+            if len(wav) > len(inwav):
+                wav = wav[:len(inwav)]
+            tf.close()
         if self.report:
             if 'report' not in pkg:
                 pkg['report'] = {}
@@ -1978,7 +2006,7 @@ class Whisperize(object):
 
 
     def __repr__(self):
-        attrs = '()'
+        attrs = '(cache_dir={})'.format(self.cache_dir)
         return self.__class__.__name__ + attrs
 
 
@@ -2005,12 +2033,15 @@ class Codec2(object):
         c2file = tfname + '.c2'
         raw_dfile = tfname + '_out.raw'
         outfile = tfname + '_out.wav'
+        inwav = np.array(wav).astype(np.float32)
         # save wav
         sf.write(infile, wav, self.sr)
         # convert to proper codec 2 input format as raw data with SoX
         sox_encode = self.SOX_ENCODE.replace('$infile', infile)
         sox_encode = sox_encode.replace('$raw_efile', raw_efile)
-        p = subprocess.Popen(shlex.split(sox_encode))
+        p = subprocess.Popen(shlex.split(sox_encode),
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
         p.wait()
         #print(sox_encode)
         # Encode with Codec 2
@@ -2025,16 +2056,21 @@ class Codec2(object):
         c2_decode = c2_decode.replace('$c2file', c2file)
         c2_decode = c2_decode.replace('$raw_dfile', raw_dfile)
         #print(c2_decode)
-        p = subprocess.Popen(shlex.split(c2_decode))
+        p = subprocess.Popen(shlex.split(c2_decode), 
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
         p.wait()
         # Convert back to <sr> sampling rate wav
         sox_decode = self.SOX_DECODE.replace('$raw_dfile', raw_dfile)
         sox_decode = sox_decode.replace('$sr', str(self.sr))
         sox_decode = sox_decode.replace('$outfile', outfile)
         #print(sox_decode)
-        p = subprocess.Popen(shlex.split(sox_decode))
+        p = subprocess.Popen(shlex.split(sox_decode),
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
         p.wait()
         wav, rate = sf.read(outfile)
+        wav = norm_energy(wav.astype(np.float32), inwav)
         tf.close()
         if self.report:
             if 'report' not in pkg:
