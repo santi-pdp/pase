@@ -49,51 +49,75 @@ def make_transforms(opts, workers_cfg):
         else:
             trans.append(SingleChunkWav(opts.chunk_size, random_scale=opts.random_scale))
 
+    collater_keys = []
     znorm = False
     for type, minions_cfg in workers_cfg.items():
         for minion in minions_cfg:
             name = minion['name']
+            if name in collater_keys:
+                raise ValueError('Duplicated key {} in minions'.format(name))
+            collater_keys.append(name)
+            # look for the transform config if available 
+            # in this minion
+            tr_cfg=minion.pop('transform', {})
             if name == 'mi' or name == 'cmi' or name == 'spc' or \
                name == 'overlap' or name == 'gap' or 'regu' in name:
                 continue
-            elif name == 'lps':
+            elif 'lps' in name:
                 znorm = True
-                trans.append(LPS(opts.nfft, hop=opts.LPS_hop, win=opts.LPS_win, der_order=opts.LPS_der_order))
-            elif name == 'gtn':
+                # copy the minion name into the transform name
+                tr_cfg['name'] = name
+                #trans.append(LPS(opts.nfft, hop=opts.LPS_hop, win=opts.LPS_win, der_order=opts.LPS_der_order))
+                trans.append(LPS(**tr_cfg))
+            elif 'gtn' in name:
                 znorm = True
-                trans.append(Gammatone(opts.gtn_fmin, opts.gtn_channels, 
-                                       hop=opts.gammatone_hop, win=opts.gammatone_win,der_order=opts.gammatone_der_order))
-            elif name == 'lpc':
+                tr_cfg['name'] = name
+                trans.append(Gammatone(**tr_cfg))
+                #trans.append(Gammatone(opts.gtn_fmin, opts.gtn_channels, 
+                #                       hop=opts.gammatone_hop, win=opts.gammatone_win,der_order=opts.gammatone_der_order))
+            elif 'lpc' in name:
                 znorm = True
-                trans.append(LPC(opts.lpc_order, hop=opts.LPC_hop,
-                                 win=opts.LPC_win))
-            elif name == 'fbank':
+                tr_cfg['name'] = name
+                trans.append(LPC(**tr_cfg))
+                #trans.append(LPC(opts.lpc_order, hop=opts.LPC_hop,
+                #                 win=opts.LPC_win))
+            elif 'fbank' in name:
                 znorm = True
-                trans.append(FBanks(n_filters=opts.fbank_filters, 
-                                    n_fft=opts.nfft,
-                                    hop=opts.fbanks_hop,
-                                    win=opts.fbanks_win,
-                                    der_order=opts.fbanks_der_order))
-            elif name == 'mfcc':
-                znorm = True
-                trans.append(MFCC(hop=opts.mfccs_hop, win=opts.mfccs_win, order=opts.mfccs_order, der_order=opts.mfccs_der_order))
+                tr_cfg['name'] = name
+                trans.append(FBanks(**tr_cfg))
+                #trans.append(FBanks(n_filters=opts.fbank_filters, 
+                #                    n_fft=opts.nfft,
+                #                    hop=opts.fbanks_hop,
+                #                    win=opts.fbanks_win,
+                #                    der_order=opts.fbanks_der_order))
             
-            elif name == 'mfcc_librosa':
+            elif 'mfcc_librosa' in name:
                 znorm = True
-                trans.append(MFCC_librosa(hop=opts.mfccs_librosa_hop, win=opts.mfccs_librosa_win, order=opts.mfccs_librosa_order, der_order=opts.mfccs_librosa_der_order, n_mels=opts.mfccs_librosa_n_mels, htk=opts.mfccs_librosa_htk))
-
-		
-            elif name == 'prosody':
+                tr_cfg['name'] = name
+                trans.append(MFCC_librosa(**tr_cfg))
+                #trans.append(MFCC_librosa(hop=opts.mfccs_librosa_hop, win=opts.mfccs_librosa_win, order=opts.mfccs_librosa_order, der_order=opts.mfccs_librosa_der_order, n_mels=opts.mfccs_librosa_n_mels, htk=opts.mfccs_librosa_htk))
+            elif 'mfcc' in name:
                 znorm = True
-                trans.append(Prosody(hop=opts.prosody_hop, win=opts.prosody_win, der_order=opts.prosody_der_order))
+                tr_cfg['name'] = name
+                trans.append(MFCC(**tr_cfg))
+                #trans.append(MFCC(hop=opts.mfccs_hop, win=opts.mfccs_win, order=opts.mfccs_order, der_order=opts.mfccs_der_order))
+            elif 'prosody' in name:
+                znorm = True
+                tr_cfg['name'] = name
+                trans.append(Prosody(**tr_cfg))
+                #trans.append(Prosody(hop=opts.prosody_hop, win=opts.prosody_win, der_order=opts.prosody_der_order))
             elif name == 'chunk' or name == 'cchunk':
                 znorm = False
-            elif name == "kaldimfcc":
+            elif 'kaldimfcc' in name:
                 znorm = True
-                trans.append(KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.kaldimfccs_hop, win=opts.kaldimfccs_win,num_mel_bins=opts.kaldimfccs_num_mel_bins,num_ceps=opts.kaldimfccs_num_ceps,der_order=opts.kaldimfccs_der_order))
-            elif name == "kaldiplp":
+                tr_cfg['name'] = name
+                trans.append(KaldiMFCC(**tr_cfg))
+                #trans.append(KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.kaldimfccs_hop, win=opts.kaldimfccs_win,num_mel_bins=opts.kaldimfccs_num_mel_bins,num_ceps=opts.kaldimfccs_num_ceps,der_order=opts.kaldimfccs_der_order))
+            elif "kaldiplp" in name:
                 znorm = True
-                trans.append(KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.kaldiplp_hop, win=opts.kaldiplp_win))
+                tr_cfg['name'] = name
+                trans.append(KaldiPLP(**tr_cfg))
+                #trans.append(KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.kaldiplp_hop, win=opts.kaldiplp_win))
             else:
                 raise TypeError('Unrecognized module \"{}\"'
                                 'whilst building transfromations'.format(name))
@@ -106,7 +130,7 @@ def make_transforms(opts, workers_cfg):
     else:
         print (keys, trans)
         trans = CachedCompose(trans, keys, opts.trans_cache)
-    return trans
+    return trans, collater_keys
 
 
 def config_zerospeech(noises_dir=None,
@@ -146,7 +170,7 @@ def build_dataset_providers(opts, minions_cfg):
         opts.dataset.append('LibriSpeechSegTupleWavDataset')
 
     #TODO: allow for different base transforms for different datasets
-    trans = make_transforms(opts, minions_cfg)
+    trans, batch_keys = make_transforms(opts, minions_cfg)
     print(trans)
 
     dsets, va_dsets = [], []
@@ -213,7 +237,7 @@ def build_dataset_providers(opts, minions_cfg):
     if opts.do_eval is False or len(va_dsets) == 0:
         ret = ret + (None, )
 
-    return ret
+    return ret, batch_keys
 
 def train(opts):
     CUDA = True if torch.cuda.is_available() and not opts.no_cuda else False
@@ -239,9 +263,14 @@ def train(opts):
     #make_transforms(opts, minions_cfg)
     opts.random_scale = str2bool(opts.random_scale)
 
-    dset, va_dset = build_dataset_providers(opts, minions_cfg)
+    dsets, collater_keys = build_dataset_providers(opts, minions_cfg)
+    dset, va_dset = dsets
+    # Build collater, appending the keys from the loaded transforms to the
+    # existing default ones
+    collater = DictCollater()
+    collater.batching_keys.extend(collater_keys)
     dloader = DataLoader(dset, batch_size=opts.batch_size,
-                         shuffle=True, collate_fn=DictCollater(),
+                         shuffle=True, collate_fn=collater,
                          num_workers=opts.num_workers,drop_last=True,
                          pin_memory=False)
     # Compute estimation of bpe. As we sample chunks randomly, we
@@ -386,9 +415,6 @@ if __name__ == '__main__':
     parser.add_argument('--sup_exec', type=str, default=None)
     
     # hop/wlen of the various feature regressors
-    parser.add_argument('--LPS_hop', type=int, default=160)
-    parser.add_argument('--LPS_win', type=int, default=400)
-    parser.add_argument('--LPS_der_order', type=int, default=0)
     parser.add_argument('--gammatone_hop', type=int, default=160)
     parser.add_argument('--gammatone_win', type=int, default=400)
     parser.add_argument('--gammatone_der_order', type=int, default=0)

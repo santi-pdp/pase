@@ -397,12 +397,14 @@ class MIChunkWav(SingleChunkWav):
 
 class LPS(object):
 
-    def __init__(self, n_fft=2048, hop=80,
-                 win=320, der_order=0,
+    def __init__(self, n_fft=2048, hop=160,
+                 win=400, der_order=0,
+                 name='lps',
                  device='cpu'):
         self.n_fft = n_fft
         self.hop = hop
         self.win = win
+        self.name = name
         self.der_order=der_order
         self.device = device
 
@@ -431,7 +433,7 @@ class LPS(object):
                     deltas.append(librosa.feature.delta(X.numpy(),order=n))
                 X=torch.from_numpy(np.concatenate(deltas))
      
-            pkg['lps'] = X
+            pkg[self.name] = X
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -445,8 +447,9 @@ class LPS(object):
 
 class FBanks(object):
 
-    def __init__(self, n_filters=40, n_fft=512, hop=80,
+    def __init__(self, n_filters=40, n_fft=512, hop=160,
                  win=320, rate=16000, der_order=0,
+                 name='fbank',
                  device='cpu'):
         self.n_fft = n_fft
         self.n_filters = n_filters
@@ -468,7 +471,7 @@ class FBanks(object):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             X = X[:, beg_i:end_i]
-            pkg['fbank'] = X
+            pkg[self.name] = X
         else:
             winlen = (float(self.win) / self.rate)
             winstep = (float(self.hop) / self.rate)
@@ -488,7 +491,7 @@ class FBanks(object):
                 # pad repeating borders
                 fbank = F.pad(fbank.unsqueeze(0), (0, P), mode='replicate')
                 fbank = fbank.squeeze(0)
-            pkg['fbank'] = fbank
+            pkg[self.name] = fbank
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -503,8 +506,9 @@ class FBanks(object):
 
 class Gammatone(object):
 
-    def __init__(self, f_min=500, n_channels=40, hop=80,
+    def __init__(self, f_min=500, n_channels=40, hop=160,
                  win=320,  der_order=0, rate=16000,
+                 name='gtn',
                  device='cpu'):
         self.hop = hop
         self.win = win
@@ -512,6 +516,7 @@ class Gammatone(object):
         self.rate = rate
         self.f_min = f_min
         self.der_order = der_order
+        self.name = name
 
     # @profile
     def __call__(self, pkg, cached_file=None):
@@ -526,7 +531,7 @@ class Gammatone(object):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             X = X[:, beg_i:end_i]
-            pkg['gtn'] = X
+            pkg[self.name] = X
         else:
             windowtime = float(self.win) / self.rate
             windowhop = float(self.hop) / self.rate
@@ -551,7 +556,7 @@ class Gammatone(object):
                 gtn = gtn.squeeze(0)
             #pkg['gtn'] = torch.FloatTensor(gtn[:, :total_frames])
 
-            pkg['gtn'] = torch.FloatTensor(gtn)
+            pkg[self.name] = torch.FloatTensor(gtn)
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -566,13 +571,14 @@ class Gammatone(object):
 
 class LPC(object):
 
-    def __init__(self, order=25, hop=80,
-                 win=320, 
+    def __init__(self, order=25, hop=160,
+                 win=320, name='lpc',
                  device='cpu'):
         self.order = order
         self.hop = hop
         self.win = win
         self.window = pysptk.hamming(win).astype(np.float32)
+        self.name = name
 
     def frame_signal(self, signal, window):
         
@@ -602,13 +608,13 @@ class LPC(object):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             X = X[:, beg_i:end_i]
-            pkg['lpc'] = X
+            pkg[self.name] = X
         else:
             wav = self.frame_signal(wav, self.window)
             #print('wav shape: ', wav.shape)
             lpc = pysptk.sptk.lpc(wav, order=self.order)
             #print('lpc: ', lpc.shape)
-            pkg['lpc'] = torch.FloatTensor(lpc)
+            pkg[self.name] = torch.FloatTensor(lpc)
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -622,7 +628,8 @@ class LPC(object):
 class MFCC(object):
 
     def __init__(self, n_fft=2048, hop=160,
-                 order=20, sr=16000, win=400,der_order=0):
+                 order=20, sr=16000, win=400,
+                 der_order=0, name='mfcc'):
         self.hop = hop
         # Santi: the librosa mfcc api does not always
         # accept a window argument, so we enforce n_fft
@@ -632,6 +639,7 @@ class MFCC(object):
         self.order = order
         self.sr = 16000
         self.der_order=der_order
+        self.name = name
 
     # @profile
     def __call__(self, pkg, cached_file=None):
@@ -645,7 +653,7 @@ class MFCC(object):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             mfcc = mfcc[:, beg_i:end_i]
-            pkg['mfcc'] = mfcc
+            pkg[self.name] = mfcc
         else:
             # print(y.dtype)
             mfcc = librosa.feature.mfcc(y, sr=self.sr,
@@ -660,7 +668,7 @@ class MFCC(object):
                     deltas.append(librosa.feature.delta(mfcc,order=n))
                 mfcc=np.concatenate(deltas)
     
-            pkg['mfcc'] = torch.tensor(mfcc.astype(np.float32))
+            pkg[self.name] = torch.tensor(mfcc.astype(np.float32))
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -673,7 +681,8 @@ class MFCC(object):
 class MFCC_librosa(object):
 
     def __init__(self, n_fft=2048, hop=160,
-                 order=20, sr=16000, win=400,der_order=0,n_mels=40,htk=True):
+                 order=20, sr=16000, win=400,der_order=0,n_mels=40,
+                 htk=True, name='mfcc_librosa'):
         self.hop = hop
         # Santi: the librosa mfcc api does not always
         # accept a window argument, so we enforce n_fft
@@ -685,6 +694,7 @@ class MFCC_librosa(object):
         self.der_order=der_order
         self.n_mels=n_mels
         self.htk=True
+        self.name = name
 
     # @profile
     def __call__(self, pkg, cached_file=None):
@@ -698,7 +708,7 @@ class MFCC_librosa(object):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             mfcc = mfcc[:, beg_i:end_i]
-            pkg['mfcc_librosa'] = mfcc
+            pkg[self.name] = mfcc
         else:
             # print(y.dtype)
             mfcc = librosa.feature.mfcc(y, sr=self.sr,
@@ -715,7 +725,7 @@ class MFCC_librosa(object):
                     deltas.append(librosa.feature.delta(mfcc,order=n))
                 mfcc=np.concatenate(deltas)
 
-            pkg['mfcc_librosa'] = torch.tensor(mfcc.astype(np.float32))
+            pkg[self.name] = torch.tensor(mfcc.astype(np.float32))
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -761,7 +771,8 @@ class KaldiFeats(object):
 
 class KaldiMFCC(KaldiFeats):
     def __init__(self, kaldi_root, hop=160, win=400, sr=16000,
-                    num_mel_bins=20, num_ceps=20, der_order=0):
+                    num_mel_bins=20, num_ceps=20, der_order=0,
+                    name='kaldimfcc'):
 
         super(KaldiMFCC, self).__init__(kaldi_root=kaldi_root, 
                                         hop=hop, win=win, sr=sr)
@@ -781,6 +792,7 @@ class KaldiMFCC(KaldiFeats):
                               self.frame_length, self.frame_shift,
                               self.num_mel_bins, self.sr, self.kaldi_root,
                               self.der_order)
+        self.name = name
 
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
@@ -793,14 +805,14 @@ class KaldiMFCC(KaldiFeats):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             mfcc = mfcc[:, beg_i:end_i]
-            pkg['kaldimfcc'] = mfcc
+            pkg[self.name] = mfcc
         else:
             # print(y.dtype)
             mfccs = self.__execute_command__(y, self.cmd)
             assert mfccs is not None, (
                 "Mfccs extraction failed"
             )
-            pkg['kaldimfcc'] = torch.tensor(mfccs[:,:max_frames].astype(np.float32))
+            pkg[self.name] = torch.tensor(mfccs[:,:max_frames].astype(np.float32))
 
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
@@ -813,7 +825,8 @@ class KaldiMFCC(KaldiFeats):
 
 class KaldiPLP(KaldiFeats):
     def __init__(self, kaldi_root, hop=160, win=400, sr=16000,
-                    num_mel_bins=20, num_ceps=20, lpc_order=20):
+                 num_mel_bins=20, num_ceps=20, lpc_order=20,
+                 name='kaldiplp'):
 
         super(KaldiPLP, self).__init__(kaldi_root=kaldi_root, 
                                         hop=hop, win=win, sr=sr)
@@ -832,6 +845,7 @@ class KaldiPLP(KaldiFeats):
         self.cmd = cmd.format(self.kaldi_root, self.num_ceps, self.lpc_order, 
                               self.frame_length, self.frame_shift, 
                               self.num_mel_bins, self.sr)
+        self.name = name
 
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
@@ -844,11 +858,11 @@ class KaldiPLP(KaldiFeats):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             plp = plp[:, beg_i:end_i]
-            pkg['kaldiplp'] = plp
+            pkg[self.name] = plp
         else:
             # print(y.dtype)
             feats = self.__execute_command__(y, self.cmd)
-            pkg['kaldiplp'] = torch.tensor(feats[:,:max_frames].astype(np.float32))
+            pkg[self.name] = torch.tensor(feats[:,:max_frames].astype(np.float32))
         
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
@@ -861,14 +875,15 @@ class KaldiPLP(KaldiFeats):
 
 class Prosody(object):
 
-    def __init__(self, hop=80, win=320, f0_min=60, f0_max=300,der_order=0,
-                 sr=16000):
+    def __init__(self, hop=160, win=320, f0_min=60, f0_max=300,der_order=0,
+                 sr=16000, name='prosody'):
         self.hop = hop
         self.win = win
         self.f0_min = f0_min
         self.f0_max = f0_max
         self.sr = sr
         self.der_order = der_order
+        self.name = name
 
     # @profile
     def __call__(self, pkg, cached_file=None):
@@ -882,7 +897,7 @@ class Prosody(object):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             proso = proso[:, beg_i:end_i]
-            pkg['prosody'] = proso
+            pkg[self.name] = proso
         else:
             # first compute logF0 and voiced/unvoiced flag
             # f0 = pysptk.rapt(wav.astype(np.float32),
@@ -927,7 +942,7 @@ class Prosody(object):
                     deltas.append(librosa.feature.delta(proso.numpy(),order=n))
                 proso=torch.from_numpy(np.concatenate(deltas))
 
-            pkg['prosody'] = proso
+            pkg[self.name] = proso
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
