@@ -34,7 +34,8 @@ def str2None(v):
         return None
     return v
 
-def make_transforms(opts, workers_cfg):
+def make_transforms(chunk_size, workers_cfg, random_scale=False,
+                    stats=None, trans_cache=None):
     trans = [ToTensor()]
     keys = ['totensor']
     # go through all minions first to check whether
@@ -45,9 +46,9 @@ def make_transforms(opts, workers_cfg):
             if 'mi' in minion['name']:
                 mi = True
         if mi:
-            trans.append(MIChunkWav(opts.chunk_size, random_scale=opts.random_scale))
+            trans.append(MIChunkWav(chunk_size, random_scale=random_scale))
         else:
-            trans.append(SingleChunkWav(opts.chunk_size, random_scale=opts.random_scale))
+            trans.append(SingleChunkWav(chunk_size, random_scale=random_scale))
 
     collater_keys = []
     znorm = False
@@ -122,14 +123,14 @@ def make_transforms(opts, workers_cfg):
                 raise TypeError('Unrecognized module \"{}\"'
                                 'whilst building transfromations'.format(name))
             keys.append(name)
-    if znorm:
-        trans.append(ZNorm(opts.stats))
+    if znorm and stats is not None:
+        trans.append(ZNorm(stats))
         keys.append('znorm')
-    if opts.trans_cache is None:
+    if trans_cache is None:
         trans = Compose(trans)
     else:
         print (keys, trans)
-        trans = CachedCompose(trans, keys, opts.trans_cache)
+        trans = CachedCompose(trans, keys, trans_cache)
     return trans, collater_keys
 
 
@@ -170,7 +171,9 @@ def build_dataset_providers(opts, minions_cfg):
         opts.dataset.append('LibriSpeechSegTupleWavDataset')
 
     #TODO: allow for different base transforms for different datasets
-    trans, batch_keys = make_transforms(opts, minions_cfg)
+    trans, batch_keys = make_transforms(opts.chunk_size, minions_cfg,
+                                        opts.random_scale,
+                                        opts.stats, opts.trans_cache)
     print(trans)
 
     dsets, va_dsets = [], []
