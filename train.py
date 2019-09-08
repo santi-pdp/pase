@@ -414,40 +414,6 @@ if __name__ == '__main__':
     parser.add_argument('--cchunk_prior', action='store_true', default=False)
     parser.add_argument('--sup_exec', type=str, default=None)
     
-    # hop/wlen of the various feature regressors
-    parser.add_argument('--gammatone_hop', type=int, default=160)
-    parser.add_argument('--gammatone_win', type=int, default=400)
-    parser.add_argument('--gammatone_der_order', type=int, default=0)
-    parser.add_argument('--LPC_hop', type=int, default=160)
-    parser.add_argument('--LPC_win', type=int, default=400)
-    parser.add_argument('--fbanks_hop', type=int, default=160)
-    parser.add_argument('--fbanks_win', type=int, default=400)
-    parser.add_argument('--fbanks_der_order', type=int, default=0)
-    parser.add_argument('--mfccs_hop', type=int, default=160)
-    parser.add_argument('--mfccs_win', type=int, default=400)
-    parser.add_argument('--mfccs_order', type=int, default=20)
-    parser.add_argument('--mfccs_der_order', type=int, default=0)
-
-    parser.add_argument('--mfccs_librosa_hop', type=int, default=160)
-    parser.add_argument('--mfccs_librosa_win', type=int, default=400)
-    parser.add_argument('--mfccs_librosa_order', type=int, default=20)
-    parser.add_argument('--mfccs_librosa_der_order', type=int, default=0)
-    parser.add_argument('--mfccs_librosa_n_mels', type=int, default=40)
-    parser.add_argument('--mfccs_librosa_htk', type=int, default=True)
-
-    parser.add_argument('--prosody_hop', type=int, default=160)
-    parser.add_argument('--prosody_win', type=int, default=400)
-    parser.add_argument('--prosody_der_order', type=int, default=0)
-
-    parser.add_argument('--kaldimfccs_hop', type=int, default=160)
-    parser.add_argument('--kaldimfccs_win', type=int, default=400)
-    parser.add_argument('--kaldimfccs_num_mel_bins', type=int, default=20)
-    parser.add_argument('--kaldimfccs_num_ceps', type=int, default=20)
-    parser.add_argument('--kaldimfccs_der_order', type=int, default=0)
-    parser.add_argument('--kaldiplp_hop', type=int, default=160)
-    parser.add_argument('--kaldiplp_win', type=int, default=400)
-
-
     parser.add_argument('--sup_freq', type=int, default=1)
     parser.add_argument('--preload_wav', action='store_true', default=False,
                         help='Preload wav files in Dataset (Def: False).')
