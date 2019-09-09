@@ -398,7 +398,7 @@ class MIChunkWav(SingleChunkWav):
 class LPS(object):
 
     def __init__(self, n_fft=2048, hop=160,
-                 win=400, der_order=0,
+                 win=400, der_order=2,
                  name='lps',
                  device='cpu'):
         self.n_fft = n_fft
@@ -448,7 +448,7 @@ class LPS(object):
 class FBanks(object):
 
     def __init__(self, n_filters=40, n_fft=512, hop=160,
-                 win=320, rate=16000, der_order=0,
+                 win=400, rate=16000, der_order=2,
                  name='fbank',
                  device='cpu'):
         self.n_fft = n_fft
@@ -508,7 +508,7 @@ class FBanks(object):
 class Gammatone(object):
 
     def __init__(self, f_min=500, n_channels=40, hop=160,
-                 win=320,  der_order=0, rate=16000,
+                 win=400,  der_order=2, rate=16000,
                  name='gtn',
                  device='cpu'):
         self.hop = hop
@@ -629,8 +629,8 @@ class LPC(object):
 class MFCC(object):
 
     def __init__(self, n_fft=2048, hop=160,
-                 order=20, sr=16000, win=400,
-                 der_order=0, name='mfcc'):
+                 order=13, sr=16000, win=400,
+                 der_order=2, name='mfcc'):
         self.hop = hop
         # Santi: the librosa mfcc api does not always
         # accept a window argument, so we enforce n_fft
@@ -682,7 +682,7 @@ class MFCC(object):
 class MFCC_librosa(object):
 
     def __init__(self, n_fft=2048, hop=160,
-                 order=20, sr=16000, win=400,der_order=0,n_mels=40,
+                 order=13, sr=16000, win=400,der_order=2,n_mels=40,
                  htk=True, name='mfcc_librosa'):
         self.hop = hop
         # Santi: the librosa mfcc api does not always
@@ -772,7 +772,7 @@ class KaldiFeats(object):
 
 class KaldiMFCC(KaldiFeats):
     def __init__(self, kaldi_root, hop=160, win=400, sr=16000,
-                    num_mel_bins=20, num_ceps=20, der_order=0,
+                    num_mel_bins=40, num_ceps=13, der_order=2,
                     name='kaldimfcc'):
 
         super(KaldiMFCC, self).__init__(kaldi_root=kaldi_root, 
@@ -876,7 +876,7 @@ class KaldiPLP(KaldiFeats):
 
 class Prosody(object):
 
-    def __init__(self, hop=160, win=320, f0_min=60, f0_max=300,der_order=0,
+    def __init__(self, hop=160, win=320, f0_min=60, f0_max=300,der_order=2,
                  sr=16000, name='prosody'):
         self.hop = hop
         self.win = win
