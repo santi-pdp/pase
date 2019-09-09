@@ -980,6 +980,8 @@ class Reverb(object):
             IR = np.loadtxt(ir_file)
         elif ir_fmt == 'npy':
             IR = np.load(ir_file)
+        elif ir_fmt == 'wav':
+            IR, _ = sf.read(ir_file)
         else:
             raise TypeError('Unrecognized IR format: ', ir_fmt)
         IR = IR[:self.max_reverb_len]
