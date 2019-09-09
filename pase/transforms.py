@@ -457,6 +457,7 @@ class FBanks(object):
         self.hop = hop
         self.win = win
         self.der_order=der_order
+        self.name = name
 
     # @profile
     def __call__(self, pkg, cached_file=None):
