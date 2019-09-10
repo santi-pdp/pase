@@ -124,6 +124,7 @@ class WaveFe(Model):
                  norm_type='bnorm',
                  pad_mode='reflect', sr=16000,
                  emb_dim=256,
+                 rnn_dim=None,
                  activation=None,
                  rnn_pool=False,
                  rnn_layers=1,
@@ -181,12 +182,14 @@ class WaveFe(Model):
             ninp = fmap
         # last projection
         if rnn_pool:
-            self.rnn = build_rnn_block(fmap, emb_dim // 2,
+            if rnn_dim is None:
+                rnn_dim = emb_dim
+            self.rnn = build_rnn_block(fmap, rnn_dim // 2,
                                        rnn_layers=rnn_layers,
                                        rnn_type=rnn_type,
                                        bidirectional=True,
                                        dropout=rnn_dropout)
-            self.W = nn.Conv1d(emb_dim, emb_dim, 1)
+            self.W = nn.Conv1d(rnn_dim, emb_dim, 1)
         else:
             self.W = nn.Conv1d(fmap, emb_dim, 1)
         self.emb_dim = concat_emb_dim
