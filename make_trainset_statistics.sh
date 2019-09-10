@@ -1,7 +1,8 @@
 #!/bin/bash
 
 libri=false
-libri_alldeltas=true
+libri_alldeltas=false
+genhlibri_allder2_5reg=true
 libri_kaldi=false
 swbd=false
 ami=false
@@ -22,14 +23,28 @@ python make_trainset_statistics.py \
 
 }
 
+$genhlibri_allder2_5reg && {
+  der=2
+  python make_trainset_statistics.py \
+   --data_root data/GEnhancement/LibriSpeech \
+   --data_cfg data/GEnhancement/librispeech_clean.cfg \
+   --num_workers 10 --max_batches=30 \
+   --net_cfg cfg/workers5reg_L2regularizer_allder2.cfg \
+   --out_file data/librispeech_clean_allder2.pkl
+}
+
 $libri_alldeltas && {
+  der=3
   python make_trainset_statistics.py \
    --data_root data/LibriSpeech_50h/wav_sel \
    --data_cfg  data/LibriSpeech_50h/librispeech_data_50h.cfg \
    --num_workers 10 --max_batches=30 \
    --mfccs_order 13 \
-   --LPS_der_order 2 --gammatone_der_order 2 --fbanks_der_order 2 --mfccs_der_order 2 \
-   --out_file data/librispeech_50h_stats_libri_allder2.pkl
+   --LPS_der_order $der --gammatone_der_order $der --fbanks_der_order $der --mfccs_der_order $der \
+   --mfccs_librosa_order 13 --mfccs_librosa_n_mels 40 --mfccs_librosa_der_order $der \
+   --kaldimfccs_num_ceps 13 --kaldimfccs_num_mel_bins 40 --kaldimfccs_der_order $der \
+   --kaldi_root /disks/data1/pawel/repos/kaldi \
+   --out_file data/librispeech_50h_stats_all_der$der.pkl
 }
 
 $libri_kaldi && {

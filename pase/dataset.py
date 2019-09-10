@@ -34,15 +34,18 @@ class DictCollater(object):
                                       'prosody',
                                       'kaldimfcc',
                                       'kaldiplp'],
+                 meta_keys=[],
                  labs=False):
         self.batching_keys = batching_keys
         self.labs = labs
+        self.meta_keys = meta_keys
 
     def __call__(self, batch):
         batches = {}
         lab_b = False
         labs = None
         lab_batches = []
+        meta = {}
         for sample in batch:
             if len(sample) > 1 and self.labs:
                 labs = sample[1:]
@@ -51,6 +54,10 @@ class DictCollater(object):
                     for lab in labs:
                         lab_batches.append([])
             for k, v in sample.items():
+                if k in self.meta_keys:
+                    if k not in meta:
+                        meta[k] = []
+                    meta[k].append(v)
                 if k not in self.batching_keys:
                     continue
                 if k not in batches:
@@ -68,15 +75,18 @@ class DictCollater(object):
                     lab_batches[lab_i].append(lab)
         for k in batches.keys():
             batches[k] = torch.cat(batches[k], dim=0)
+        rets = [batches]
         if labs is not None:
-            rets = [batches]
             for li in range(len(lab_batches)):
                 lab_batches_T = lab_batches[li]
                 lab_batches_T = torch.tensor(lab_batches_T)
                 rets.append(lab_batches_T)
+        if len(meta) > 0:
+            rets.append(meta)
+        if len(rets) == 1:
+            return rets[0]
         else:
-            rets = batches
-        return rets
+            return rets
 
 
 def uttwav_collater(batch):
@@ -311,6 +321,106 @@ class PairWavDataset(WavDataset):
             return pkg
 
 
+class GenhancementDataset(Dataset):
+    """ Return the regular package with current (noisy) wav, 
+        random neighbor wav (also noisy), and clean output
+    """
+
+    def __init__(self, data_root, data_cfg_file, split,
+                 transform=None, sr=None,
+                 return_spk=False,
+                 preload_wav=False,
+                 return_uttname=False,
+                 transforms_cache=None,
+                 distortion_transforms=None,
+                 whisper_folder=None,
+                 noise_folder=None,
+                 cache_on_load=False,
+                 distortion_probability=0.4,
+                 zero_speech_p=0,
+                 zero_speech_transform=None,
+                 verbose=True,
+                 *args, **kwargs):
+        # TODO: half of these useless arguments should be removed in 
+        # this dataset, but need to homogeneize the datasets or something
+        super().__init__()
+        # sr: sampling rate, (Def: None, the one in the wav header)
+        self.sr = sr
+        self.data_root = data_root
+        self.data_cfg_file = data_cfg_file
+        if not isinstance(data_cfg_file, str):
+            raise ValueError('Please specify a path to a cfg '
+                             'file for loading data.')
+
+        self.split = split
+        self.transform = transform
+        with open(data_cfg_file, 'r') as data_cfg_f:
+            self.data_cfg = json.load(data_cfg_f)
+            self.spk_info = self.data_cfg['speakers']
+            if verbose:
+                print('Found {} speakers info'.format(len(self.spk_info)))
+                noisy_wavs = self.data_cfg[split]['data']
+                print('Found {} files in {} split'.format(len(noisy_wavs),
+                                                          split))
+                spks = self.data_cfg[split]['speakers']
+                print('Found {} speakers in {} split'.format(len(spks),
+                                                             split))
+                self.total_wav_dur = int(self.data_cfg[split]['total_wav_dur'])
+                if 'spk2idx' in self.data_cfg and return_spk:
+                    self.spk2idx = self.data_cfg['spk2idx']
+                    print('Loaded spk2idx with {} '
+                          'speakers'.format(len(self.spk2idx)))
+            self.noisy_wavs = noisy_wavs
+
+    def __len__(self):
+        return len(self.noisy_wavs)
+
+    def __getitem__(self, index):
+        # create candidate indices for random other wavs without current index
+        indices = list(range(len(self.noisy_wavs)))
+        indices.remove(index)
+        rindex = random.choice(indices)
+        # sample from the noisies
+        rwname = os.path.join(self.data_root, self.noisy_wavs[rindex]['filename'])
+        rwav, rate = sf.read(rwname)
+        rwav = rwav.astype(np.float32)
+        # Load current clean wav 
+        uttname = self.noisy_wavs[index]['filename']
+        # Santi:
+        # --------------
+        # TODO: Fix this shameful "path replacement" assuming there is a
+        # 'noisy' -> 'clean' valid redirection from the config paths
+        # Clean chunk has to be forwarded first to compute regression outputs
+        # then we can load and chunk the same window on current noisy piece
+        nwname = os.path.join(self.data_root, uttname)
+        cwname = nwname.replace('noisy', 'clean')
+        wav, rate = sf.read(cwname)
+        wav = wav.astype(np.float32)
+        pkg = {'raw': wav, 'raw_rand': rwav,
+               'uttname': uttname, 'split': self.split}
+        # Apply the set of 'target' transforms on the clean data
+        if self.transform is not None:
+            pkg = self.transform(pkg)
+
+        # Load the noisy one and chunk it
+        nwav, rate = sf.read(nwname)
+        nwav = nwav.astype(np.float32)
+        # re-direct the chunk to be cchunk (clean chunk)
+        pkg['cchunk'] = pkg['chunk'].squeeze(0)
+        # make the current noisy chunk
+        chunk_beg = pkg['chunk_beg_i']
+        chunk_end = pkg['chunk_end_i']
+        chunk = nwav[chunk_beg:chunk_end]
+        pkg['chunk'] = torch.FloatTensor(chunk)
+        pkg['raw'] = nwav
+
+        if self.transform is None:
+            # if no transforms happened do not send a package
+            return pkg['chunk'], pkg['raw_rand']
+        else:
+            # otherwise return the full package
+            return pkg
+
 class LibriSpeechSegTupleWavDataset(PairWavDataset):
     """ Return three wavs, one is current wav, another one is
         the continuation of a pre-chunked utterance following the name
@@ -397,6 +507,7 @@ class LibriSpeechSegTupleWavDataset(PairWavDataset):
         else:
             # otherwise return the full package
             return pkg
+
 
 class AmiSegTupleWavDataset(PairWavDataset):
     """ Returns 4 wavs:

@@ -108,6 +108,11 @@ def norm_and_scale(wav):
     return wav * torch.rand(1)
 
 
+def norm_energy(out_signal, in_signal, eps=1e-14):
+    ienergy = np.dot(in_signal, in_signal)
+    oenergy = np.dot(out_signal, out_signal)
+    return np.sqrt(ienergy / (oenergy + eps)) * out_signal
+
 def format_package(x):
     if not isinstance(x, dict):
         return {'raw': x}
@@ -388,12 +393,14 @@ class MIChunkWav(SingleChunkWav):
 
 class LPS(object):
 
-    def __init__(self, n_fft=2048, hop=80,
-                 win=320, der_order=0,
+    def __init__(self, n_fft=2048, hop=160,
+                 win=400, der_order=2,
+                 name='lps',
                  device='cpu'):
         self.n_fft = n_fft
         self.hop = hop
         self.win = win
+        self.name = name
         self.der_order=der_order
         self.device = device
 
@@ -422,7 +429,7 @@ class LPS(object):
                     deltas.append(librosa.feature.delta(X.numpy(),order=n))
                 X=torch.from_numpy(np.concatenate(deltas))
      
-            pkg['lps'] = X
+            pkg[self.name] = X
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -436,15 +443,18 @@ class LPS(object):
 
 class FBanks(object):
 
-    def __init__(self, n_filters=40, n_fft=512, hop=80,
-                 win=320, rate=16000, der_order=0,
+    def __init__(self, n_filters=40, n_fft=512, hop=160,
+                 win=400, rate=16000, der_order=2,
+                 name='fbank',
                  device='cpu'):
         self.n_fft = n_fft
         self.n_filters = n_filters
         self.rate = rate
         self.hop = hop
+        self.name = name
         self.win = win
         self.der_order=der_order
+        self.name = name
 
     # @profile
     def __call__(self, pkg, cached_file=None):
@@ -459,7 +469,7 @@ class FBanks(object):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             X = X[:, beg_i:end_i]
-            pkg['fbank'] = X
+            pkg[self.name] = X
         else:
             winlen = (float(self.win) / self.rate)
             winstep = (float(self.hop) / self.rate)
@@ -479,7 +489,7 @@ class FBanks(object):
                 # pad repeating borders
                 fbank = F.pad(fbank.unsqueeze(0), (0, P), mode='replicate')
                 fbank = fbank.squeeze(0)
-            pkg['fbank'] = fbank
+            pkg[self.name] = fbank
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -494,8 +504,9 @@ class FBanks(object):
 
 class Gammatone(object):
 
-    def __init__(self, f_min=500, n_channels=40, hop=80,
-                 win=320,  der_order=0, rate=16000,
+    def __init__(self, f_min=500, n_channels=40, hop=160,
+                 win=400,  der_order=2, rate=16000,
+                 name='gtn',
                  device='cpu'):
         self.hop = hop
         self.win = win
@@ -503,6 +514,7 @@ class Gammatone(object):
         self.rate = rate
         self.f_min = f_min
         self.der_order = der_order
+        self.name = name
 
     # @profile
     def __call__(self, pkg, cached_file=None):
@@ -517,7 +529,7 @@ class Gammatone(object):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             X = X[:, beg_i:end_i]
-            pkg['gtn'] = X
+            pkg[self.name] = X
         else:
             windowtime = float(self.win) / self.rate
             windowhop = float(self.hop) / self.rate
@@ -542,7 +554,7 @@ class Gammatone(object):
                 gtn = gtn.squeeze(0)
             #pkg['gtn'] = torch.FloatTensor(gtn[:, :total_frames])
 
-            pkg['gtn'] = torch.FloatTensor(gtn)
+            pkg[self.name] = torch.FloatTensor(gtn)
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -557,13 +569,14 @@ class Gammatone(object):
 
 class LPC(object):
 
-    def __init__(self, order=25, hop=80,
-                 win=320, 
+    def __init__(self, order=25, hop=160,
+                 win=320, name='lpc',
                  device='cpu'):
         self.order = order
         self.hop = hop
         self.win = win
         self.window = pysptk.hamming(win).astype(np.float32)
+        self.name = name
 
     def frame_signal(self, signal, window):
         
@@ -593,13 +606,13 @@ class LPC(object):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             X = X[:, beg_i:end_i]
-            pkg['lpc'] = X
+            pkg[self.name] = X
         else:
             wav = self.frame_signal(wav, self.window)
             #print('wav shape: ', wav.shape)
             lpc = pysptk.sptk.lpc(wav, order=self.order)
             #print('lpc: ', lpc.shape)
-            pkg['lpc'] = torch.FloatTensor(lpc)
+            pkg[self.name] = torch.FloatTensor(lpc)
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -613,7 +626,8 @@ class LPC(object):
 class MFCC(object):
 
     def __init__(self, n_fft=2048, hop=160,
-                 order=20, sr=16000, win=400,der_order=0):
+                 order=13, sr=16000, win=400,
+                 der_order=2, name='mfcc'):
         self.hop = hop
         # Santi: the librosa mfcc api does not always
         # accept a window argument, so we enforce n_fft
@@ -623,6 +637,7 @@ class MFCC(object):
         self.order = order
         self.sr = 16000
         self.der_order=der_order
+        self.name = name
 
     # @profile
     def __call__(self, pkg, cached_file=None):
@@ -636,7 +651,7 @@ class MFCC(object):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             mfcc = mfcc[:, beg_i:end_i]
-            pkg['mfcc'] = mfcc
+            pkg[self.name] = mfcc
         else:
             # print(y.dtype)
             mfcc = librosa.feature.mfcc(y, sr=self.sr,
@@ -651,7 +666,7 @@ class MFCC(object):
                     deltas.append(librosa.feature.delta(mfcc,order=n))
                 mfcc=np.concatenate(deltas)
     
-            pkg['mfcc'] = torch.tensor(mfcc.astype(np.float32))
+            pkg[self.name] = torch.tensor(mfcc.astype(np.float32))
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -664,7 +679,8 @@ class MFCC(object):
 class MFCC_librosa(object):
 
     def __init__(self, n_fft=2048, hop=160,
-                 order=20, sr=16000, win=400,der_order=0,n_mels=40,htk=True):
+                 order=13, sr=16000, win=400,der_order=2,n_mels=40,
+                 htk=True, name='mfcc_librosa'):
         self.hop = hop
         # Santi: the librosa mfcc api does not always
         # accept a window argument, so we enforce n_fft
@@ -676,6 +692,7 @@ class MFCC_librosa(object):
         self.der_order=der_order
         self.n_mels=n_mels
         self.htk=True
+        self.name = name
 
     # @profile
     def __call__(self, pkg, cached_file=None):
@@ -689,7 +706,7 @@ class MFCC_librosa(object):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             mfcc = mfcc[:, beg_i:end_i]
-            pkg['mfcc_librosa'] = mfcc
+            pkg[self.name] = mfcc
         else:
             # print(y.dtype)
             mfcc = librosa.feature.mfcc(y, sr=self.sr,
@@ -706,7 +723,7 @@ class MFCC_librosa(object):
                     deltas.append(librosa.feature.delta(mfcc,order=n))
                 mfcc=np.concatenate(deltas)
 
-            pkg['mfcc_librosa'] = torch.tensor(mfcc.astype(np.float32))
+            pkg[self.name] = torch.tensor(mfcc.astype(np.float32))
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -752,7 +769,8 @@ class KaldiFeats(object):
 
 class KaldiMFCC(KaldiFeats):
     def __init__(self, kaldi_root, hop=160, win=400, sr=16000,
-                    num_mel_bins=20, num_ceps=20, der_order=0):
+                    num_mel_bins=40, num_ceps=13, der_order=2,
+                    name='kaldimfcc'):
 
         super(KaldiMFCC, self).__init__(kaldi_root=kaldi_root, 
                                         hop=hop, win=win, sr=sr)
@@ -772,6 +790,7 @@ class KaldiMFCC(KaldiFeats):
                               self.frame_length, self.frame_shift,
                               self.num_mel_bins, self.sr, self.kaldi_root,
                               self.der_order)
+        self.name = name
 
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
@@ -784,14 +803,14 @@ class KaldiMFCC(KaldiFeats):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             mfcc = mfcc[:, beg_i:end_i]
-            pkg['kaldimfcc'] = mfcc
+            pkg[self.name] = mfcc
         else:
             # print(y.dtype)
             mfccs = self.__execute_command__(y, self.cmd)
             assert mfccs is not None, (
                 "Mfccs extraction failed"
             )
-            pkg['kaldimfcc'] = torch.tensor(mfccs[:,:max_frames].astype(np.float32))
+            pkg[self.name] = torch.tensor(mfccs[:,:max_frames].astype(np.float32))
 
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
@@ -804,7 +823,8 @@ class KaldiMFCC(KaldiFeats):
 
 class KaldiPLP(KaldiFeats):
     def __init__(self, kaldi_root, hop=160, win=400, sr=16000,
-                    num_mel_bins=20, num_ceps=20, lpc_order=20):
+                 num_mel_bins=20, num_ceps=20, lpc_order=20,
+                 name='kaldiplp'):
 
         super(KaldiPLP, self).__init__(kaldi_root=kaldi_root, 
                                         hop=hop, win=win, sr=sr)
@@ -823,6 +843,7 @@ class KaldiPLP(KaldiFeats):
         self.cmd = cmd.format(self.kaldi_root, self.num_ceps, self.lpc_order, 
                               self.frame_length, self.frame_shift, 
                               self.num_mel_bins, self.sr)
+        self.name = name
 
     def __call__(self, pkg, cached_file=None):
         pkg = format_package(pkg)
@@ -835,11 +856,11 @@ class KaldiPLP(KaldiFeats):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             plp = plp[:, beg_i:end_i]
-            pkg['kaldiplp'] = plp
+            pkg[self.name] = plp
         else:
             # print(y.dtype)
             feats = self.__execute_command__(y, self.cmd)
-            pkg['kaldiplp'] = torch.tensor(feats[:,:max_frames].astype(np.float32))
+            pkg[self.name] = torch.tensor(feats[:,:max_frames].astype(np.float32))
         
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
@@ -852,13 +873,15 @@ class KaldiPLP(KaldiFeats):
 
 class Prosody(object):
 
-    def __init__(self, hop=80, win=320, f0_min=60, f0_max=300,
-                 sr=16000):
+    def __init__(self, hop=160, win=320, f0_min=60, f0_max=300,der_order=2,
+                 sr=16000, name='prosody'):
         self.hop = hop
         self.win = win
         self.f0_min = f0_min
         self.f0_max = f0_max
         self.sr = sr
+        self.der_order = der_order
+        self.name = name
 
     # @profile
     def __call__(self, pkg, cached_file=None):
@@ -872,7 +895,7 @@ class Prosody(object):
             beg_i = pkg['chunk_beg_i'] // self.hop
             end_i = pkg['chunk_end_i'] // self.hop
             proso = proso[:, beg_i:end_i]
-            pkg['prosody'] = proso
+            pkg[self.name] = proso
         else:
             # first compute logF0 and voiced/unvoiced flag
             # f0 = pysptk.rapt(wav.astype(np.float32),
@@ -910,7 +933,14 @@ class Prosody(object):
             egy = torch.tensor(egy.astype(np.float32))
             egy = egy[:, :max_frames]
             proso = torch.cat((lf0, uv, egy, zcr), dim=0)
-            pkg['prosody'] = proso
+  
+            if self.der_order > 0 :
+                deltas=[proso]
+                for n in range(1,self.der_order+1):
+                    deltas.append(librosa.feature.delta(proso.numpy(),order=n))
+                proso=torch.from_numpy(np.concatenate(deltas))
+
+            pkg[self.name] = proso
         # Overwrite resolution to hop length
         pkg['dec_resolution'] = self.hop
         return pkg
@@ -948,6 +978,8 @@ class Reverb(object):
             IR = np.loadtxt(ir_file)
         elif ir_fmt == 'npy':
             IR = np.load(ir_file)
+        elif ir_fmt == 'wav':
+            IR, _ = sf.read(ir_file)
         else:
             raise TypeError('Unrecognized IR format: ', ir_fmt)
         IR = IR[:self.max_reverb_len]
@@ -1909,6 +1941,178 @@ class Additive(object):
         return self.__class__.__name__ + attrs
 
 
+class Whisperize(object):
+
+    def __init__(self, sr=16000, cache_dir=None, report=False):
+        self.report = report
+        self.sr = 16000
+        self.AHOCODE = 'ahocoder16_64 $infile $f0file $ccfile $fvfile'
+        self.AHODECODE = 'ahodecoder16_64 $f0file $ccfile $fvfile $outfile'
+        self.cache_dir = cache_dir
+
+    def __call__(self, pkg):
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        if 'uttname' in pkg:
+            # look for the uttname in whisper format first
+            wuttname = os.path.basename(pkg['uttname'])
+        if self.cache_dir is not None and \
+                os.path.exists(self.cache_dir) and 'uttname' in pkg:
+            wfpath = os.path.join(self.cache_dir, wuttname)
+            if not os.path.exists(wfpath):
+                raise ValueError('Path {} does not exist'.format(wfpath))
+            # The cached whisper file exists, load it and chunk it
+            # to match pkg boundaries
+            wav, rate = sf.read(wfpath)
+            beg_i = pkg['chunk_beg_i']
+            end_i = pkg['chunk_end_i']
+            L_ = end_i - beg_i
+            if len(wav) < L_:
+                P = L_ - len(wav)
+                wav = np.concatenate((wav, np.zeros((P,))), axis=0)
+            assert end_i - beg_i <= len(wav), len(wav)
+            wav = wav[beg_i:end_i]
+        else:
+            wav = wav.data.numpy().reshape(-1).astype(np.float32)
+            tf = tempfile.NamedTemporaryFile()
+            tfname = tf.name
+            # save wav to file
+            infile = tfname + '.wav'
+            ccfile = tfname + '.cc'
+            f0file = tfname + '.lf0'
+            fvfile = tfname + '.fv'
+            # overwrite infile
+            outfile = infile
+            inwav = np.array(wav).astype(np.float32)
+            # save wav
+            sf.write(infile, wav, self.sr)
+            # encode with vocoder
+            ahocode = self.AHOCODE.replace('$infile', infile)
+            ahocode = ahocode.replace('$f0file', f0file)
+            ahocode = ahocode.replace('$fvfile', fvfile)
+            ahocode = ahocode.replace('$ccfile', ccfile)
+            p = subprocess.Popen(shlex.split(ahocode))
+            p.wait()
+            # read vocoder to know the length
+            lf0 = read_aco_file(f0file, (-1,))
+            nsamples = lf0.shape[0]
+            # Unvoice everything generating -1e10 for logF0 and 
+            # 1e3 for FV params
+            lf0 = -1e10 * np.ones(nsamples)
+            fv = 1e3 * np.ones(nsamples)
+            # Write the unvoiced frames overwriting voiced ones
+            write_aco_file(fvfile, fv)
+            write_aco_file(f0file, lf0)
+            # decode with vododer
+            ahodecode = self.AHODECODE.replace('$f0file', f0file)
+            ahodecode = ahodecode.replace('$ccfile', ccfile)
+            ahodecode = ahodecode.replace('$fvfile', fvfile)
+            ahodecode = ahodecode.replace('$outfile', outfile)
+            p = subprocess.Popen(shlex.split(ahodecode))
+            p.wait()
+            wav, _ = sf.read(outfile)
+            wav = norm_energy(wav.astype(np.float32), inwav)
+            if len(wav) > len(inwav):
+                wav = wav[:len(inwav)]
+            tf.close()
+            os.unlink(infile)
+            os.unlink(ccfile)
+            os.unlink(f0file)
+            os.unlink(fvfile)
+        if self.report:
+            if 'report' not in pkg:
+                pkg['report'] = {}
+            pkg['report']['whisper'] = True
+        pkg['chunk'] = torch.FloatTensor(wav)
+        return pkg
+
+
+    def __repr__(self):
+        attrs = '(cache_dir={})'.format(self.cache_dir)
+        return self.__class__.__name__ + attrs
+
+
+class Codec2(object):
+
+    def __init__(self, kbps=1600, sr=16000, report=False):
+        self.kbps = kbps
+        self.report = report
+        self.sr = sr
+        self.SOX_ENCODE = 'sox $infile -r 8k -b 16 -e signed-integer -c 1 $raw_efile'
+        self.C2_ENCODE = 'c2enc $kbps $raw_efile $c2file'
+        self.C2_DECODE = 'c2dec $kbps $c2file $raw_dfile'
+        self.SOX_DECODE = 'sox -r 8k -b 16 -e signed-integer -c 1 $raw_dfile -r $sr -b 16 -e signed-integer -c 1 $outfile'
+
+    def __call__(self, pkg):
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        wav = wav.data.numpy().reshape(-1).astype(np.float32)
+        tf = tempfile.NamedTemporaryFile()
+        tfname = tf.name
+        # save wav to file
+        infile = tfname + '.wav'
+        raw_efile = tfname + '.raw'
+        c2file = tfname + '.c2'
+        raw_dfile = tfname + '_out.raw'
+        outfile = tfname + '_out.wav'
+        inwav = np.array(wav).astype(np.float32)
+        # save wav
+        sf.write(infile, wav, self.sr)
+        # convert to proper codec 2 input format as raw data with SoX
+        sox_encode = self.SOX_ENCODE.replace('$infile', infile)
+        sox_encode = sox_encode.replace('$raw_efile', raw_efile)
+        p = subprocess.Popen(shlex.split(sox_encode),
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        p.wait()
+        #print(sox_encode)
+        # Encode with Codec 2
+        c2_encode = self.C2_ENCODE.replace('$kbps', str(self.kbps))
+        c2_encode = c2_encode.replace('$raw_efile', raw_efile)
+        c2_encode = c2_encode.replace('$c2file', c2file)
+        #print(c2_encode)
+        p = subprocess.Popen(shlex.split(c2_encode))
+        p.wait()
+        # Decode with Codec 2
+        c2_decode = self.C2_DECODE.replace('$kbps', str(self.kbps))
+        c2_decode = c2_decode.replace('$c2file', c2file)
+        c2_decode = c2_decode.replace('$raw_dfile', raw_dfile)
+        #print(c2_decode)
+        p = subprocess.Popen(shlex.split(c2_decode), 
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        p.wait()
+        # Convert back to <sr> sampling rate wav
+        sox_decode = self.SOX_DECODE.replace('$raw_dfile', raw_dfile)
+        sox_decode = sox_decode.replace('$sr', str(self.sr))
+        sox_decode = sox_decode.replace('$outfile', outfile)
+        #print(sox_decode)
+        p = subprocess.Popen(shlex.split(sox_decode),
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        p.wait()
+        wav, rate = sf.read(outfile)
+        wav = norm_energy(wav.astype(np.float32), inwav)
+        tf.close()
+        os.unlink(infile)
+        os.unlink(raw_efile)
+        os.unlink(c2file)
+        os.unlink(raw_dfile)
+        os.unlink(outfile)
+        if self.report:
+            if 'report' not in pkg:
+                pkg['report'] = {}
+            pkg['report']['kbps'] = self.kbps
+        pkg['chunk'] = torch.FloatTensor(wav)
+        return pkg
+
+    def __repr__(self):
+        attrs = '(kbps={})'.format(
+            self.kbps
+        )
+        return self.__class__.__name__ + attrs
+        
+>>>>>>> d545fb02b322c292418b8e33c52d73513cc93542
 class SpeedChange(object):
 
     def __init__(self, factor_range=(-0.15, 0.15), report=False):
