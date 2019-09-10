@@ -2112,7 +2112,6 @@ class Codec2(object):
         )
         return self.__class__.__name__ + attrs
         
->>>>>>> d545fb02b322c292418b8e33c52d73513cc93542
 class SpeedChange(object):
 
     def __init__(self, factor_range=(-0.15, 0.15), report=False):
