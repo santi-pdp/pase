@@ -5,7 +5,9 @@ from torchvision.transforms import Compose
 from pase.transforms import *
 import argparse
 import pickle
+from train import make_transforms
 import pase
+from pase.utils import *
 
 def build_dataset_providers(opts):
 
@@ -25,6 +27,9 @@ def build_dataset_providers(opts):
         "Provide same number of data_root and dataset arguments"
     )
 
+    minions_cfg = worker_parser(opts.net_cfg)
+    trans, batch_keys = make_transforms(opts.chunk_size, minions_cfg)
+    """
     trans = Compose([
         ToTensor(),
         MIChunkWav(opts.chunk_size),
@@ -41,11 +46,12 @@ def build_dataset_providers(opts):
         #LPC(hop=opts.LPC_hop),
         FBanks(hop=opts.fbanks_hop,win=opts.fbanks_win,der_order=opts.fbanks_der_order),
         MFCC(hop=opts.mfccs_hop,win=opts.mfccs_win,order=opts.mfccs_order,der_order=opts.mfccs_der_order),
-        MFCC_librosa(hop=opts.mfccs_librosa_hop,win=opts.mfccs_librosa_win,order=opts.mfccs_librosa_order,der_order=opts.mfccs_librosa_der_order,n_mels=opts.mfccs_librosa_n_mels,htk=opts.mfccs_librosa_htk),
+        #MFCC_librosa(hop=opts.mfccs_librosa_hop,win=opts.mfccs_librosa_win,order=opts.mfccs_librosa_order,der_order=opts.mfccs_librosa_der_order,n_mels=opts.mfccs_librosa_n_mels,htk=opts.mfccs_librosa_htk),
         #KaldiMFCC(kaldi_root=opts.kaldi_root, hop=opts.kaldimfccs_hop, win=opts.kaldimfccs_win,num_mel_bins=opts.kaldimfccs_num_mel_bins,num_ceps=opts.kaldimfccs_num_ceps,der_order=opts.kaldimfccs_der_order),
         #KaldiPLP(kaldi_root=opts.kaldi_root, hop=opts.kaldiplp_hop, win=opts.kaldiplp_win),
         Prosody(hop=opts.prosody_hop, win=opts.prosody_win, der_order=opts.prosody_der_order)
     ])
+    """
 
     dsets = []
     for idx in range(len(opts.data_root)):
@@ -143,6 +149,7 @@ if __name__ == '__main__':
     parser.add_argument('--mfccs_librosa_der_order', type=int, default=0)
     parser.add_argument('--mfccs_librosa_n_mels', type=int, default=40)
     parser.add_argument('--mfccs_librosa_htk', type=int, default=True)
+    parser.add_argument('--net_cfg', type=str, default=None)
 
     
     parser.add_argument('--ihm2sdm', type=str, default=None,

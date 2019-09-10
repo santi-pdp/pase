@@ -455,6 +455,7 @@ class FBanks(object):
         self.n_filters = n_filters
         self.rate = rate
         self.hop = hop
+        self.name = name
         self.win = win
         self.der_order=der_order
         self.name = name
