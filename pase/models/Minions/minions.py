@@ -12,7 +12,9 @@ def minion_maker(cfg):
     if isinstance(cfg, str):
         with open(cfg, "r") as f:
             cfg = json.load(f)
-
+    print("=" * 50)
+    print("name", cfg["name"])
+    print("=" * 50)
     mtype = cfg.pop('type', 'mlp')
     if mtype == 'mlp':
         minion = MLPMinion(**cfg)
@@ -452,7 +454,8 @@ class MLPMinion(Model):
 
     def __init__(self, num_inputs,
                  num_outputs,
-                 dropout, hidden_size=256,
+                 dropout, dropout_time=0.0,hidden_size=256,
+                 dropin=0.0,
                  hidden_layers=2,
                  context=1,
                  tie_context_weights=False,
@@ -460,8 +463,11 @@ class MLPMinion(Model):
                  loss=None,
                  loss_weight=1.,
                  keys=None,
+                 augment=False,
                  r=1, 
-                 name='MLPMinion'):
+                 name='MLPMinion',
+                 ratio_fixed=None, range_fixed=None, 
+                 dropin_mode='std', drop_channels=False, emb_size=100):
         super().__init__(name=name)
         # Implemented with Conv1d layers to not
         # transpose anything in time, such that
@@ -488,9 +494,15 @@ class MLPMinion(Model):
         for hi in range(hidden_layers):
             self.blocks.append(MLPBlock(ninp,
                                         hidden_size,
-                                        dropout,
+                                        din=dropin,
+                                        dout=dropout,
                                         context=context,
-                                        tie_context_weights=tie_context_weights))
+                                        tie_context_weights=tie_context_weights,
+                                        emb_size=emb_size, 
+                                        dropin_mode=dropin_mode,
+                                        range_fixed=range_fixed,
+                                        ratio_fixed=ratio_fixed,
+                                        drop_channels=drop_channels))
             ninp = hidden_size
             # in case context has been assigned,
             # it is overwritten to 1

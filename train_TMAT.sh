@@ -21,7 +21,7 @@ python -u  train.py --batch_size 24 --epoch 200 --save_path ~/jsalt/models/TMAT_
        --backprop_mode hyper_volume --delta 1.15\
        --lr_mode poly \
        --tensorboard True \
-       --fbanks_der_order 2 --gammatone_der_order 2 --LPS_der_order 2 \
-       --mfccs_order 13 --mfccs_der_order 2
+#       --fbanks_der_order 2 --gammatone_der_order 2 --LPS_der_order 2 \
+#       --mfccs_order 13 --mfccs_der_order 2
 #       --sup_exec ./sup_cmd.txt --sup_freq 10 --log_freq 100
 
