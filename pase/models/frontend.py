@@ -323,8 +323,8 @@ class T_MAT_encoder(Model):
               self.resblocks.append(ResBasicBlock1D(inplanes=fmaps[i], planes=fmaps[i+2], kwidth=1, stride=strides[i] * strides[i+1],norm_layer=nn.BatchNorm1d))
 
       # self.cls_stream = zip(self.GCNNs, self.resblocks)
-      self.regr_conv = nn.Sequential(nn.Conv1d(fmaps[-1], hidden_dim, 1),
-                                    nn.BatchNorm1d(hidden_dim),
+      self.regr_conv = nn.Sequential(nn.Conv1d(hidden_dim, fmaps[-1], 1),
+                                    nn.BatchNorm1d(fmaps[-1]),
                                     nn.CELU())
       self.cls_conv = nn.Sequential(nn.Conv1d(fmaps[-1], hidden_dim, 1),
                                     nn.BatchNorm1d(hidden_dim),
@@ -361,7 +361,7 @@ class T_MAT_encoder(Model):
       if not output_for_representation:
           return format_frontend_output(regr_out, data_fmt, mode), format_frontend_output(cls_out, data_fmt, mode)
       else:
-          return format_frontend_output(regr_out, data_fmt, mode)
+          return format_frontend_output(torch.cat((regr_out, cls_out), dim=1), data_fmt, mode)
 
 
 
