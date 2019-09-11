@@ -300,7 +300,7 @@ class T_MAT_encoder(Model):
 
       self.regr_stream = nn.ModuleList()
       for i in range(len(strides)):
-        self.regr_stream.append(nn.Sequential(nn.Conv1d(fmaps[i], fmaps[i+1], kernel_sizes[i], strides[i], kernel_sizes[i]//2),
+        self.regr_stream.append(nn.Sequential(nn.Conv1d(fmaps[i], fmaps[i+1], kernel_sizes[i], strides[i], kernel_sizes[i]//2, bias=False),
                                                      nn.BatchNorm1d(fmaps[i+1]),
                                                      nn.CELU()))
 

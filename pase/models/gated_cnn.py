@@ -28,10 +28,12 @@ class GatedCNN(Model):
 
         self.conv = nn.ModuleList([nn.Conv1d(out_chs, out_chs, 1) for _ in range(n_layers)])
         self.conv_gate = nn.ModuleList([nn.Conv1d(out_chs, out_chs, 1) for _ in range(n_layers)])
-        self.b = nn.ParameterList([nn.Parameter(torch.randn(out_chs, out_chs, 1)) for _ in range(n_layers)])
-        self.c = nn.ParameterList([nn.Parameter(torch.randn(out_chs, out_chs, 1)) for _ in range(n_layers)])
+        # self.b = nn.ParameterList([nn.Parameter(torch.randn(out_chs, out_chs, 1)) for _ in range(n_layers)])
+        # self.c = nn.ParameterList([nn.Parameter(torch.randn(out_chs, out_chs, 1)) for _ in range(n_layers)])
 
         self.fc = nn.Conv1d(out_chs, out_chs, 1, bias=False)
+
+        self._init_weight()
 
     def forward(self, x):
         # x: (N, seq_len)
@@ -53,7 +55,7 @@ class GatedCNN(Model):
 
         for i, (conv, conv_gate) in enumerate(zip(self.conv, self.conv_gate)):
             A = conv(h) #+ self.b[i].repeat(1, 1, seq_len)
-            B = conv_gate(h) #+ self.c[i].repeat(1, 1, seq_len)
+            B = conv_gate(h) #+ #self.c[i].repeat(1, 1, seq_len)
             h = A * F.sigmoid(B) # (bs, Cout, seq_len)
             if i % self.res_block_count == 0: # size of each residual block
                 h += res_input
@@ -63,6 +65,14 @@ class GatedCNN(Model):
         out = F.log_softmax(out, dim=-1)
 
         return out
+
+    def _init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv1d):
+                torch.nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, nn.BatchNorm1d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
 
 class ResBasicBlock1D(Model):
     """ Adapted from
@@ -88,6 +98,8 @@ class ResBasicBlock1D(Model):
                                bias=False)
         self.bn2 = norm_layer(planes)
 
+        self._init_weight()
+
     def forward(self, x):
         identity = x
 
@@ -100,3 +112,11 @@ class ResBasicBlock1D(Model):
         out += identity
         out = self.relu(out)
         return out
+
+    def _init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv1d):
+                torch.nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, nn.BatchNorm1d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
