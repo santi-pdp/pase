@@ -2,14 +2,16 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 import json
-from .aspp import aspp_resblock
-from .tdnn import TDNN
 from pase.models.WorkerScheduler.encoder import encoder
 import torchvision.models as models
 try:
     from modules import *
+    from aspp import aspp_resblock
+    from tdnn import TDNN
 except ImportError:
     from .modules import *
+    from .aspp import aspp_resblock
+    from .tdnn import TDNN
 
 
 

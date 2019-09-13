@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 from .frontend import *
-from .minions import *
+#from .Minions.minions import *
 import random
 
 class SpectrumLM(nn.Module):
@@ -68,3 +68,38 @@ class SpectrumLM(nn.Module):
             return (h0, c0)
         else:
             return h0
+
+class SpectrogramDecoder(Model):
+
+    def __init__(self, num_inputs, nfft=1024, 
+                 strides=[1, 1, 1],
+                 kwidths=[3, 3, 3],
+                 fmaps=[256, 256, 256],
+                 norm_type=None,
+                 name='SpectrogramDecoder'):
+        super().__init__(name=name)
+        ninp = num_inputs
+        self.dec = nn.ModuleList()
+        for di, (kwidth, stride, fmap) in enumerate(zip(kwidths, strides,
+                                                        fmaps), 
+                                                    start=1):
+            if stride > 1:
+                self.dec.append(GDeconv1DBlock(ninp, fmap, kwidth, stride,
+                                               norm_type=norm_type))
+            else:
+                self.dec.append(GConv1DBlock(ninp, fmap, kwidth, 1,
+                                             norm_type=norm_type))
+            ninp = fmap
+        self.dec.append(nn.Conv1d(ninp, nfft // 2 + 1, 1))
+
+    def forward(self, x):
+        for dec in self.dec: x = dec(x)
+        return x
+
+
+if __name__ == '__main__':
+    spec_dec = SpectrogramDecoder(1024, 1024)
+    x = torch.randn(1, 512, 100)
+    y = spec_dec(x)
+    print(x.shape)
+    print(y.shape)
