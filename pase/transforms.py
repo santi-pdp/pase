@@ -458,6 +458,7 @@ class FBanks(object):
         self.name = name
         self.win = win
         self.der_order=der_order
+        self.name = name
 
     # @profile
     def __call__(self, pkg, cached_file=None):
@@ -981,6 +982,8 @@ class Reverb(object):
             IR = np.loadtxt(ir_file)
         elif ir_fmt == 'npy':
             IR = np.load(ir_file)
+        elif ir_fmt == 'wav':
+            IR, _ = sf.read(ir_file)
         else:
             raise TypeError('Unrecognized IR format: ', ir_fmt)
         IR = IR[:self.max_reverb_len]

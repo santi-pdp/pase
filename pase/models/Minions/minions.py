@@ -462,6 +462,7 @@ class MLPMinion(Model):
                  loss=None,
                  loss_weight=1.,
                  keys=None,
+                 augment=False,
                  r=1, 
                  name='MLPMinion',
                  ratio_fixed=None, range_fixed=None, 
