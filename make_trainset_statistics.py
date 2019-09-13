@@ -67,7 +67,7 @@ def build_dataset_providers(opts):
     else:
         return dsets[0], batch_keys
 
-def extract_stats(opts, collater_keys):
+def extract_stats(opts):
     dset = build_dataset_providers(opts)
     collater_keys = dset[-1]
     dset = dset[:-1]
