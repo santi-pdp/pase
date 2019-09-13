@@ -70,7 +70,7 @@ def build_dataset_providers(opts):
 def extract_stats(opts):
     dset = build_dataset_providers(opts)
     collater_keys = dset[-1]
-    dset = dset[:-1]
+    dset = dset[0]
     collater = DictCollater()
     collater.batching_keys.extend(collater_keys)
     dloader = DataLoader(dset, batch_size = 100,
