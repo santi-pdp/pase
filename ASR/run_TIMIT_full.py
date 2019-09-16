@@ -68,36 +68,36 @@ seed=1234
 batch_size=128
 halving_factor=0.5
 lr=0.024
-left=3
-right=3
+left=2
+right=2
 
-avg_spk=True
+avg_spk=False
 
 
 # Neural network parameters
-#options={}
-#options['dnn_lay']='1024,1973'
-#options['dnn_drop']='0.15,0.0'
-#options['dnn_use_batchnorm']='True,False'
-#options['dnn_use_laynorm']='False,False'
-#options['dnn_use_laynorm_inp']='False'
-#options['dnn_use_batchnorm_inp']='False'
-#options['dnn_act']='relu,softmax'
-
-
 options={}
-options['dnn_lay']='128,1024,1024,1024,1024,1973'
-options['dnn_drop']='0.15,0.15,0.15,0.15,0.15,0.0'
-options['dnn_use_batchnorm']='True,True,True,True,True,False'
-options['dnn_use_laynorm']='False,False,False,False,False,False'
+options['dnn_lay']='2048,1973'
+options['dnn_drop']='0.15,0.0'
+options['dnn_use_batchnorm']='True,False'
+options['dnn_use_laynorm']='False,False'
 options['dnn_use_laynorm_inp']='False'
 options['dnn_use_batchnorm_inp']='False'
-options['dnn_act']='linear,relu,relu,relu,relu,softmax'
+options['dnn_act']='relu,softmax'
+
+
+#options={}
+#options['dnn_lay']='1024,2048,3072,2048,2048,1973'
+#options['dnn_drop']='0.15,0.15,0.15,0.15,0.15,0.0'
+#options['dnn_use_batchnorm']='True,True,True,True,True,False'
+#options['dnn_use_laynorm']='False,False,False,False,False,False'
+#options['dnn_use_laynorm_inp']='False'
+#options['dnn_use_batchnorm_inp']='True'
+#options['dnn_act']='linear,relu,relu,relu,relu,softmax'
 
 
 
-device=get_freer_gpu()
-
+#device=get_freer_gpu()
+device = "cuda:0"
 
 # folder creation
 text_file=open(output_file, "w")
@@ -270,8 +270,12 @@ fea_conc_dev=np.concatenate(fea_lst_dev)
 fea_conc_dev=context_window(fea_conc_dev,left,right)
 
 # feature normalization
-fea_conc=(fea_conc-np.mean(fea_conc,axis=0))/np.std(fea_conc,axis=0)
-fea_conc_dev=(fea_conc_dev-np.mean(fea_conc_dev,axis=0))/np.std(fea_conc_dev,axis=0)
+fea_conc -= -np.mean(fea_conc,axis=0)
+fea_conc /= np.std(fea_conc,axis=0) 
+#fea_conc=(fea_conc-np.mean(fea_conc,axis=0))/np.std(fea_conc,axis=0)
+fea_conc_dev -= -np.mean(fea_conc_dev,axis=0)
+fea_conc_dev /= np.std(fea_conc_dev,axis=0)
+#fea_conc_dev=(fea_conc_dev-np.mean(fea_conc_dev,axis=0))/np.std(fea_conc_dev,axis=0)
 
 
 # lab matrix
@@ -293,6 +297,12 @@ lab_conc_dev=lab_conc_dev-lab_conc_dev.min()
 # dataset composition
 dataset=np.concatenate([fea_conc,lab_conc.reshape(-1,1)],axis=1)
 dataset_dev=np.concatenate([fea_conc_dev,lab_conc_dev.reshape(-1,1)],axis=1)
+
+# free mem
+del fea_conc
+del fea_conc_dev
+del lab_conc
+del lab_conc_dev
 
 # shuffling
 np.random.shuffle(dataset)
@@ -325,8 +335,8 @@ for ep in range(N_epochs):
     nnet.train()
     
     # random shuffling
-    shuffle_index=torch.randperm(dataset.shape[0])
-    dataset=dataset[shuffle_index]
+#    shuffle_index=torch.randperm(dataset.shape[0])
+#    dataset=dataset[shuffle_index]
     
     for batch_id in range(N_batches):
         

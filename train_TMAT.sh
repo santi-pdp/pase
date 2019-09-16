@@ -1,24 +1,36 @@
 #!/bin/bash
-#SBATCH -J aspp
-#SBATCH -o log/aspp_32000
-#SBATCH --mem=32GB
-#SBATCH -t 5-00:00:00
+#SBATCH -J TMAT_hyper
+#SBATCH -o log/TMAT_hyper
+#SBATCH --mem=64GB
+#SBATCH -t 12:00:00
 #SBATCH -n 1
-#SBATCH -c 8
+#SBATCH -c 12
 #SBATCH -p gpu
-#SBATCH --gres=gpu -C K80
+#SBATCH --gres=gpu -C V100
 
 nvidia-smi
 
-python -u  train.py --batch_size 24 --epoch 200 --save_path ~/jsalt/models/TMAT_modified \
-       --num_workers 6 --warmup 10000000 --net_cfg cfg/workers5reg_r3.cfg \
-       --fe_cfg cfg/PASE_TMAT.cfg --do_eval --data_cfg data/LibriSpeech_50h/LibriSpeech_50h/librispeech_data_50h.cfg \
-       --min_lr 0.0005 --fe_lr 0.0005 --data_root data/LibriSpeech_50h/LibriSpeech_50h/wav_sel \
+#module load cuda anaconda
+
+echo "copying data from /scratch":
+
+#cp -r /scratch/jzhong9/data/LibriSpeech_50h /tmp
+
+echo "done!"
+
+source activate myenv
+
+conda info -e
+
+python -u  train.py --batch_size 32 --epoch 200 --save_path /scratch/jzhong9/models/TMAT_V100_best_MAT_deeper \
+       --num_workers 12 --warmup 10000000 --net_cfg cfg/workers_best_matconv.cfg \
+       --fe_cfg cfg/PASE_TMAT.cfg --do_eval --data_cfg data/librispeech_data_50h.cfg \
+       --min_lr 0.0005 --fe_lr 0.0005 --data_root /scratch/jzhong9/data/LibriSpeech_50h/wav_sel \
        --dtrans_cfg cfg/distortions/half.cfg \
-       --stats data/librispeech_50h_stats_libri_allder2.pkl \
+       --stats data/libri_bestder2_jianyuan.pkl \
        --chunk_size 32000 \
        --random_scale True \
-       --backprop_mode hyper_volume --delta 1.15\
+       --backprop_mode hyper_volume --delta 1.15 \
        --lr_mode poly \
        --tensorboard True \
 #       --fbanks_der_order 2 --gammatone_der_order 2 --LPS_der_order 2 \
