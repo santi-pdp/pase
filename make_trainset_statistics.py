@@ -63,14 +63,18 @@ def build_dataset_providers(opts):
         dsets.append(dset)
 
     if len(dsets) > 1:
-        return MetaWavConcatDataset(dsets)
+        return MetaWavConcatDataset(dsets), batch_keys
     else:
-        return dsets[0]
+        return dsets[0], batch_keys
 
 def extract_stats(opts):
     dset = build_dataset_providers(opts)
+    collater_keys = dset[-1]
+    dset = dset[0]
+    collater = DictCollater()
+    collater.batching_keys.extend(collater_keys)
     dloader = DataLoader(dset, batch_size = 100,
-                         shuffle=True, collate_fn=DictCollater(),
+                         shuffle=True, collate_fn=collater,
                          num_workers=opts.num_workers)
     # Compute estimation of bpe. As we sample chunks randomly, we
     # should say that an epoch happened after seeing at least as many
