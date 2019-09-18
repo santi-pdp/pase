@@ -25,13 +25,13 @@ import os
 
 def get_freer_gpu(trials=10):
     for j in range(trials):
-         f = os.popen('nvidia-smi -q -d Memory |grep -A4 GPU|grep Free')
-         memory_available = [int(x.split()[2]) for x in f.readlines()]
-         dev_ = torch.device('cuda:'+str(np.argmax(memory_available)))
-         try:
+        f = os.popen('nvidia-smi -q -d Memory |grep -A4 GPU|grep Free')
+        memory_available = [int(x.split()[2]) for x in f.readlines()]
+        dev_ = torch.device('cuda:'+str(np.argmax(memory_available)))
+        try:
             a = torch.rand(1).cuda(dev_)
             return dev_
-         except: 
+        except:
             pass
             print('NO GPU AVAILABLE!!!')
             exit(1)
