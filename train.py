@@ -45,10 +45,10 @@ def make_transforms(chunk_size, workers_cfg, random_scale=False,
         for minion in minions_cfg:
             if 'mi' in minion['name']:
                 mi = True
-        if mi:
-            trans.append(MIChunkWav(chunk_size, random_scale=random_scale))
-        else:
-            trans.append(SingleChunkWav(chunk_size, random_scale=random_scale))
+    if mi:
+        trans.append(MIChunkWav(chunk_size, random_scale=random_scale))
+    else:
+        trans.append(SingleChunkWav(chunk_size, random_scale=random_scale))
 
     collater_keys = []
     znorm = False
