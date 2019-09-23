@@ -2,7 +2,7 @@ from ..Minions.minions import *
 from ..Minions.cls_minions import *
 from .encoder import encoder
 from .lr_scheduler import LR_Scheduler
-from ..pase import pase, pase_attention, pase_chunking
+from ..pase import pase, pase_attention
 from .worker_scheduler import backprop_scheduler
 from ...utils import AuxiliarSuperviser, get_grad_norms
 from .radam import *

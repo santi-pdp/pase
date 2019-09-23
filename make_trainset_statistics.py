@@ -138,7 +138,6 @@ if __name__ == '__main__':
     parser.add_argument('--mfccs_der_order', type=int, default=0)
     parser.add_argument('--prosody_hop', type=int, default=160)
     parser.add_argument('--prosody_win', type=int, default=400)
-    parser.add_argument('--prosody_der_order', type=int, default=0)
     parser.add_argument('--kaldimfccs_hop', type=int, default=160)
     parser.add_argument('--kaldimfccs_win', type=int, default=400)
     parser.add_argument('--kaldimfccs_der_order', type=int, default=0)

@@ -424,6 +424,7 @@ class DecoderMinion(Model):
         # The following part of the code drops out some time steps, but the worker should reconstruct all of them (i.e, the original signal)
         # This way we encourage learning features with a larger contextual information
         if self.dropout_time > 0:
+            self.dropout_time=1.0
             mask=(torch.FloatTensor(x.shape[0],x.shape[2]).to('cuda').uniform_() > self.dropout_time).float().unsqueeze(1)
             x=x*mask
 
@@ -476,7 +477,6 @@ class MLPMinion(Model):
         self.context = context
         self.tie_context_weights = tie_context_weights
         self.dropout = dropout
-        self.dropout_time = dropout_time
         self.skip = skip
         self.hidden_size = hidden_size
         self.hidden_layers = hidden_layers
@@ -513,11 +513,6 @@ class MLPMinion(Model):
 
     def forward(self, x, alpha=1, device=None):
         self.sg.apply(x, alpha)
-        
-        if self.dropout_time > 0 and self.context > 1:
-            mask=(torch.FloatTensor(x.shape[0],x.shape[2]).to('cuda').uniform_() > self.dropout_time).float().unsqueeze(1)
-            x=x*mask
-
         h = x
         for bi, block in enumerate(self.blocks, start=1):
             h = block(h)

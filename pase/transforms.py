@@ -2,11 +2,8 @@ import torch
 import torch.nn.functional as F
 import tqdm
 import gammatone
-import tempfile
 from gammatone.gtgram import gtgram
 import numpy as np
-import subprocess
-import shlex
 import random
 import pysptk
 import os
@@ -24,7 +21,6 @@ from scipy.signal import lfilter
 from scipy.interpolate import interp1d
 from torchvision.transforms import Compose
 from ahoproc_tools.interpolate import interpolation
-from ahoproc_tools.io import *
 
 try:
     import kaldi_io as kio
@@ -1943,6 +1939,7 @@ class Additive(object):
             self.do_IRS
         )
         return self.__class__.__name__ + attrs
+
 
 class Whisperize(object):
 
