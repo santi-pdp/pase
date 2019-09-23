@@ -141,6 +141,7 @@ class pase(Model):
         # init frontend
         print("pase config ==>", frontend_cfg)
         self.frontend = wf_builder(frontend_cfg)
+        self.frontend_name = frontend_cfg["name"]
 
 
         # init all workers
@@ -200,8 +201,8 @@ class pase(Model):
             # remove key if it exists
             x_.pop('cchunk', None)
         h = self.frontend(x_, device)
-        T_MAT = False
-        if isinstance(h[0], tuple):
+        T_MAT = (self.frontend_name == "T-MAT")
+        if T_MAT:
             T_MAT = True
             regr_h, cls_h = h
             regr_hidden, regr_chunk = regr_h

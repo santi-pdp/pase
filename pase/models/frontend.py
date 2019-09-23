@@ -378,7 +378,7 @@ class T_MAT_encoder(Model):
 
 class aspp_res_encoder(Model):
 
-    def __init__(self, sinc_out, hidden_dim, kernel_sizes=[11, 11, 11, 11], sinc_kernel=251, sinc_stride=1,strides=[10, 4, 2, 2], dilations=[1, 6, 12, 18], fmaps=48, name='aspp_encoder', pool2d=False, rnn_pool=False, rnn_add=False, concat=[False, False, False, True], dense=False):
+    def __init__(self, sinc_out, hidden_dim, kernel_sizes=[11, 11, 11, 11], sinc_kernel=251, sinc_stride=1,strides=[10, 4, 2, 2], dilations=[1, 6, 12, 18], fmaps=48, name='aspp_encoder', pool2d=False, rnn_pool=False, rnn_layers=1,rnn_add=False, concat=[False, False, False, True], dense=False):
         super().__init__(name=name)
         self.sinc = SincConv_fast(1, sinc_out, sinc_kernel,
                                   sample_rate=16000,
@@ -404,7 +404,7 @@ class aspp_res_encoder(Model):
 
         if rnn_pool:
             self.rnn = build_rnn_block(hidden_dim, hidden_dim // 2,
-                                       rnn_layers=1,
+                                       rnn_layers=rnn_layers,
                                        rnn_type='qrnn',
                                        bidirectional=True,
                                        dropout=0)
@@ -441,6 +441,7 @@ class aspp_res_encoder(Model):
             rnn_out = out.transpose(1, 2).transpose(0, 1)
             rnn_out, _ = self.rnn(rnn_out)
             rnn_out = rnn_out.transpose(0, 1).transpose(1, 2)
+            rnn_out = self.W(rnn_out)
 
         if self.rnn_pool and self.rnn_add:
             h = out + rnn_out
