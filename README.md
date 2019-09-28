@@ -4,6 +4,14 @@ This repository is the official implementation of [PASE](https://arxiv.org/abs/1
 
 ![SimplePASE](https://user-images.githubusercontent.com/7583502/55691535-5ad39a80-599f-11e9-81aa-4ea5ad949d09.png)
 
+## Requirements
+
+* PyTorch 1.0 or higher
+* Torchvision 0.2 or higher
+* Install the requirements from `requirements.txt`: `pip install -r requirements.txt`
+
+*NOTE: Edit the cupy-cuda100 requirement in the file if needed depending on your CUDA version. Defaults to 10.0 now*
+
 ## Pre-trained Model
 
 The PASE parameters used in the published work can be found <a href='http://veu.talp.cat/models/PASE.ckpt'>here</a>. This `ckpt` file
