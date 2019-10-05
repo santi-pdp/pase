@@ -20,7 +20,7 @@ from scipy import interpolate
 from scipy import signal
 from scipy.signal import decimate
 from scipy.io import loadmat
-from scipy.signal import lfilter
+from scipy.signal import lfilter, resample
 from scipy.interpolate import interp1d
 from torchvision.transforms import Compose
 from ahoproc_tools.interpolate import interpolation
@@ -61,34 +61,46 @@ def config_distortions(reverb_irfiles=[],
                        chop_factors=[],
                        #chop_factors=[(0.05, 0.025), (0.1, 0.05)], 
                        max_chops=5,
-                       chop_p=0.5):
+                       chop_p=0.5,
+                       codec2_p=0.3):
     trans = []
     probs = []
     # this can be shared in two different stages of the pipeline
     reverb = Reverb(reverb_irfiles, ir_fmt=reverb_fmt,
                     data_root=reverb_data_root)
+
     if reverb_p > 0. and len(reverb_irfiles) > 0:
         trans.append(reverb)
         probs.append(reverb_p)
+
     if overlap_p > 0. and overlap_dir is not None:
         noise_trans = reverb if overlap_reverb else None
         trans.append(SimpleAdditiveShift(overlap_dir, overlap_snrs,
                                          noises_list=overlap_list,
                                          noise_transform=noise_trans))
         probs.append(overlap_p)
+
     if noises_p > 0. and noises_dir is not None:
         trans.append(SimpleAdditive(noises_dir, noises_snrs))
         probs.append(noises_p)
+
     if speed_p > 0. and speed_range is not None:
         # speed changer
         trans.append(SpeedChange(speed_range))
         probs.append(speed_p)
+
     if resample_p > 0. and len(resample_factors) > 0:
         trans.append(Resample(resample_factors))
         probs.append(resample_p)
+
     if clip_p > 0. and len(clip_factors) > 0:
         trans.append(Clipping(clip_factors))
         probs.append(clip_p)
+
+    if codec2_p > 0.:
+        trans.append(Codec2Buffer())
+        probs.append(codec2_p)
+
     if chop_p > 0. and len(chop_factors) > 0:
         trans.append(Chopper(max_chops=max_chops,
                              chop_factors=chop_factors))
@@ -256,9 +268,11 @@ class CachedCompose(Compose):
 
 class SingleChunkWav(object):
 
-    def __init__(self, chunk_size, random_scale=True):
+    def __init__(self, chunk_size, random_scale=True,
+                 pad_mode='reflect'):
         self.chunk_size = chunk_size
         self.random_scale = random_scale
+        self.pad_mode = pad_mode
 
     def assert_format(self, x):
         # assert it is a waveform and pytorch tensor
@@ -272,10 +286,11 @@ class SingleChunkWav(object):
         if len(wav) <= chksz:
             # padding time
             P = chksz - len(wav)
-            if P < len(wav):
-                chk = F.pad(wav.view(1, 1, -1), (0, P), mode='reflect').view(-1)
-            else:
-                chk = F.pad(wav.view(1, 1, -1), (0, P), mode='replicate').view(-1)
+            #if P < len(wav):
+            chk = F.pad(wav.view(1, 1, -1), (0, P), 
+                        mode=self.pad_mode).view(-1)
+            #else:
+            #    chk = F.pad(wav.view(1, 1, -1), (0, P), mode='replicate').view(-1)
             idx = 0
         elif reuse_bounds is not None:
             idx, end_i = reuse_bounds
@@ -2035,6 +2050,61 @@ class Whisperize(object):
         return self.__class__.__name__ + attrs
 
 
+class Codec2Buffer(object):
+
+    def __init__(self, kbps=1600, sr=16000, report=False):
+        import pycodec2
+        self.report = report
+        self.kbps = kbps
+        self.sr = sr
+        self.c2 = pycodec2.Codec2(kbps)
+        self.INT16_BYTE_SIZE = 2
+        self.FRAME_SIZE = self.c2.samples_per_frame()
+        #self.PACKET_SIZE = self.c2.samples_per_frame() * self.INT16_BYTE_SIZE
+        #self.STRUCT_FORMAT = '{}h'.format(self.c2.samples_per_frame())
+
+    def __call__(self, pkg):
+        pkg = format_package(pkg)
+        wav = pkg['chunk']
+        re_factor = self.sr // 8000
+        wav = wav.data.numpy().reshape(-1).astype(np.float32)
+        inwav = wav
+        wav = resample(wav, len(wav) // re_factor)
+        wav = np.array(wav * (2 ** 15), dtype=np.int16)
+        owav = []
+        T = len(wav)
+        for t in range(0, T, self.FRAME_SIZE):
+            frame = wav[t:t + self.FRAME_SIZE]
+            fT = len(frame)
+            if len(frame) < self.FRAME_SIZE:
+                # zero-pad
+                P_ = self.FRAME_SIZE - len(frame)
+                frame = np.concatenate((frame,
+                                        np.zeros((P_,), dtype=np.int16)),
+                                       axis=0)
+            encoded = self.c2.encode(frame)
+            decoded = self.c2.decode(encoded)
+            decoded = decoded[:fT]
+            owav.extend(decoded.tolist())
+        owav = np.array(owav, dtype=np.int16)
+        # resample up to original srate
+        owav = resample(owav, len(owav) * re_factor)
+        owav = np.array(owav / (2 ** 15), dtype=np.float32)
+        owav = norm_energy(owav, inwav)
+        if self.report:
+            if 'report' not in pkg:
+                pkg['report'] = {}
+            pkg['report']['kbps'] = self.kbps
+        pkg['chunk'] = torch.FloatTensor(owav)
+        return pkg
+
+    def __repr__(self):
+        attrs = '(kbps={})'.format(
+            self.kbps
+        )
+        return self.__class__.__name__ + attrs
+
+
 class Codec2(object):
 
     def __init__(self, kbps=1600, sr=16000, report=False):
@@ -2161,6 +2231,7 @@ class SpeedChange(object):
         return self.__class__.__name__ + attrs
 
 if __name__ == '__main__':
+    """
     lpc = Gammatone(n_channels=40, f_min=100)
     wav, size = sf.read('test.wav')
     wav = wav[:32000]
@@ -2178,3 +2249,11 @@ if __name__ == '__main__':
     plt.plot(wav)
     plt.tight_layout()
     plt.savefig('gtn.png', dpi=200)
+    """
+    codec = Codec2Buffer()
+    wav, size = sf.read('test.wav')
+    buffer_c2 = codec({'chunk':torch.tensor(wav)})['chunk']
+    sf.write('/tmp/buffer_test.wav', buffer_c2, 16000)
+    codec = Codec2()
+    file_c2 = codec({'chunk':torch.tensor(wav)})['chunk']
+    sf.write('/tmp/file_test.wav', file_c2, 16000)
