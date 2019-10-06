@@ -10,7 +10,7 @@ import shlex
 import random
 import pysptk
 import os
-from python_speech_features import logfbank
+#from python_speech_features import logfbank
 import librosa
 import struct
 import glob
@@ -20,22 +20,30 @@ from scipy import interpolate
 from scipy import signal
 from scipy.signal import decimate
 from scipy.io import loadmat
+import multiprocessing as mp
 from scipy.signal import lfilter, resample
 from scipy.interpolate import interp1d
 from torchvision.transforms import Compose
 from ahoproc_tools.interpolate import interpolation
 from ahoproc_tools.io import *
+from joblib import Parallel, delayed
+try:
+    from .codec2_utils import *
+except ImportError:
+    from codec2_utils import *
 
 try:
     import kaldi_io as kio
 except ImportError:
     print ('kaldi_io is optional, but required when extracting feats with kaldi')
 
+
 # Make a configurator for the distortions
 def config_distortions(reverb_irfiles=[], 
                        reverb_fmt='imp',
                        reverb_data_root='.',
                        reverb_p=0.5,
+                       reverb_cache=False,
                        overlap_dir=None,
                        overlap_list=None,
                        overlap_snrs=[0, 5, 10],
@@ -44,6 +52,7 @@ def config_distortions(reverb_irfiles=[],
                        noises_dir=None,
                        noises_snrs=[0, 5, 10],
                        noises_p=0.5,
+                       noises_cache=False,
                        speed_range=None,
                        speed_p=0.5,
                        resample_factors=[],
@@ -62,12 +71,20 @@ def config_distortions(reverb_irfiles=[],
                        #chop_factors=[(0.05, 0.025), (0.1, 0.05)], 
                        max_chops=5,
                        chop_p=0.5,
-                       codec2_p=0.3):
+                       codec2_p=0.3,
+                       codec2_cachedir=None,
+                       codec2_cache=False):
     trans = []
     probs = []
-    # this can be shared in two different stages of the pipeline
+    # first of all, in case we have cached codec2 data
+    if codec2_p > 0. and codec2_cachedir is not None:
+        trans.append(Codec2Cached(cache_dir=codec2_cachedir,
+                                  cache=codec2_cache))
+        probs.append(codec2_p)
+    # Reverb can be shared in two different stages of the pipeline
     reverb = Reverb(reverb_irfiles, ir_fmt=reverb_fmt,
-                    data_root=reverb_data_root)
+                    data_root=reverb_data_root,
+                    cache=reverb_cache)
 
     if reverb_p > 0. and len(reverb_irfiles) > 0:
         trans.append(reverb)
@@ -81,7 +98,8 @@ def config_distortions(reverb_irfiles=[],
         probs.append(overlap_p)
 
     if noises_p > 0. and noises_dir is not None:
-        trans.append(SimpleAdditive(noises_dir, noises_snrs))
+        trans.append(SimpleAdditive(noises_dir, noises_snrs, 
+                                    cache=noises_cache))
         probs.append(noises_p)
 
     if speed_p > 0. and speed_range is not None:
@@ -97,7 +115,8 @@ def config_distortions(reverb_irfiles=[],
         trans.append(Clipping(clip_factors))
         probs.append(clip_p)
 
-    if codec2_p > 0.:
+    if codec2_p > 0. and codec2_cachedir is None:
+        # codec2 from memory (SLOW)
         trans.append(Codec2Buffer())
         probs.append(codec2_p)
 
@@ -190,7 +209,7 @@ class PCompose(object):
                 '{} != {}'.format(len(transforms),
                                   len(probs))
 
-    ##@profile
+    #@profile
     def __call__(self, tensor):
         x = tensor
         reports = []
@@ -279,7 +298,7 @@ class SingleChunkWav(object):
         assert isinstance(x, torch.Tensor), type(x)
         # assert x.dim() == 1, x.size()
 
-    ##@profile
+    #@profile
     def select_chunk(self, wav, ret_bounds=False, reuse_bounds=None):
         # select random index
         chksz = self.chunk_size
@@ -976,6 +995,7 @@ class Reverb(object):
 
     def __init__(self, ir_files, report=False, ir_fmt='mat',
                  max_reverb_len=24000,
+                 cache=False,
                  data_root='.'):
         self.ir_files = ir_files
         assert isinstance(ir_files, list), type(ir_files)
@@ -986,26 +1006,35 @@ class Reverb(object):
         self.report = report
         self.data_root = data_root
         self.max_reverb_len = max_reverb_len
+        if cache:
+            self.cache = {}
+            for ir_file in self.ir_files:
+                self.load_IR(ir_file, ir_fmt)
 
     def load_IR(self, ir_file, ir_fmt):
         ir_file = os.path.join(self.data_root, ir_file)
         # print('loading ir_file: ', ir_file)
-        if ir_fmt == 'mat':
-            IR = loadmat(ir_file, squeeze_me=True, struct_as_record=False)
-            IR = IR['risp_imp']
-        elif ir_fmt == 'imp' or ir_fmt == 'txt':
-            IR = np.loadtxt(ir_file)
-        elif ir_fmt == 'npy':
-            IR = np.load(ir_file)
-        elif ir_fmt == 'wav':
-            IR, _ = sf.read(ir_file)
+        if hasattr(self, 'cache') and ir_file in self.cache:
+            return self.cache[ir_file]
         else:
-            raise TypeError('Unrecognized IR format: ', ir_fmt)
-        IR = IR[:self.max_reverb_len]
-        if np.max(IR)>0:
-            IR = IR / np.abs(np.max(IR))
-        p_max = np.argmax(np.abs(IR))
-        return IR, p_max
+            if ir_fmt == 'mat':
+                IR = loadmat(ir_file, squeeze_me=True, struct_as_record=False)
+                IR = IR['risp_imp']
+            elif ir_fmt == 'imp' or ir_fmt == 'txt':
+                IR = np.loadtxt(ir_file)
+            elif ir_fmt == 'npy':
+                IR = np.load(ir_file)
+            elif ir_fmt == 'wav':
+                IR, _ = sf.read(ir_file)
+            else:
+                raise TypeError('Unrecognized IR format: ', ir_fmt)
+            IR = IR[:self.max_reverb_len]
+            if np.max(IR)>0:
+                IR = IR / np.abs(np.max(IR))
+            p_max = np.argmax(np.abs(IR))
+            if hasattr(self, 'cache'):
+                self.cache[ir_file] = (IR, p_max)
+            return IR, p_max
 
     def shift(self, xs, n):
         e = np.empty_like(xs)
@@ -1304,7 +1333,6 @@ class SimpleChopper(object):
         chopped_wav = np.copy(wav)
         return None
 
-    # @profile
     def __call__(self, pkg, srate=16000):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -1415,7 +1443,7 @@ class Chopper(object):
             chopped_wav[chop_beg:chop_end] = 0
         return chopped_wav
 
-    # @profile
+    #@profile
     def __call__(self, pkg, srate=16000):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -1452,6 +1480,7 @@ class Clipping(object):
         self.clip_factors = clip_factors
         self.report = report
 
+    #@profile
     def __call__(self, pkg):
         pkg = format_package(pkg)
         wav = pkg['chunk']
@@ -1509,6 +1538,7 @@ class Resample(object):
 class SimpleAdditive(object):
 
     def __init__(self, noises_dir, snr_levels=[0, 5, 10],
+                 cache=False,
                  report=False):
         self.noises_dir = noises_dir
         self.snr_levels = snr_levels
@@ -1526,6 +1556,10 @@ class SimpleAdditive(object):
         else:
             print('[*] Found {} noise files'.format(len(self.noises)))
         self.eps = 1e-22
+        if cache:
+            self.cache = {}
+            for noise in self.noises:
+                self.load_noise(noise)
 
     def sample_noise(self):
         if len(self.noises) == 1:
@@ -1536,7 +1570,12 @@ class SimpleAdditive(object):
             return self.noises[idx]
 
     def load_noise(self, filename):
-        nwav, rate = sf.read(filename)
+        if hasattr(self, 'cache') and filename in self.cache:
+            return self.cache[filename]
+        else:
+            nwav, rate = sf.read(filename)
+            if hasattr(self, 'cache'):
+                self.cache[filename] = nwav
         return nwav
 
     def compute_SNR_K(self, signal, noise, snr):
@@ -1552,7 +1591,7 @@ class SimpleAdditive(object):
         oenergy = np.dot(osignal, osignal)
         return np.sqrt(ienergy / (oenergy + eps)) * osignal
 
-    # @profile
+    #@profile
     def __call__(self, pkg):
         """ Add noise to clean wav """
         pkg = format_package(pkg)
@@ -2050,6 +2089,7 @@ class Whisperize(object):
         return self.__class__.__name__ + attrs
 
 
+
 class Codec2Buffer(object):
 
     def __init__(self, kbps=1600, sr=16000, report=False):
@@ -2063,43 +2103,112 @@ class Codec2Buffer(object):
         #self.PACKET_SIZE = self.c2.samples_per_frame() * self.INT16_BYTE_SIZE
         #self.STRUCT_FORMAT = '{}h'.format(self.c2.samples_per_frame())
 
+    #@profile
     def __call__(self, pkg):
         pkg = format_package(pkg)
         wav = pkg['chunk']
+        tensor_wav = wav
         re_factor = self.sr // 8000
         wav = wav.data.numpy().reshape(-1).astype(np.float32)
         inwav = wav
-        wav = resample(wav, len(wav) // re_factor)
+        #wav = resample(wav, len(wav) // re_factor)
+        #wav = librosa.core.resample(wav, self.sr, 8000,
+        #                            res_type='kaiser_fast')
+        wav = decimate(wav, self.sr // 8000)
         wav = np.array(wav * (2 ** 15), dtype=np.int16)
+        total_frames = int(np.ceil(len(wav) / self.FRAME_SIZE))
+        P_ = total_frames * self.FRAME_SIZE - len(wav)
+        orilen = len(wav)
+        if P_ > 0:
+            wav = np.concatenate((wav, 
+                                  np.zeros((P_,), dtype=np.int16)),
+                                 axis=0)
+        #encoded = self.c2.encode(wav)
+        #decoded = self.c2.decode(encoded)
+        #owav = decoded
         owav = []
         T = len(wav)
+        data = [(wav[t:t + self.FRAME_SIZE], self.c2) for t in range(0, T,
+                                                            self.FRAME_SIZE)]
+        for frame in data:
+            owav.extend(codec2_helper(frame).tolist())
+        """
         for t in range(0, T, self.FRAME_SIZE):
             frame = wav[t:t + self.FRAME_SIZE]
-            fT = len(frame)
-            if len(frame) < self.FRAME_SIZE:
-                # zero-pad
-                P_ = self.FRAME_SIZE - len(frame)
-                frame = np.concatenate((frame,
-                                        np.zeros((P_,), dtype=np.int16)),
-                                       axis=0)
             encoded = self.c2.encode(frame)
             decoded = self.c2.decode(encoded)
-            decoded = decoded[:fT]
             owav.extend(decoded.tolist())
+        """
         owav = np.array(owav, dtype=np.int16)
+        owav = owav[:orilen]
+        #owav = np.array(owav, dtype=np.float32) / (2 ** 15)
         # resample up to original srate
         owav = resample(owav, len(owav) * re_factor)
-        owav = np.array(owav / (2 ** 15), dtype=np.float32)
+        #owav = librosa.core.resample(owav, 8000, self.sr, res_type='kaiser_fast')
+        owav = owav.astype(np.float32) / (2 ** 15)
+        #owav = owav / (2 ** 15)
         owav = norm_energy(owav, inwav)
         if self.report:
             if 'report' not in pkg:
                 pkg['report'] = {}
             pkg['report']['kbps'] = self.kbps
-        pkg['chunk'] = torch.FloatTensor(owav)
+        #tensor_wav.data = torch.from_numpy(owav)
+        pkg['chunk'] = torch.from_numpy(owav)
         return pkg
 
     def __repr__(self):
         attrs = '(kbps={})'.format(
+            self.kbps
+        )
+        return self.__class__.__name__ + attrs
+
+class Codec2Cached(object):
+
+    def __init__(self, cache_path, kbps=1600, cache=False):
+        self.kbps = kbps
+        self.cache_path = cache_path
+        self.do_cache = cache
+        if cache:
+            self.cache = {}
+            wavs = glob.glob(os.path.join(self.cache_path, '*.wav'))
+            for wav in wavs:
+                self.load_file(os.path.basename(wav))
+            
+
+    def load_file(self, path):
+        if not os.path.exist(uttpath):
+            raise FileNotFoundError('Could not find the file {}'
+                                    ' in the codec2cache path {}'
+                                    ''.format(uttname, self.cache_path))
+        if hasattr(self, 'cache') and path in cache:
+            return self.cache[path]
+        else:
+            x, rate = sf.read(path)
+            if hasattr(self, 'cache'):
+                self.cache[path] = x
+            return x
+
+    def __call__(self, pkg):
+        pkg = format_package(pkg)
+        # take input ref for energy normalization
+        inwav = pkg['chunk']
+        uttname = os.path.basename(pkg['uttname'])
+        uttpath = os.path.join(self.cache_path,
+                               uttname)
+        owav = self.load_file(uttpath)
+        owav = norm_energy(owav, inwav)
+        if self.report:
+            if 'report' not in pkg:
+                pkg['report'] = {}
+            pkg['report']['kbps'] = self.kbps
+        pkg['chunk'] = torch.from_numpy(owav)
+        self.do_cache = cache
+        return pkg
+
+    def __repr__(self):
+        attrs = '(kbps={}, cache_dir={}, cache={})'.format(
+            self.cache_dir,
+            self.do_cache,
             self.kbps
         )
         return self.__class__.__name__ + attrs
@@ -2250,10 +2359,13 @@ if __name__ == '__main__':
     plt.tight_layout()
     plt.savefig('gtn.png', dpi=200)
     """
+    import json
+    dist_path = '/home/santi/DB/GEnhancement/distortions_SEGANnoises.cfg'
+    dtr = json.load(open(dist_path, 'r'))
+    dist = config_distortions(**dtr)
     codec = Codec2Buffer()
     wav, size = sf.read('test.wav')
-    buffer_c2 = codec({'chunk':torch.tensor(wav)})['chunk']
+    for n in range(100):
+        #buffer_c2 = dist({'chunk':torch.tensor(wav)})['chunk']
+        buffer_c2 = codec({'chunk':torch.tensor(wav)})['chunk']
     sf.write('/tmp/buffer_test.wav', buffer_c2, 16000)
-    codec = Codec2()
-    file_c2 = codec({'chunk':torch.tensor(wav)})['chunk']
-    sf.write('/tmp/file_test.wav', file_c2, 16000)
