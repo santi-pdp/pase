@@ -27,10 +27,6 @@ from torchvision.transforms import Compose
 from ahoproc_tools.interpolate import interpolation
 from ahoproc_tools.io import *
 from joblib import Parallel, delayed
-try:
-    from .codec2_utils import *
-except ImportError:
-    from codec2_utils import *
 
 try:
     import kaldi_io as kio
@@ -2123,22 +2119,14 @@ class Codec2Buffer(object):
             wav = np.concatenate((wav, 
                                   np.zeros((P_,), dtype=np.int16)),
                                  axis=0)
-        #encoded = self.c2.encode(wav)
-        #decoded = self.c2.decode(encoded)
-        #owav = decoded
         owav = []
         T = len(wav)
         data = [(wav[t:t + self.FRAME_SIZE], self.c2) for t in range(0, T,
                                                             self.FRAME_SIZE)]
         for frame in data:
-            owav.extend(codec2_helper(frame).tolist())
-        """
-        for t in range(0, T, self.FRAME_SIZE):
-            frame = wav[t:t + self.FRAME_SIZE]
-            encoded = self.c2.encode(frame)
-            decoded = self.c2.decode(encoded)
-            owav.extend(decoded.tolist())
-        """
+            enc = c2.encode(frame)
+            dec = c2.decode(enc)
+            owav.extend(dec.tolist())
         owav = np.array(owav, dtype=np.int16)
         owav = owav[:orilen]
         #owav = np.array(owav, dtype=np.float32) / (2 ** 15)
