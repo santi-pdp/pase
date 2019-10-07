@@ -2121,8 +2121,8 @@ class Codec2Buffer(object):
                                  axis=0)
         owav = []
         T = len(wav)
-        data = [(wav[t:t + self.FRAME_SIZE], self.c2) for t in range(0, T,
-                                                            self.FRAME_SIZE)]
+        data = [wav[t:t + self.FRAME_SIZE] for t in range(0, T,
+                                                          self.FRAME_SIZE)]
         for frame in data:
             enc = self.c2.encode(frame)
             dec = self.c2.decode(enc)
