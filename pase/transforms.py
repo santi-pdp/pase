@@ -2124,8 +2124,8 @@ class Codec2Buffer(object):
         data = [(wav[t:t + self.FRAME_SIZE], self.c2) for t in range(0, T,
                                                             self.FRAME_SIZE)]
         for frame in data:
-            enc = c2.encode(frame)
-            dec = c2.decode(enc)
+            enc = self.c2.encode(frame)
+            dec = self.c2.decode(enc)
             owav.extend(dec.tolist())
         owav = np.array(owav, dtype=np.int16)
         owav = owav[:orilen]
