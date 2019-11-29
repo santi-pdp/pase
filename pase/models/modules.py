@@ -228,10 +228,9 @@ class Saver(object):
     def load_weights(self):
         save_path = self.save_path
         curr_ckpt = self.read_latest_checkpoint()
-        if curr_ckpt is False:
-            if not os.path.exists(ckpt_path):
-                print('[!] No weights to be loaded')
-                return False
+        if curr_ckpt is None:
+            print('[!] No weights to be loaded')
+            return False
         else:
             st_dict = torch.load(os.path.join(save_path,
                                               'weights_' + \
@@ -321,7 +320,7 @@ class Model(NeuralBlock):
             if not hasattr(self, 'saver'):
                 self.saver = Saver(self, save_path, 
                                    optimizer=self.optim,
-                                   prefix=model_name + '-',
+                                   prefix=self.name + '-',
                                    max_ckpts=self.max_ckpts)
             self.saver.load_weights()
         else:

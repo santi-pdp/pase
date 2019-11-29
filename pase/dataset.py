@@ -305,7 +305,10 @@ class PairWavDataset(WavDataset):
 
         pkg['cchunk'] = pkg['chunk'].squeeze(0)
         # initialize overlap label
-        pkg['overlap'] = torch.zeros(len(pkg['chunk']) // pkg['dec_resolution']).float()
+        if 'dec_resolution' in pkg:
+            pkg['overlap'] = torch.zeros(len(pkg['chunk']) // pkg['dec_resolution']).float()
+        else:
+            pkg['overlap'] = torch.zeros(len(pkg['chunk'])).float()
 
         if self.distortion_transforms and not ZERO_SPEECH:
             pkg = self.distortion_transforms(pkg)
