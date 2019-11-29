@@ -22,12 +22,12 @@ source activate myenv
 
 conda info -e
 
-python -u  train.py --batch_size 32 --epoch 200 --save_path /scratch/jzhong9/models/TMAT_V100_best_MAT_deeper \
+python -u  train.py --batch_size 10 --epoch 200 --save_path ~/jsalt/models/TMAT_rnn_layers_2 \
        --num_workers 12 --warmup 10000000 --net_cfg cfg/workers_best_matconv.cfg \
-       --fe_cfg cfg/PASE_TMAT.cfg --do_eval --data_cfg data/librispeech_data_50h.cfg \
-       --min_lr 0.0005 --fe_lr 0.0005 --data_root /scratch/jzhong9/data/LibriSpeech_50h/wav_sel \
+       --fe_cfg cfg/PASE_MT_sinc_stride8.cfg --do_eval --data_cfg data/LibriSpeech_50h/LibriSpeech_50h/librispeech_data_50h.cfg \
+       --min_lr 0.0005 --fe_lr 0.0005 --data_root data/LibriSpeech_50h/LibriSpeech_50h/wav_sel \
        --dtrans_cfg cfg/distortions/half.cfg \
-       --stats data/libri_bestder2_jianyuan.pkl \
+       --stats data/libri_der2_jianyuan.pkl \
        --chunk_size 32000 \
        --random_scale True \
        --backprop_mode hyper_volume --delta 1.15 \
