@@ -34,7 +34,8 @@ def str2None(v):
         return None
     return v
 
-def make_transforms(chunk_size, workers_cfg, random_scale=False,
+def make_transforms(chunk_size, workers_cfg, hop,
+                    random_scale=False,
                     stats=None, trans_cache=None):
     trans = [ToTensor()]
     keys = ['totensor']
@@ -61,6 +62,7 @@ def make_transforms(chunk_size, workers_cfg, random_scale=False,
             # look for the transform config if available 
             # in this minion
             tr_cfg=minion.pop('transform', {})
+            tr_cfg['hop'] = hop
             if name == 'mi' or name == 'cmi' or name == 'spc' or \
                name == 'overlap' or name == 'gap' or 'regu' in name:
                 continue
@@ -172,6 +174,7 @@ def build_dataset_providers(opts, minions_cfg):
 
     #TODO: allow for different base transforms for different datasets
     trans, batch_keys = make_transforms(opts.chunk_size, minions_cfg,
+                                        opts.hop,
                                         opts.random_scale,
                                         opts.stats, opts.trans_cache)
     print(trans)
@@ -275,7 +278,7 @@ def train(opts):
     dloader = DataLoader(dset, batch_size=opts.batch_size,
                          shuffle=True, collate_fn=collater,
                          num_workers=opts.num_workers,drop_last=True,
-                         pin_memory=False)
+                         pin_memory=CUDA)
     # Compute estimation of bpe. As we sample chunks randomly, we
     # should say that an epoch happened after seeing at least as many
     # chunks as total_train_wav_dur // chunk_size
@@ -289,7 +292,7 @@ def train(opts):
         va_dloader = DataLoader(va_dset, batch_size=opts.batch_size,
                                 shuffle=True, collate_fn=DictCollater(),
                                 num_workers=opts.num_workers,drop_last=True,
-                                pin_memory=False)
+                                pin_memory=CUDA)
         va_bpe = (va_dset.total_wav_dur // opts.chunk_size) // opts.batch_size
         opts.va_bpe = va_bpe
     else:
@@ -445,6 +448,7 @@ if __name__ == '__main__':
     #some transformations rely on kaldi to extract feats
     parser.add_argument('--kaldi_root', type=str, default=None,
                         help='Absolute path to kaldi installation. Possibly of use for feature related bits.')
+    parser.add_argument('--hop', type=int, default=160)
 
     opts = parser.parse_args()
     opts.ckpt_continue = not str2bool(opts.no_continue)
