@@ -1,10 +1,18 @@
-from .Minions.minions import *
-from .Minions.cls_minions import *
-from .attention_block import attention_block
-from .frontend import wf_builder
-from .WorkerScheduler.encoder import *
+try:
+    from .Minions.minions import *
+    from .Minions.cls_minions import *
+    from .attention_block import attention_block
+    from .frontend import wf_builder
+    from .WorkerScheduler.encoder import *
+except ImportError:
+    from Minions.minions import *
+    from Minions.cls_minions import *
+    from attention_block import attention_block
+    from frontend import wf_builder
+    from WorkerScheduler.encoder import *
 import numpy as np
 import torch
+import soundfile as sf
 
 class pase_attention(Model):
 
