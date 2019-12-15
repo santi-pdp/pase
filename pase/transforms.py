@@ -10,7 +10,7 @@ import shlex
 import random
 import pysptk
 import os
-#from python_speech_features import logfbank
+from python_speech_features import logfbank
 import librosa
 import struct
 import glob
@@ -35,7 +35,7 @@ except ImportError:
 
 
 # Make a configurator for the distortions
-def config_distortions(reverb_irfiles=[], 
+def config_distortions(reverb_irfiles=None, 
                        reverb_fmt='imp',
                        reverb_data_root='.',
                        reverb_p=0.5,
@@ -68,21 +68,26 @@ def config_distortions(reverb_irfiles=[],
                        max_chops=5,
                        chop_p=0.5,
                        codec2_p=0.3,
+                       codec2_kbps=1600,
                        codec2_cachedir=None,
-                       codec2_cache=False):
+                       codec2_cache=False,
+                       report=False):
     trans = []
     probs = []
     # first of all, in case we have cached codec2 data
     if codec2_p > 0. and codec2_cachedir is not None:
+        assert codec2_kbps == 1600, codec2_kbps
         trans.append(Codec2Cached(cache_dir=codec2_cachedir,
-                                  cache=codec2_cache))
+                                  cache=codec2_cache,
+                                  report=report))
         probs.append(codec2_p)
     # Reverb can be shared in two different stages of the pipeline
     reverb = Reverb(reverb_irfiles, ir_fmt=reverb_fmt,
                     data_root=reverb_data_root,
-                    cache=reverb_cache)
+                    cache=reverb_cache,
+                    report=report)
 
-    if reverb_p > 0. and len(reverb_irfiles) > 0:
+    if reverb_p > 0. and reverb_irfiles is not None:
         trans.append(reverb)
         probs.append(reverb_p)
 
@@ -90,46 +95,53 @@ def config_distortions(reverb_irfiles=[],
         noise_trans = reverb if overlap_reverb else None
         trans.append(SimpleAdditiveShift(overlap_dir, overlap_snrs,
                                          noises_list=overlap_list,
-                                         noise_transform=noise_trans))
+                                         noise_transform=noise_trans,
+                                         report=report))
         probs.append(overlap_p)
 
     if noises_p > 0. and noises_dir is not None:
         trans.append(SimpleAdditive(noises_dir, noises_snrs, 
-                                    cache=noises_cache))
+                                    cache=noises_cache,
+                                    report=report))
         probs.append(noises_p)
 
     if speed_p > 0. and speed_range is not None:
         # speed changer
-        trans.append(SpeedChange(speed_range))
+        trans.append(SpeedChange(speed_range, report=report))
         probs.append(speed_p)
 
     if resample_p > 0. and len(resample_factors) > 0:
-        trans.append(Resample(resample_factors))
+        trans.append(Resample(resample_factors, report=report))
         probs.append(resample_p)
 
     if clip_p > 0. and len(clip_factors) > 0:
-        trans.append(Clipping(clip_factors))
+        trans.append(Clipping(clip_factors, report=report))
         probs.append(clip_p)
 
     if codec2_p > 0. and codec2_cachedir is None:
         # codec2 from memory (SLOW)
-        trans.append(Codec2Buffer())
+        trans.append(Codec2Buffer(report=report, kbps=codec2_kbps))
         probs.append(codec2_p)
 
     if chop_p > 0. and len(chop_factors) > 0:
         trans.append(Chopper(max_chops=max_chops,
-                             chop_factors=chop_factors))
+                             chop_factors=chop_factors,
+                             report=report))
         probs.append(chop_p)
     if bandrop_p > 0. and len(bandrop_irfiles) > 0:
-        trans.append(BandDrop(bandrop_irfiles,filt_fmt=bandrop_fmt, data_root=bandrop_data_root))
+        trans.append(BandDrop(bandrop_irfiles,filt_fmt=bandrop_fmt,
+                              data_root=bandrop_data_root,
+                              report=report))
         probs.append(bandrop_p)
 
     if downsample_p > 0. and len(downsample_irfiles) > 0:
-        trans.append(Downsample(downsample_irfiles,filt_fmt=downsample_fmt, data_root=downsample_data_root))
+        trans.append(Downsample(downsample_irfiles,filt_fmt=downsample_fmt,
+                                data_root=downsample_data_root,
+                                report=report))
         probs.append(downsample_p)
 
     if len(trans) > 0:
-        return PCompose(trans, probs=probs)
+        return PCompose(trans, probs=probs, report=report)
     else:
         return None
 
@@ -208,7 +220,7 @@ class PCompose(object):
     #@profile
     def __call__(self, tensor):
         x = tensor
-        reports = []
+        report = {}
         for ti, transf in enumerate(self.transforms):
             if isinstance(self.probs, list):
                 prob = self.probs[ti]
@@ -216,12 +228,11 @@ class PCompose(object):
                 prob = self.probs
             if random.random() < prob:
                 x = transf(x)
-                if len(x) == 2:
+                if 'report' in x:
                     # get the report
-                    x, report = x
-                    reports.append(report)
+                    report = x['report']
         if self.report:
-            return x, reports
+            return x, report
         else:
             return x
 
@@ -993,6 +1004,13 @@ class Reverb(object):
                  max_reverb_len=24000,
                  cache=False,
                  data_root='.'):
+        if len(ir_files) == 0:
+            # list the directory
+            ir_files = glob.glob(os.path.join(data_root,
+                                              '*.{}'.format(ir_fmt)))
+            print('Found {} *.{} ir_files in {}'.format(len(ir_files),
+                                                        ir_fmt,
+                                                        data_root))
         self.ir_files = ir_files
         assert isinstance(ir_files, list), type(ir_files)
         assert len(ir_files) > 0, len(ir_files)
@@ -1353,11 +1371,12 @@ class SimpleChopper(object):
 
 class Chopper(object):
     def __init__(self, chop_factors=[(0.05, 0.025), (0.1, 0.05)],
-                 max_chops=2, report=False):
+                 max_chops=2, force_regions=False, report=False):
         # chop factors in seconds (mean, std) per possible chop
         import webrtcvad
         self.chop_factors = chop_factors
         self.max_chops = max_chops
+        self.force_regions = force_regions
         # create VAD to get speech chunks
         self.vad = webrtcvad.Vad(2)
         # make scalers to norm/denorm
@@ -1378,38 +1397,51 @@ class Chopper(object):
         curr_region_counter = 0
         init = None
         vad = self.vad
-        # first run the vad across the full waveform
-        for beg_i in range(0, wav.shape[0], window_size):
-            frame = wav[beg_i:beg_i + window_size]
-            if frame.shape[0] >= window_size and \
-                    vad.is_speech(struct.pack('{}i'.format(window_size),
-                                              *frame), srate):
-                curr_region_counter += 1
-                if init is None:
-                    init = beg_i
-            else:
-                # end of speech region (or never began yet)
-                if init is not None:
-                    # close the region
-                    end_sample = init + (curr_region_counter * window_size)
-                    center_sample = init + (end_sample - init) / 2
-                    regions.append((init, center_sample,
-                                    curr_region_counter * window_size))
-                init = None
-                curr_region_counter = 0
-        return regions
+        if self.force_regions:
+            # Divide the signal into even regions depending on number of chops
+            # to put
+            nregions = wav.shape[0] // self.max_chops
+            reg_len = wav.shape[0] // nregions
+            for beg_i in range(0, wav.shape[0], reg_len):
+                end_sample = beg_i + reg_len
+                center_sample = beg_i + (end_sample - beg_i) / 2
+                regions.append((beg_i, center_sample,
+                                reg_len))
+            return regions
+        else:
+            # Use the VAD to determine actual speech regions
+            for beg_i in range(0, wav.shape[0], window_size):
+                frame = wav[beg_i:beg_i + window_size]
+                if frame.shape[0] >= window_size and \
+                        vad.is_speech(struct.pack('{}i'.format(window_size),
+                                                  *frame), srate):
+                    curr_region_counter += 1
+                    if init is None:
+                        init = beg_i
+                else:
+                    # end of speech region (or never began yet)
+                    if init is not None:
+                        # close the region
+                        end_sample = init + (curr_region_counter * window_size)
+                        center_sample = init + (end_sample - init) / 2
+                        regions.append((init, center_sample,
+                                        curr_region_counter * window_size))
+                    init = None
+                    curr_region_counter = 0
+            return regions
 
     # @profile
     def chop_wav(self, wav, srate, speech_regions):
         if len(speech_regions) == 0:
             # print('Skipping no speech regions')
-            return wav
+            return wav, []
         chop_factors = self.chop_factors
         # get num of chops to make
         num_chops = list(range(1, self.max_chops + 1))
         chops = np.asscalar(np.random.choice(num_chops, 1))
         # trim it to available regions
         chops = min(chops, len(speech_regions))
+        #print('Making {} chops'.format(chops))
         # build random indexes to randomly pick regions, not ordered
         if chops == 1:
             chop_idxs = [0]
@@ -1417,6 +1449,7 @@ class Chopper(object):
             chop_idxs = np.random.choice(list(range(chops)), chops,
                                          replace=False)
         chopped_wav = np.copy(wav)
+        chops_log = []
         # make a chop per chosen region
         for chop_i in chop_idxs:
             region = speech_regions[chop_i]
@@ -1437,7 +1470,8 @@ class Chopper(object):
             # print('chop_end: ', chop_end)
             # chop the selected region with computed dur
             chopped_wav[chop_beg:chop_end] = 0
-        return chopped_wav
+            chops_log.append(float(chop_dur))
+        return chopped_wav, chops_log
 
     #@profile
     def __call__(self, pkg, srate=16000):
@@ -1451,13 +1485,14 @@ class Chopper(object):
             wav = wav.reshape((-1,))
         # get speech regions for proper chopping
         speech_regions = self.vad_wav(wav, srate)
-        chopped = self.chop_wav(wav, srate,
-                                speech_regions).astype(np.float32)
-        chopped = self.normalizer(torch.FloatTensor(chopped))
+        chopped, chops = self.chop_wav(wav, srate,
+                                       speech_regions)
+        chopped = chopped.astype(np.float32)
+        chopped = self.normalizer(torch.from_numpy(chopped))
         if self.report:
             if 'report' not in pkg:
                 pkg['report'] = {}
-            pkg['report']['speech_regions'] = speech_regions
+            pkg['report']['chops'] = chops
         pkg['chunk'] = chopped
         return pkg
 
@@ -1489,7 +1524,7 @@ class Clipping(object):
         if self.report:
             if 'report' not in pkg:
                 pkg['report'] = {}
-            pkg['report']['clip_factor'] = np.asscalar(cf)
+            pkg['report']['clip_factor'] = cf
         pkg['chunk'] = clipT
         return pkg
 
