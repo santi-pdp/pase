@@ -1,6 +1,6 @@
 # Problem Agnostic Speech Encoder (PASE)
 
-This repository is the official implementation of [PASE](https://arxiv.org/abs/1904.03416) and PASE+, which are speech waveform encoders trained in a self-supervised framework with the so called workers. PASE can be used as a speech feature extractor or can be used to pre-train a network that perform a speech classification task such as speech recognition, speaker identification, emotion classification, etc. 
+This repository contains the official implementations of [PASE](https://arxiv.org/abs/1904.03416) and [PASE+](http://veu.talp.cat/papers/pase_asr_icassp2020.pdf). These are speech waveform encoders trained in a self-supervised manner with the so called worker/minion framework. A PASE model can be used as a speech feature extractor or to pre-train an encoder for our desired end-task, like speech classification such as in ASR, seaker recognition, or emotion recognition, or speech generation such as in voice conversion or [TTS](https://arxiv.org/abs/1906.00733).
 
 ![pase+](https://user-images.githubusercontent.com/7583502/72657492-42b88f00-39a5-11ea-9ae6-cf96a1e09042.png)
 
@@ -16,7 +16,19 @@ This repository is the official implementation of [PASE](https://arxiv.org/abs/1
 
 ## Pre-trained Model
 
-**Will be released soon.**
+The PASE+ parameters used in our most recently [published work](http://veu.talp.cat/papers/pase_asr_icassp2020.pdf) can be found if you [CLICK HERE](https://drive.google.com/open?id=1xwlZMGnEt9bGKCVcqDeNrruLFQW5zUEW). This ckpt file contains the encoder parameters only, without any worker. This, and the configuration file cfg/PASE+.cfg let you build and use the encoder in the following simple manner:
+
+```
+from pase.models.frontend import wf_builder
+pase = wf_builder('cfg/PASE.cfg').eval()
+pase.load_pretrained('PASE.ckpt', load_last=True, verbose=True)
+
+# Now we can forward waveforms as Torch tensors
+import torch
+x = torch.randn(1, 1, 100000) # example with random noise to check shape
+# y size will be (1, 256, 625), which are 625 frames of 256 dims each
+y = pase(x)
+```
 
 The encoder can be inserted in any PyTorch model and fine-tuned, just like any
 other `nn.Module`.
@@ -25,54 +37,15 @@ other `nn.Module`.
 
 ### Data preparation
 
-The self-supervised training stage requires the following components to be specified to the training script:
-
-* data root folder: contains `wav` files (or soft links to them) without subfolders.
-* trainset statistics file to normalize each worker's output values
-* dataset configuration `data_cfg` file: contains pointers to train/valid/test splits, among other info.
-* front-end (encoder) configuration file: `cfg/PASE.cfg`
-* workers' configuration file: `cfg/workers.cfg` 
+**TO BE UPDATED Soon with latest PASE+ commands**
 
 #### Making the dataset config file
 
-To make the dataset configuration file the following files have to be provided:
-
-* training files list `train_scp`: contains a `wav` file name per line (without directory names), including `.wav` extension.
-* test files list `test_scp`: contains a `wav` file name per line (without directory names), including `.wav` extension.
-* dictionary with `wav` filename -> integer speaker class (speaker id) correspondence (same filenames as in train/test lists).
-
-An example of each of these files can be found in the `data/` folder of the repo. Build them based on your data files.
-
-_NOTE: The `filename2spkclass` dictionary is required to create a train/valid/test split which holds out some speakers from training, such that
-self-supervised training validation tracks the workers' losses with unseen identities (thus to truly generalize). Those labels,
-however, are not used during training for this is an unsupervised framework._
-
-We use the following script to create our dataset configuration file (`--cfg_file`):
-
-```
-python unsupervised_data_cfg_librispeech.py --data_root data/LibriSpeech/wavs \
-	--train_scp data/LibriSpeech/libri_tr.scp --test_scp data/LibriSpeech/libri_te.scp \
-	--libri_dict data/LibriSpeech/libri_dict.npy --cfg_file data/librispeech_data.cfg
-
-```
+**TO BE UPDATED Soon with latest PASE+ commands**
 
 #### Making the trainset statistics file
 
-The `make_trainset_statistics.py` script will load a certain amount of training batches with the config file we just generated,
-and will compute the normalization statistics for the workers to work properly in the self-supervised training. We use this script
-as follows:
-
-```
-python make_trainset_statistics.py --data_root data/LibriSpeech/wavs \
-	--data_cfg data/librispeech_data.cfg \
-	--out_file data/librispeech_stats.pkl
-```
-
-The file `data/librispeech_stats.pkl` will be generated. If this goes too slow, you may try with
-a smaller amount of training batches with the `--max_batches 10` argument for example. The default
-is 20.
-
-**Now we have the ingredients to train our PASE model.**
+**TO BE UPDATED Soon with latest PASE+ commands**
 
 ### Training
 
