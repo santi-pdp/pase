@@ -1,35 +1,22 @@
 # Problem Agnostic Speech Encoder (PASE)
 
-This repository is the official implementation of [PASE](https://arxiv.org/abs/1904.03416), a speech waveform encoder trained in a self-supervised framework with the so called workers. PASE can be used as a speech feature extractor or can be used to pre-train a network that perform a speech classification task such as speech recognition, speaker identification, emotion classification, etc.
+This repository is the official implementation of [PASE](https://arxiv.org/abs/1904.03416) and PASE+, which are speech waveform encoders trained in a self-supervised framework with the so called workers. PASE can be used as a speech feature extractor or can be used to pre-train a network that perform a speech classification task such as speech recognition, speaker identification, emotion classification, etc. 
 
-![SimplePASE](https://user-images.githubusercontent.com/7583502/55691535-5ad39a80-599f-11e9-81aa-4ea5ad949d09.png)
+![pase+](https://user-images.githubusercontent.com/7583502/72657492-42b88f00-39a5-11ea-9ae6-cf96a1e09042.png)
+
+### NOTE: The old PASE version can be accessed through the tagged commit `v0.1`. 
 
 ## Requirements
 
 * PyTorch 1.0 or higher
 * Torchvision 0.2 or higher
-* Install the deps in the requirements file: `pip install -r requirements.txt`
+* Install the requirements from `requirements.txt`: `pip install -r requirements.txt`
 
-*IMPORTANTLY: change the cupy package cuda version depending on your system. It deafults to CUDA 10.0 with cupy-cuda100*
+*NOTE: Edit the cupy-cuda100 requirement in the file if needed depending on your CUDA version. Defaults to 10.0 now*
 
 ## Pre-trained Model
 
-The PASE parameters used in the published work can be found <a href='http://veu.talp.cat/models/PASE.ckpt'>here</a>. This `ckpt` file
-contains the encoder parameters only, without any worker. This, and the configuration file `cfg/PASE.cfg` let you build and use the 
-encoder in the following simple manner:
-
-```
-from pase.models.frontend import wf_builder
-pase = wf_builder('cfg/PASE.cfg')
-pase.eval()
-pase.load_pretrained('PASE.ckpt', load_last=True, verbose=True)
-
-# Now we can forward waveforms as Torch tensors
-import torch
-x = torch.randn(1, 1, 100000)
-# y size will be (1, 100, 625), which are 625 frames of 100 dims each
-y = pase(x)
-```
+**Will be released soon.**
 
 The encoder can be inserted in any PyTorch model and fine-tuned, just like any
 other `nn.Module`.
@@ -102,16 +89,3 @@ Note that `data_root`, `stats` and `data_cfg` are the mentioned data root folder
 [TensorboardX](https://github.com/lanpa/tensorboardX) is used during training to dump stats information (stored in `save_path` folder, together with the model checkpoints). The `do_eval` flag activates validation 
 tracking which will be printed out to tensorboard. The learning rates `min_lr` and `fe_lr` control the worker learning rates and the encoder learning rates respectively. The `lrdec_step` and `lrdecay` params control
 the learning rate decay factor and the periodic step at which it is applied, for all components (workers and PASE). 
-
-_NOTE: there is an additional possible worker that can be activated during training, the adversarial worker. This works as a regularizer to shape up the latent space of PASE like a Normal distribution, 
-basically following the_ [adversarial autoencoder](https://arxiv.org/abs/1511.05644) _methodology. The `warmup` parameter can be specified as an argument, which is huge by default. This is because
-we do not activate it for these experiments, but it can be used if it is of any interest by the reader/user._
-
-
-## Authors
-
-* Santiago Pascual (Universitat Politècnica de Catalunya - Barcelona)
-* Mirco Ravanelli (MILA, Université de Montréal - Montréal)
-* Joan Serrà (Telefónica Research - Barcelona)
-* Antonio Bonafonte (Universitat Politècnica de Catalunya - Barcelona)
-* Yoshua Bengio (MILA, Université de Montréal - Montréal, CIFAR Fellow)
