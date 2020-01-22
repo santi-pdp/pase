@@ -81,7 +81,7 @@ for ck_data in "${arr_ck[@]}"
 do
 
     finalfeats="ark,s,cs: cat $ck_data |"
-    latgen-faster-mapped$thread_string --min-active=$min_active --max-active=$max_active --max-mem=$max_mem --beam=$beam --lattice-beam=$latbeam --acoustic-scale=$acwt --allow-partial=true --word-symbol-table=$graphdir/words.txt $alidir/final.mdl $graphdir/HCLG.fst "$finalfeats" "ark:|gzip -c > $dir/lat.$JOB.gz" &> $dir/log/decode.$JOB.log &
+    latgen-faster-mapped$thread_string --min-active=$min_active --max-active=$max_active --max-mem=$max_mem --beam=$beam --lattice-beam=$latbeam --acoustic-scale=$acwt --allow-partial=true --word-symbol-table=$(pwd)/$graphdir/words.txt $(pwd)/$alidir/final.mdl $graphdir/HCLG.fst "$finalfeats" "ark:|gzip -c > $dir/lat.$JOB.gz" &> $dir/log/decode.$JOB.log &
     JOB=$((JOB+1))
 done
 wait
