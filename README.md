@@ -62,3 +62,23 @@ Note that `data_root`, `stats` and `data_cfg` are the mentioned data root folder
 [TensorboardX](https://github.com/lanpa/tensorboardX) is used during training to dump stats information (stored in `save_path` folder, together with the model checkpoints). The `do_eval` flag activates validation 
 tracking which will be printed out to tensorboard. The learning rates `min_lr` and `fe_lr` control the worker learning rates and the encoder learning rates respectively. The `lrdec_step` and `lrdecay` params control
 the learning rate decay factor and the periodic step at which it is applied, for all components (workers and PASE). 
+
+### Running an ASR experiment
+
+In this section, we show how to use PASE+ for a basic speech recognition experiment using the TIMIT dataset (make sure you have it available). The speech recognition experiments reported in the PASE+ paper use standard HMM-DNN technology. The DNN part is composed of the PASE+ encoder coupled with a simple MLP classifier. For the HMM decoding part, we rely on the kaldi toolkit (make sure you have it installed before running the following example).
+
+To run a TIMIT experiment, go to the ASR folder and execute the following command:
+
+```
+python run_TIMIT_full_decoding.py $pase_cfg $pase_model $timit_folder $out_folder cfg/MLP_PASE.cfg  cfg/decoder.cfg
+```
+
+where $pase_cfg is the path containing the PASE config file (e.g, ../cfg/PASE+.cfg) and $pase_model contains the path to the PASE weights (e.g,  FE_e199.ckpt).
+
+The script will train the speech recognition system. Once trained the NN, we run the kaldi decoder to retrieve the final sequence of phones. You can take a look into the Phoneme Error Rate by typing:
+
+```
+./RESULTS
+```
+
+In our case, we achieved a PER=17.2%. Note that natural variations (normally in the order of ± 0.2%) might happen due to different initializations.
