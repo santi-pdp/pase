@@ -1006,8 +1006,8 @@ class Reverb(object):
                  data_root='.'):
         if len(ir_files) == 0:
             # list the directory
-            ir_files = glob.glob(os.path.join(data_root,
-                                              '*.{}'.format(ir_fmt)))
+            ir_files = [os.path.basename(f) for f in glob.glob(os.path.join(data_root,
+                                              '*.{}'.format(ir_fmt)))]
             print('Found {} *.{} ir_files in {}'.format(len(ir_files),
                                                         ir_fmt,
                                                         data_root))
