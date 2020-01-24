@@ -37,15 +37,51 @@ other `nn.Module`.
 
 ### Data preparation
 
-**TO BE UPDATED Soon with latest PASE+ commands**
+The self-supervised training stage requires the following components to be specified to the training script:
+
+* data root folder: contains `wav` files (or soft links to them) without subfolders.
+* trainset statistics file to normalize each worker's output values, computed with the `make_trainset_statistics.py` script.
+* dataset configuration `data_cfg` file: contains pointers to train/valid/test splits, among other info.
+* front-end (encoder) configuration file: `cfg/PASE+.cfg`
+* workers' configuration file: `cfg/workers+.cfg` 
 
 #### Making the dataset config file
 
-**TO BE UPDATED Soon with latest PASE+ commands**
+To make the dataset configuration file the following files have to be provided:
+
+* training files list `train_scp`: contains a `wav` file name per line (without directory names), including `.wav` extension.
+* test files list `test_scp`: contains a `wav` file name per line (without directory names), including `.wav` extension.
+* dictionary with `wav` filename -> integer speaker class (speaker id) correspondence (same filenames as in train/test lists).
+
+An example of each of these files can be found in the `data/` folder of the repo. Build them based on your data files.
+
+_NOTE: The `filename2spkclass` dictionary is required to create a train/valid/test split which holds out some speakers from training, such that
+self-supervised training validation tracks the workers' losses with unseen identities (thus to truly generalize). Those labels,
+however, are not used during training for this is an unsupervised framework._
+
+We use the following script to create our dataset configuration file (`--cfg_file`):
+
+```
+python unsupervised_data_cfg_librispeech.py --data_root data/LibriSpeech/wavs \
+	--train_scp data/LibriSpeech/libri_tr.scp --test_scp data/LibriSpeech/libri_te.scp \
+	--libri_dict data/LibriSpeech/libri_dict.npy --cfg_file data/librispeech_data.cfg
+```
 
 #### Making the trainset statistics file
 
-**TO BE UPDATED Soon with latest PASE+ commands**
+The `make_trainset_statistics.py` script will load a certain amount of training batches with the config file we just generated, and will compute the normalization statistics for the workers to work properly in the self-supervised training. We use this script as follows:
+
+```
+python make_trainset_statistics.py --data_root data/LibriSpeech/wavs \
+	--data_cfg data/librispeech_data.cfg \
+	--net_cfg cfg/workers+.cfg \
+	--out_file data/librispeech_stats.pkl 
+```
+
+The file `data/librispeech_stats.pkl` will be generated. If this goes too slow, you may try with
+a smaller amount of training batches with the `--max_batches 10` argument for example. The default
+is 20. Note that the `--net_cfg cfg/workers+.cfg` is supplied so that the script automatically retrieves
+the workers that will be active, and the statistics are specific to the workers.
 
 ### Training
 
