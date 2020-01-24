@@ -133,3 +133,19 @@ The script will train the speech recognition system. Once trained the NN, we run
 ```
 
 In our case, we achieved a PER=17.2%. Note that natural variations (normally in the order of ± 0.2%) might happen due to different initializations.
+
+### Citation
+
+If using this code, parts of it, or developments from it, please cite our reference:
+
+PASE
+```
+@inproceedings{Pascual2019,
+  author={Santiago Pascual and Mirco Ravanelli and Joan Serrà and Antonio Bonafonte and Yoshua Bengio},
+  title={{Learning Problem-Agnostic Speech Representations from Multiple Self-Supervised Tasks}},
+  year=2019,
+  booktitle={Proc. Interspeech 2019},
+  pages={161--165},
+  url={http://dx.doi.org/10.21437/Interspeech.2019-2605}
+}
+```
