@@ -4,7 +4,7 @@ This repository contains the official implementations of [PASE](https://arxiv.or
 
 ![pase+](https://user-images.githubusercontent.com/7583502/72657492-42b88f00-39a5-11ea-9ae6-cf96a1e09042.png)
 
-### NOTE: The old PASE version can be accessed through the tagged commit `v0.1`. 
+### NOTE: The old PASE version can be accessed through the tagged commit [`v0.1`](https://github.com/santi-pdp/pase/blob/v0.1_pase/README.md). 
 
 ## Requirements
 
