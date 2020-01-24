@@ -98,7 +98,7 @@ To replicate PASE+ training, execute the following:
 ```
 python -u  train.py --batch_size 16 --epoch 400 --save_path pase+_ckpt \
 	       --num_workers 16 --warmup 10000000 --net_cfg cfg/workers+.cfg \
-	       --fe_cfg cfg/PASE_512_qrnn.cfg --do_eval --data_cfg data/librispeech_data_50h.cfg \
+	       --fe_cfg cfg/PASE+.cfg --do_eval --data_cfg data/librispeech_data_50h.cfg \
 	       --min_lr 0.0005 --fe_lr 0.001 --data_root data/LibriSpeech/wavs/ \
 	       --dtrans_cfg cfg/distortions/pase+.cfg \
 	       --stats data/workers+.pkl \
