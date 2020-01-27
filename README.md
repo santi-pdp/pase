@@ -4,7 +4,7 @@ This repository contains the official implementations of [PASE](https://arxiv.or
 
 ![pase+](https://user-images.githubusercontent.com/7583502/72657492-42b88f00-39a5-11ea-9ae6-cf96a1e09042.png)
 
-### NOTE: The old PASE version can be accessed through the tagged commit `v0.1`. 
+### NOTE: The old PASE version can be accessed through the tagged commit [`v0.1`](https://github.com/santi-pdp/pase/blob/v0.1_pase/README.md). 
 
 ## Requirements
 
@@ -37,25 +37,76 @@ other `nn.Module`.
 
 ### Data preparation
 
-**TO BE UPDATED Soon with latest PASE+ commands**
+The self-supervised training stage requires the following components to be specified to the training script:
+
+* data root folder: contains `wav` files (or soft links to them) without subfolders.
+* trainset statistics file to normalize each worker's output values, computed with the `make_trainset_statistics.py` script.
+* dataset configuration `data_cfg` file: contains pointers to train/valid/test splits, among other info.
+* front-end (encoder) configuration file: `cfg/PASE+.cfg`
+* workers' configuration file: `cfg/workers+.cfg` 
 
 #### Making the dataset config file
 
-**TO BE UPDATED Soon with latest PASE+ commands**
+To make the dataset configuration file the following files have to be provided:
+
+* training files list `train_scp`: contains a `wav` file name per line (without directory names), including `.wav` extension.
+* test files list `test_scp`: contains a `wav` file name per line (without directory names), including `.wav` extension.
+* dictionary with `wav` filename -> integer speaker class (speaker id) correspondence (same filenames as in train/test lists).
+
+An example of each of these files can be found in the `data/` folder of the repo. Build them based on your data files.
+
+_NOTE: The `filename2spkclass` dictionary is required to create a train/valid/test split which holds out some speakers from training, such that
+self-supervised training validation tracks the workers' losses with unseen identities (thus to truly generalize). Those labels,
+however, are not used during training for this is an unsupervised framework._
+
+We use the following script to create our dataset configuration file (`--cfg_file`):
+
+```
+python unsupervised_data_cfg_librispeech.py --data_root data/LibriSpeech/wavs \
+	--train_scp data/LibriSpeech/libri_tr.scp --test_scp data/LibriSpeech/libri_te.scp \
+	--libri_dict data/LibriSpeech/libri_dict.npy --cfg_file data/librispeech_data.cfg
+```
 
 #### Making the trainset statistics file
 
-**TO BE UPDATED Soon with latest PASE+ commands**
+The `make_trainset_statistics.py` script will load a certain amount of training batches with the config file we just generated, and will compute the normalization statistics for the workers to work properly in the self-supervised training. We use this script as follows:
+
+```
+python make_trainset_statistics.py --data_root data/LibriSpeech/wavs \
+	--data_cfg data/librispeech_data.cfg \
+	--net_cfg cfg/workers+.cfg \
+	--out_file data/librispeech_stats.pkl 
+```
+
+The file `data/librispeech_stats.pkl` will be generated. If this goes too slow, you may try with
+a smaller amount of training batches with the `--max_batches 10` argument for example. The default
+is 20. Note that the `--net_cfg cfg/workers+.cfg` is supplied so that the script automatically retrieves
+the workers that will be active, and the statistics are specific to the workers.
 
 ### Training
 
-To train PASE for 150 epochs, with the same hyper-parameters as those in the published work, execute the following script:
+To train PASE for 150 epochs, with the same hyper-parameters as those in the first published work, execute the following script:
 
 ```
 python -u train.py --batch_size 32 --epoch 100 --save_path pase_ckpt --num_workers 1 \
 	--net_cfg cfg/workers.cfg --fe_cfg cfg/PASE.cfg \
-	--do_eval --data_cfg data/librispeech_data.cfg --min_lr 0.0005 --fe_lr 0.0005 \
+	--data_cfg data/librispeech_data.cfg --min_lr 0.0005 --fe_lr 0.0005 \
 	--data_root data/LibriSpeech/wavs/ --stats data/librispeech_stats.pkl --lrdec_step 30 --lrdecay 0.5
+```
+To replicate PASE+ training, execute the following:
+
+```
+python -u  train.py --batch_size 16 --epoch 400 --save_path pase+_ckpt \
+	       --num_workers 16 --warmup 10000000 --net_cfg cfg/workers+.cfg \
+	       --fe_cfg cfg/PASE+.cfg --do_eval --data_cfg data/librispeech_data_50h.cfg \
+	       --min_lr 0.0005 --fe_lr 0.001 --data_root data/LibriSpeech/wavs/ \
+	       --dtrans_cfg cfg/distortions/pase+.cfg \
+	       --stats data/workers+.pkl \
+	       --chunk_size 32000 \
+	       --tensorboard False \
+	       --backprop_mode base\
+	       --random_scale True\
+	       --lr_mode poly
 ```
 
 Note that `data_root`, `stats` and `data_cfg` are the mentioned data root folder, training statistics file and dataset configuration file (created in previous section).
@@ -82,3 +133,19 @@ The script will train the speech recognition system. Once trained the NN, we run
 ```
 
 In our case, we achieved a PER=17.2%. Note that natural variations (normally in the order of ± 0.2%) might happen due to different initializations.
+
+### Citation
+
+If using this code, parts of it, or developments from it, please cite our reference:
+
+PASE
+```
+@inproceedings{Pascual2019,
+  author={Santiago Pascual and Mirco Ravanelli and Joan Serrà and Antonio Bonafonte and Yoshua Bengio},
+  title={{Learning Problem-Agnostic Speech Representations from Multiple Self-Supervised Tasks}},
+  year=2019,
+  booktitle={Proc. Interspeech 2019},
+  pages={161--165},
+  url={http://dx.doi.org/10.21437/Interspeech.2019-2605}
+}
+```
