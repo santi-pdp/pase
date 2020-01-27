@@ -128,7 +128,7 @@ def config_distortions(reverb_irfiles=None,
                              chop_factors=chop_factors,
                              report=report))
         probs.append(chop_p)
-    if bandrop_p > 0. and len(bandrop_irfiles) > 0:
+    if bandrop_p > 0. and bandrop_irfiles is not None:
         trans.append(BandDrop(bandrop_irfiles,filt_fmt=bandrop_fmt,
                               data_root=bandrop_data_root,
                               report=report))
@@ -1208,6 +1208,13 @@ class BandDrop(object):
 
     def __init__(self, filt_files, report=False, filt_fmt='npy',
                  data_root='.'):
+        if len(filt_files) == 0:
+            # list the directory
+            filt_files = [os.path.basename(f) for f in glob.glob(os.path.join(data_root,
+                                              '*.{}'.format(filt_fmt)))]
+            print('Found {} *.{} filt_files in {}'.format(len(filt_files),
+                                                          filt_fmt,
+                                                          data_root))
         self.filt_files = filt_files
         assert isinstance(filt_files, list), type(filt_files)
         assert len(filt_files) > 0, len(filt_files)
