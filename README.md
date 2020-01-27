@@ -148,6 +148,8 @@ If no `--dtrans_cfg` file is provided, the waveforms are loaded as-is without an
 * Additive noises are [HERE](https://drive.google.com/open?id=1kDrUM97uoCtPm_kXMMtMkiHLvt26FWIT)
 * For reverberation, the publicly available OpenSLR simulated RIRs can be found [HERE](https://www.openslr.org/26/)
 
+Once you download and extract each of the above datasets, point the attributes `overlap_dir`, `noises_dir`, `bandrop_data_root`, `downsample_data_root` and `reverb_data_root` accordingly. Note that in order to activate the distortion there must be a probability of activation as mentioned earlier (e.g. `noises_p`), and each file will load on the fly.
+
 If you want to use the openSLR RIRs, you should run the following command to include the file pointers into the distortions config file:
 ```
 python data/prep/prepare_openslr_rirs_cfg.py --data_root data/simulated_rirs_16k --out_file cfg/distortions/pase+.cfg --existing_cfg cfg/distortions/pase+.cfg
