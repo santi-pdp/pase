@@ -79,12 +79,12 @@ python unsupervised_data_cfg_librispeech.py --data_root data/LibriSpeech/wavs \
 
 #### Making the trainset statistics file
 
-The `make_trainset_statistics.py` script will load a certain amount of training batches with the config file we just generated, and will compute the normalization statistics for the workers to work properly in the self-supervised training. We use this script as follows:
+The `make_trainset_statistics.py` script will load a certain amount of training batches with the config file we just generated, and will compute the normalization statistics for the workers to work properly in the self-supervised training. For PASE v0.1 we use this script as follows:
 
 ```
 python make_trainset_statistics.py --data_root data/LibriSpeech/wavs \
 	--data_cfg data/librispeech_data.cfg \
-	--net_cfg cfg/workers+.cfg \
+	--net_cfg cfg/workers/workers.cfg \
 	--out_file data/librispeech_stats.pkl 
 ```
 
@@ -93,12 +93,21 @@ a smaller amount of training batches with the `--max_batches 10` argument for ex
 is 20. Note that the `--net_cfg cfg/workers+.cfg` is supplied so that the script automatically retrieves
 the workers that will be active, and the statistics are specific to the workers.
 
+To build the statistics file for PASE+ (recommended), then we simply use the new worker configuration `cfg/workers/workers+.cfg`:
+
+```
+python make_trainset_statistics.py --data_root data/LibriSpeech/wavs \
+	--data_cfg data/librispeech_data.cfg \
+	--net_cfg cfg/workers/workers+.cfg \
+	--out_file data/librispeech_stats_pase+.pkl 
+```
+
 ### Training
 
 To train PASE for 150 epochs, with the same hyper-parameters as those in the first published work, execute the following script:
 
 ```
-python -u train.py --batch_size 32 --epoch 150 --save_path pase_ckpt --num_workers 1 \
+python -u train.py --batch_size 32 --epoch 150 --save_path pase_ckpt --num_workers 4 \
 	--net_cfg cfg/workers/workers.cfg --fe_cfg cfg/frontend/PASE.cfg \
 	--data_cfg data/librispeech_data.cfg --min_lr 0.0005 --fe_lr 0.0005 \
 	--data_root data/LibriSpeech/wavs/ --stats data/librispeech_stats.pkl --lrdec_step 30 --lrdecay 0.5
@@ -111,11 +120,11 @@ To replicate PASE+ training, execute the following:
 
 ```
 python -u  train.py --batch_size 16 --epoch 400 --save_path pase+_ckpt \
-	       --num_workers 16 --warmup 10000000 --net_cfg cfg/workers/workers+.cfg \
-	       --fe_cfg cfg/frontend/PASE+.cfg --do_eval --data_cfg data/librispeech_data_50h.cfg \
+	       --num_workers 4 --warmup 10000000 --net_cfg cfg/workers/workers+.cfg \
+	       --fe_cfg cfg/frontend/PASE+.cfg --data_cfg data/librispeech_data.cfg \
 	       --min_lr 0.0005 --fe_lr 0.001 --data_root data/LibriSpeech/wavs/ \
 	       --dtrans_cfg cfg/distortions/pase+.cfg \
-	       --stats data/librispeech_stats.pkl \
+	       --stats data/librispeech_stats_pase+.pkl \
 	       --chunk_size 32000 \
 	       --tensorboard False \
 	       --backprop_mode base\
