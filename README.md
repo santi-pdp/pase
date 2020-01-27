@@ -20,7 +20,7 @@ The PASE+ parameters used in our most recently [published work](http://veu.talp.
 
 ```
 from pase.models.frontend import wf_builder
-pase = wf_builder('cfg/PASE+.cfg').eval()
+pase = wf_builder('cfg/frontend/PASE+.cfg').eval()
 pase.load_pretrained('FE_e199.ckpt', load_last=True, verbose=True)
 
 # Now we can forward waveforms as Torch tensors
@@ -93,6 +93,10 @@ python -u train.py --batch_size 32 --epoch 100 --save_path pase_ckpt --num_worke
 	--data_cfg data/librispeech_data.cfg --min_lr 0.0005 --fe_lr 0.0005 \
 	--data_root data/LibriSpeech/wavs/ --stats data/librispeech_stats.pkl --lrdec_step 30 --lrdecay 0.5
 ```
+Note that `data_root`, `stats` and `data_cfg` are the mentioned data root folder, training statistics file and dataset configuration file (created in previous section).
+[TensorboardX](https://github.com/lanpa/tensorboardX) is used during training to dump stats information (stored in `save_path` folder, together with the model checkpoints). The learning rates `min_lr` and `fe_lr` control the worker learning rates and the encoder learning rates respectively. The `lrdec_step` and `lrdecay` params control
+the learning rate decay factor and the periodic step at which it is applied, for all components (workers and PASE).
+
 To replicate PASE+ training, execute the following:
 
 ```
@@ -101,7 +105,7 @@ python -u  train.py --batch_size 16 --epoch 400 --save_path pase+_ckpt \
 	       --fe_cfg cfg/frontend/PASE+.cfg --do_eval --data_cfg data/librispeech_data_50h.cfg \
 	       --min_lr 0.0005 --fe_lr 0.001 --data_root data/LibriSpeech/wavs/ \
 	       --dtrans_cfg cfg/distortions/pase+.cfg \
-	       --stats data/workers+.pkl \
+	       --stats data/librispeech_stats.pkl \
 	       --chunk_size 32000 \
 	       --tensorboard False \
 	       --backprop_mode base\
@@ -109,10 +113,10 @@ python -u  train.py --batch_size 16 --epoch 400 --save_path pase+_ckpt \
 	       --lr_mode poly
 ```
 
-Note that `data_root`, `stats` and `data_cfg` are the mentioned data root folder, training statistics file and dataset configuration file (created in previous section).
-[TensorboardX](https://github.com/lanpa/tensorboardX) is used during training to dump stats information (stored in `save_path` folder, together with the model checkpoints). The `do_eval` flag activates validation 
-tracking which will be printed out to tensorboard. The learning rates `min_lr` and `fe_lr` control the worker learning rates and the encoder learning rates respectively. The `lrdec_step` and `lrdecay` params control
-the learning rate decay factor and the periodic step at which it is applied, for all components (workers and PASE). 
+Note that the `--lr_mode` allows to choose a different learning rate scheduler. In the `poly` case, a polynomial scheduler updates the LR to reach zero in the end of the programmed epochs. 
+
+The `--dtrans_cfg` flag controls the pointer to the configuration of data augmentation distortions in the form of additive noises, reverberations, etc.
+  
 
 ### Running an ASR experiment
 
