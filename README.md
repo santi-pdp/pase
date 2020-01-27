@@ -20,7 +20,7 @@ The PASE+ parameters used in our most recently [published work](http://veu.talp.
 
 ```
 from pase.models.frontend import wf_builder
-pase = wf_builder('cfg/PASE+.cfg').eval()
+pase = wf_builder('cfg/frontend/PASE+.cfg').eval()
 pase.load_pretrained('FE_e199.ckpt', load_last=True, verbose=True)
 
 # Now we can forward waveforms as Torch tensors
