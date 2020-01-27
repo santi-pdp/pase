@@ -88,7 +88,7 @@ the workers that will be active, and the statistics are specific to the workers.
 To train PASE for 150 epochs, with the same hyper-parameters as those in the first published work, execute the following script:
 
 ```
-python -u train.py --batch_size 32 --epoch 100 --save_path pase_ckpt --num_workers 1 \
+python -u train.py --batch_size 32 --epoch 150 --save_path pase_ckpt --num_workers 1 \
 	--net_cfg cfg/workers/workers.cfg --fe_cfg cfg/frontend/PASE.cfg \
 	--data_cfg data/librispeech_data.cfg --min_lr 0.0005 --fe_lr 0.0005 \
 	--data_root data/LibriSpeech/wavs/ --stats data/librispeech_stats.pkl --lrdec_step 30 --lrdecay 0.5
