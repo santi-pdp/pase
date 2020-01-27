@@ -42,8 +42,8 @@ The self-supervised training stage requires the following components to be speci
 * data root folder: contains `wav` files (or soft links to them) without subfolders.
 * trainset statistics file to normalize each worker's output values, computed with the `make_trainset_statistics.py` script.
 * dataset configuration `data_cfg` file: contains pointers to train/valid/test splits, among other info.
-* front-end (encoder) configuration file: `cfg/PASE+.cfg`
-* workers' configuration file: `cfg/workers+.cfg` 
+* front-end (encoder) configuration file: `cfg/frontend/PASE+.cfg`
+* workers' configuration file: `cfg/workers/workers+.cfg` 
 
 #### Making the dataset config file
 
@@ -97,8 +97,8 @@ To replicate PASE+ training, execute the following:
 
 ```
 python -u  train.py --batch_size 16 --epoch 400 --save_path pase+_ckpt \
-	       --num_workers 16 --warmup 10000000 --net_cfg cfg/workers+.cfg \
-	       --fe_cfg cfg/PASE+.cfg --do_eval --data_cfg data/librispeech_data_50h.cfg \
+	       --num_workers 16 --warmup 10000000 --net_cfg cfg/workers/workers+.cfg \
+	       --fe_cfg cfg/frontend/PASE+.cfg --do_eval --data_cfg data/librispeech_data_50h.cfg \
 	       --min_lr 0.0005 --fe_lr 0.001 --data_root data/LibriSpeech/wavs/ \
 	       --dtrans_cfg cfg/distortions/pase+.cfg \
 	       --stats data/workers+.pkl \
@@ -124,7 +124,7 @@ To run a TIMIT experiment, go to the ASR folder and execute the following comman
 python run_TIMIT_full_decoding.py $pase_cfg $pase_model $timit_folder $out_folder cfg/MLP_PASE.cfg  cfg/decoder.cfg
 ```
 
-where $pase_cfg is the path containing the PASE config file (e.g, ../cfg/PASE+.cfg) and $pase_model contains the path to the PASE weights (e.g,  FE_e199.ckpt).
+where $pase_cfg is the path containing the PASE config file (e.g, ../cfg/frontend/PASE+.cfg) and $pase_model contains the path to the PASE weights (e.g,  FE_e199.ckpt).
 
 The script will train the speech recognition system. Once trained the NN, we run the kaldi decoder to retrieve the final sequence of phones. You can take a look into the Phoneme Error Rate by typing:
 
