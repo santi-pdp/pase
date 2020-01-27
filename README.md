@@ -195,7 +195,7 @@ PASE
   author={Santiago Pascual and Mirco Ravanelli and Joan Serrà and Antonio Bonafonte and Yoshua Bengio},
   title={{Learning Problem-Agnostic Speech Representations from Multiple Self-Supervised Tasks}},
   year=2019,
-  booktitle={Proc. Interspeech 2019},
+  booktitle={Proc. of the Conf. of the Int. Speech Communication Association (INTERSPEECH)},
   pages={161--165},
   url={http://dx.doi.org/10.21437/Interspeech.2019-2605}
 }
