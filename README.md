@@ -116,6 +116,22 @@ python -u  train.py --batch_size 16 --epoch 400 --save_path pase+_ckpt \
 Note that the `--lr_mode` allows to choose a different learning rate scheduler. In the `poly` case, a polynomial scheduler updates the LR to reach zero in the end of the programmed epochs. 
 
 The `--dtrans_cfg` flag controls the pointer to the configuration of data augmentation distortions in the form of additive noises, reverberations, etc.
+
+#### Distortions Configuration
+
+The configuration for the distortions allows to control the probability of a distortion being active for a sample in the batch. Hence, distortions are applied on the fly and independently, although with a hard-coded order as programmed in file `pase/transforms.py` (i.e. Reverb happens before Additive, etc.). Note that there are possible distortions:
+
+* Overlap: activated with `overlap_p > 0`
+* Additive noise: activated with `noises_p > 0`
+* Amplitude clipping: activated with `clip_p > 0`
+* Waveform chopping: activated with `chop_p > 0`
+* Waveform resampling: activated with `downsample_p > 0`
+* Frequency band-drop: activated with `bandrop_p > 0`
+* Reverberation: activated with `reverb_p > 0`
+
+Each distortion has a set of parameters that can be controlled, like the impulse response files used to emulate reverberation or pointers to the directories where additive noises are found and the SNRs to be applied randomly. The file `cfg/distortions/pase+.cfg` exemplifies all the possible options to be controlled for the different distortions. A more exhaustive description of each configuration field will be provided soon, as well as pointers to some files that might be used to do a DIY training session with augmentation.
+
+If no `--dtrans_cfg` file is provided, the waveforms are loaded as-is without any change except for a possible random scaling in case `--random_scale True` is supplied in the training command, as shown above.
   
 
 ### Running an ASR experiment
