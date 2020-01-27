@@ -17,9 +17,16 @@ def load_filenames(opts):
 
 def main(opts):
 
-    out = {"reverb_data_root":opts.data_root, 
-           "reverb_fmt":"wav",
-           "reverb_irfiles":[]}
+    if opts.existing_cfg is not None:
+        with open(opts.existing_cfg, 'r') as ex_f:
+            out = json.load(ex_f)
+            out['reverb_data_root'] = opts.data_root
+            out['reverb_fmt'] = 'wav'
+            out['reverb_irfiles'] = []
+    else:
+        out = {"reverb_data_root":opts.data_root, 
+               "reverb_fmt":"wav",
+               "reverb_irfiles":[]}
 
     rooms = load_filenames(opts)
     final_rirs = []
@@ -70,6 +77,7 @@ if __name__ == '__main__':
     parser.add_argument('--medium_room_ratio', type=float, default=1.0)
     parser.add_argument('--large_room_ratio', type=float, default=1.0)
     parser.add_argument('--convert2npy', action='store_true', default=False)
+    parser.add_argument('--existing_cfg', type=str, default=None)
     parser.add_argument('--out_file', type=str, required=True)
 
     
