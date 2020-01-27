@@ -14,6 +14,16 @@ This repository contains the official implementations of [PASE](https://arxiv.or
 
 *NOTE: Edit the cupy-cuda100 requirement in the file if needed depending on your CUDA version. Defaults to 10.0 now*
 
+### Install 
+
+This framework can be installed locally by running:
+
+```
+python setup.py install
+```
+
+This will allow you to import PASE modules from anywhere.
+
 ## Pre-trained Model
 
 The PASE+ parameters used in our most recently [published work](http://veu.talp.cat/papers/pase_asr_icassp2020.pdf) can be found if you [CLICK HERE](https://drive.google.com/open?id=1xwlZMGnEt9bGKCVcqDeNrruLFQW5zUEW). This ckpt file contains the encoder parameters only, without any worker. This ckpt named `FE_e199.ckpt`, and the configuration file `cfg/frontend/PASE+.cfg` let you build and use the encoder in the following simple manner:
