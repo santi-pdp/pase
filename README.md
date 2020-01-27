@@ -129,20 +129,30 @@ The `--dtrans_cfg` flag controls the pointer to the configuration of data augmen
 
 #### Distortions Configuration
 
-The configuration for the distortions allows to control the probability of a distortion being active for a sample in the batch. Hence, distortions are applied on the fly and independently, although with a hard-coded order as programmed in file `pase/transforms.py` (i.e. Reverb happens before Additive, etc.). Note that there are possible distortions:
+The configuration for the distortions (supplied with the `--dtrans_cfg` argument) allows to control the probability of a distortion being active for a sample in the batch. Hence, distortions are applied on the fly and independently, although with a hard-coded order as programmed in file `pase/transforms.py` (i.e. Reverb happens before Additive, etc.). Note that there are possible distortions:
 
-* Overlap: activated with `overlap_p > 0`
-* Additive noise: activated with `noises_p > 0`
-* Amplitude clipping: activated with `clip_p > 0`
-* Waveform chopping: activated with `chop_p > 0`
-* Waveform resampling: activated with `downsample_p > 0`
-* Frequency band-drop: activated with `bandrop_p > 0`
-* Reverberation: activated with `reverb_p > 0`
+* Overlap: activated with `overlap_p > 0` . This overlaps random chunks of speech from the selected directory of `wavs` emulating background speakers with the specified SNRs in `overlap_snrs` (picked randomly).
+* Additive noise: activated with `noises_p > 0`. Selects a noise file from the specified directories and applies a random SNR out of the possible values.
+* Amplitude clipping: activated with `clip_p > 0`. Clips the waveform amplitude on values beyond a specified percentage of the maximum peak (e.g. `0.1`value means clamp all values exceeding on absolute amplitude the value `0.1 x max_asbsolute_amplitude`).
+* Waveform chopping: activated with `chop_p > 0`. Chops continuous sections of speech by building windows randomly sized following a Gaussian pdf with the values specified as tuples in the `chop_factors` array. For instance, `[0.05, 0.025]` means sampling a window of size `0.05 sec` on average with `0.025 sec` standard deviation. Many Gaussian parameterizations can be supplied to have windows of different sizes on average, which are then sampled uniformly random.
+* Waveform resampling: activated with `downsample_p > 0`. Resample the signal to make it narrowband.
+* Frequency band-drop: activated with `bandrop_p > 0`. Apply random bandpass filters to equalize the spectrogram per bands.
+* Reverberation: activated with `reverb_p > 0`.
 
-Each distortion has a set of parameters that can be controlled, like the impulse response files used to emulate reverberation or pointers to the directories where additive noises are found and the SNRs to be applied randomly. The file `cfg/distortions/pase+.cfg` exemplifies all the possible options to be controlled for the different distortions. A more exhaustive description of each configuration field will be provided soon, as well as pointers to some files that might be used to do a DIY training session with augmentation.
+Each distortion has a set of parameters that can be controlled, like the impulse response files used to emulate reverberation or pointers to the directories where additive noises are found and the SNRs to be applied randomly. The file `cfg/distortions/pase+.cfg` exemplifies all the possible options to be controlled for the different distortions. 
 
 If no `--dtrans_cfg` file is provided, the waveforms are loaded as-is without any change except for a possible random scaling in case `--random_scale True` is supplied in the training command, as shown above.
-  
+
+**Links to the data to perform distortions:**
+* Band-drop/Resampling filters are [HERE](https://drive.google.com/open?id=1oaWnurx0nHcUGpr5aiQ1La55S2USmA4p)
+* Additive noises are [HERE](https://drive.google.com/open?id=1kDrUM97uoCtPm_kXMMtMkiHLvt26FWIT)
+* For reverberation, the publicly available OpenSLR simulated RIRs can be found [HERE](https://www.openslr.org/26/)
+
+If you want to use the openSLR RIRs, you should run the following command to include the file pointers into the distortions config file:
+```
+python data/prep/prepare_openslr_rirs_cfg.py --data_root data/simulated_rirs_16k --out_file cfg/distortions/pase+.cfg --existing_cfg cfg/distortions/pase+.cfg
+```
+Note that this points to the dataset root `simulated_rirs_16k` and overwrites the existing IR file pointers in the `cfg/distortions/pase+.cfg`.
 
 ### Running an ASR experiment
 
