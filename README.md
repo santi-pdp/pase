@@ -16,7 +16,7 @@ This repository contains the official implementations of [PASE](https://arxiv.or
 
 ## Pre-trained Model
 
-The PASE+ parameters used in our most recently [published work](http://veu.talp.cat/papers/pase_asr_icassp2020.pdf) can be found if you [CLICK HERE](https://drive.google.com/open?id=1xwlZMGnEt9bGKCVcqDeNrruLFQW5zUEW). This ckpt file contains the encoder parameters only, without any worker. This, and the configuration file cfg/PASE+.cfg let you build and use the encoder in the following simple manner:
+The PASE+ parameters used in our most recently [published work](http://veu.talp.cat/papers/pase_asr_icassp2020.pdf) can be found if you [CLICK HERE](https://drive.google.com/open?id=1xwlZMGnEt9bGKCVcqDeNrruLFQW5zUEW). This ckpt file contains the encoder parameters only, without any worker. This ckpt named `FE_e199.ckpt`, and the configuration file `cfg/frontend/PASE+.cfg` let you build and use the encoder in the following simple manner:
 
 ```
 from pase.models.frontend import wf_builder
