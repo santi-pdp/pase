@@ -198,3 +198,14 @@ PASE
   url={http://dx.doi.org/10.21437/Interspeech.2019-2605}
 }
 ```
+
+PASE+
+```
+% WaveNet
+@article{Ravanelli2020,
+  title={{Multi-task self-supervised learning for Robust Speech Recognition}},
+  author={Mirco Ravanelli and Jianyuan Zhong and Santiago Pascual and Pawel Swietojanski and Joao Monteiro and Jan Trmal and Yoshua Bengio},
+  journal={ArXiv:2001.09239},
+  year={2020}
+}
+```
