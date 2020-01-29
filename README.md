@@ -1,6 +1,6 @@
 # Problem Agnostic Speech Encoder (PASE)
 
-This repository contains the official implementations of [PASE](https://arxiv.org/abs/1904.03416) and [PASE+](http://veu.talp.cat/papers/pase_asr_icassp2020.pdf). These are speech waveform encoders trained in a self-supervised manner with the so called worker/minion framework. A PASE model can be used as a speech feature extractor or to pre-train an encoder for our desired end-task, like speech classification such as in ASR, seaker recognition, or emotion recognition, or speech generation such as in voice conversion or [TTS](https://arxiv.org/abs/1906.00733).
+This repository contains the official implementations of [PASE](https://arxiv.org/abs/1904.03416) and [PASE+](https://arxiv.org/pdf/2001.09239.pdf). These are speech waveform encoders trained in a self-supervised manner with the so called worker/minion framework. A PASE model can be used as a speech feature extractor or to pre-train an encoder for our desired end-task, like speech classification such as in ASR, seaker recognition, or emotion recognition, or speech generation such as in voice conversion or [TTS](https://arxiv.org/abs/1906.00733).
 
 ![pase+](https://user-images.githubusercontent.com/7583502/72657492-42b88f00-39a5-11ea-9ae6-cf96a1e09042.png)
 
