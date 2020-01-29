@@ -84,7 +84,8 @@ options['dnn_use_laynorm_inp']='True'
 options['dnn_use_batchnorm_inp']='False'
 options['dnn_act']='relu,softmax'
 
-device=0 #get_freer_gpu()
+#device=0 #get_freer_gpu()
+device='cuda'
 
 
 # folder creation
@@ -114,24 +115,30 @@ for wav_file in dev_lst:
     [signal, fs] = sf.read(data_folder+'/'+wav_file)
     signal=signal/np.max(np.abs(signal))
     fea_id=wav_file.split('/')[-2]+'_'+wav_file.split('/')[-1].split('.')[0]
-    fea_dev[fea_id]=torch.from_numpy(signal).float().to(device).view(1,1,-1)
+    fea_dev[fea_id]=torch.from_numpy(signal).float().view(1,1,-1)
 
 
 # Computing pase features for training
 print('Computing PASE features...')
-fea_pase={}
-for snt_id in fea.keys():
-    pase.eval()
-    fea_pase[snt_id]=pase(fea[snt_id], device,mode='avg_norm').to('cpu').detach()
-    fea_pase[snt_id]=fea_pase[snt_id].view(fea_pase[snt_id].shape[1],fea_pase[snt_id].shape[2]).transpose(0,1)
+with torch.no_grad():
+    fea_pase={}
+    for wi, snt_id in enumerate(fea.keys()):
+        #pase.eval()
+        fea_pase[snt_id]=pase(fea[snt_id].to(device), device=device,mode='avg_norm').to('cpu').detach()
+        fea_pase[snt_id]=fea_pase[snt_id].view(fea_pase[snt_id].shape[1],fea_pase[snt_id].shape[2]).transpose(0,1)
+        print('Processed training utterance {}/{} features'.format(wi + 1,
+                                                                   len(fea.keys())))
 
 inp_dim=fea_pase[snt_id].shape[1]*(left+right+1)
 
-# Computing pase features for test
-fea_pase_dev={}
-for snt_id in fea_dev.keys():
-    fea_pase_dev[snt_id]=pase(fea_dev[snt_id], device, mode='avg_norm').to('cpu').detach()
-    fea_pase_dev[snt_id]=fea_pase_dev[snt_id].view(fea_pase_dev[snt_id].shape[1],fea_pase_dev[snt_id].shape[2]).transpose(0,1)
+with torch.no_grad():
+    # Computing pase features for test
+    fea_pase_dev={}
+    for wi, snt_id in enumerate(fea_dev.keys()):
+        fea_pase_dev[snt_id]=pase(fea_dev[snt_id].to(device), device=device, mode='avg_norm').to('cpu').detach()
+        fea_pase_dev[snt_id]=fea_pase_dev[snt_id].view(fea_pase_dev[snt_id].shape[1],fea_pase_dev[snt_id].shape[2]).transpose(0,1)
+        print('Processed test utterance {}/{} features'.format(wi + 1,
+                                                               len(fea_dev.keys())))
 
   
 # Label file reading
