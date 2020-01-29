@@ -4,6 +4,7 @@ import math
 import torch.nn.functional as F
 from torch.distributions import Binomial
 from torch.nn.utils.spectral_norm import spectral_norm
+from torch.nn.utils.weight_norm import weight_norm
 import numpy as np
 import json
 import os
@@ -84,6 +85,9 @@ def build_norm_layer(norm_type, param=None, num_feats=None):
         return nn.BatchNorm1d(num_feats)
     elif norm_type == 'lnorm':
         return nn.LayerNorm(num_feats)
+    elif norm_type == 'wnorm':
+        weight_norm(param)
+        return None
     elif norm_type == 'inorm':
         return nn.InstanceNorm1d(num_feats, affine=False)
     elif norm_type == 'affinorm':
@@ -118,6 +122,9 @@ def forward_activation(activation, tensor):
         return y
     else:
         return activation(tensor)
+
+def get_padding(kwidth, dilation):
+    return (kwidth // 2) * dilation
 
 class NeuralBlock(nn.Module):
 
@@ -928,10 +935,11 @@ class FeResBlock(NeuralBlock):
 
     def __init__(self, num_inputs,
                  fmaps, kwidth, 
-                 dilation,
-                 pad_mode='reflect',
+                 dilations=[1, 2],
+                 downsample=1,
+                 pad_mode='constant',
                  act=None,
-                 norm_type='bnorm',
+                 norm_type=None,
                  name='FeResBlock'):
         super().__init__(name=name)
         if act is not None and act == 'glu':
@@ -941,35 +949,39 @@ class FeResBlock(NeuralBlock):
         self.num_inputs = num_inputs
         self.fmaps = fmaps
         self.kwidth = kwidth
+        downscale = 1. / downsample
+        self.downscale = downscale
         # stride is ignored for no downsampling is
         # possible in FeResBlock
         self.stride = 1
-        self.dilation = dilation
-        self.pad_mode = pad_mode
+        #self.dilation = dilation
+        dilation = dilations[0]
         self.conv1 = nn.Conv1d(num_inputs,
                                Wfmaps, kwidth,
-                               stride=1,
-                               dilation=dilation)
+                               dilation=dilation,
+                               padding=get_padding(kwidth, dilation))
         self.norm1 = build_norm_layer(norm_type,
                                       self.conv1,
                                       fmaps)
-        assert self.norm1 is not None
+        #assert self.norm1 is not None
         self.act1 = build_activation(act, fmaps)
+        dilation = dilations[1]
         self.conv2 = nn.Conv1d(fmaps, Wfmaps,
-                               kwidth, stride=1,
-                               dilation=dilation)
+                               kwidth,
+                               dilation=dilation,
+                               padding=get_padding(kwidth, dilation))
         self.norm2 = build_norm_layer(norm_type,
                                       self.conv2,
                                       fmaps)
-        assert self.norm2 is not None
+        #assert self.norm2 is not None
         self.act2 = build_activation(act, fmaps)
         if self.num_inputs != self.fmaps:
             # build projection layer
             self.resproj = nn.Conv1d(self.num_inputs,
-                                     self.fmaps, 1,
-                                     bias=False)
+                                     self.fmaps, 1)
 
     def forward(self, x):
+        """
         # compute pad factor
         if self.kwidth % 2 == 0:
             if self.dilation > 1:
@@ -980,19 +992,23 @@ class FeResBlock(NeuralBlock):
             pad = (self.kwidth // 2) * (self.dilation - 1) + \
                     (self.kwidth // 2)
             P = (pad, pad)
+        """
         identity = x
-        x = F.pad(x, P, mode=self.pad_mode)
-        h = self.conv1(x)
-        h = forward_activation(self.act1, h)
-        h = forward_norm(h, self.norm1)
-        h = F.pad(h, P, mode=self.pad_mode)
-        h = self.conv2(h)
-        h = forward_activation(self.act2, h)
+        #x = F.pad(x, P, mode=self.pad_mode)
+        if self.downscale < 1:
+            x = F.interpolate(x, scale_factor=self.downscale)
+        x = self.conv1(x)
+        x = forward_norm(x, self.norm1)
+        x = forward_activation(self.act1, x)
+        x = self.conv2(x)
+        x = forward_activation(self.act2, x)
         if hasattr(self, 'resproj'):
             identity = self.resproj(identity)
-        h = h + identity
-        h = forward_norm(h, self.norm2)
-        return h
+        if self.downscale < 1:
+            identity = F.interpolate(identity, scale_factor=self.downscale)
+        x = x + identity
+        x = forward_norm(x, self.norm2)
+        return x
 
 class FeBlock(NeuralBlock):
 

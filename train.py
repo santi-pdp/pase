@@ -366,7 +366,7 @@ if __name__ == '__main__':
     parser.add_argument('--net_cfg', type=str,
                         default=None)
     parser.add_argument('--fe_cfg', type=str, default=None)
-    parser.add_argument('--do_eval', action='store_true', default=False)
+    #parser.add_argument('--do_eval', action='store_true', default=False)
     parser.add_argument('--pretrained_ckpt', type=str, default=None)
     parser.add_argument('--save_path', type=str, default='ckpt')
     parser.add_argument('--max_ckpts', type=int, default=5)
@@ -451,6 +451,8 @@ if __name__ == '__main__':
     parser.add_argument('--hop', type=int, default=160)
 
     opts = parser.parse_args()
+    # enforce evaluation for now, no option to disable
+    opts.do_eval = True
     opts.ckpt_continue = not str2bool(opts.no_continue)
     if opts.net_cfg is None:
         raise ValueError('Please specify a net_cfg file')

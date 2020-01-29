@@ -165,7 +165,8 @@ class WaveFe(Model):
                 sincnet = False
             if resblocks and not sincnet:
                 feblock = FeResBlock(ninp, fmap, kwidth, 
-                                     dilation, act=activation,
+                                     downsample=stride,
+                                     act=activation,
                                      pad_mode=pad_mode, norm_type=norm_type)
             else:
                 feblock = FeBlock(ninp, fmap, kwidth, stride,
