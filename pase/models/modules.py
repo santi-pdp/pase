@@ -111,6 +111,8 @@ def forward_norm(x, norm_layer):
 def build_activation(activation, params, init=0):
     if activation == 'prelu' or activation is None:
         return nn.PReLU(params, init=init)
+    if isinstance(activation, str):
+        return getattr(nn, activation)()
     else:
         return activation
 
@@ -963,17 +965,16 @@ class FeResBlock(NeuralBlock):
         self.norm1 = build_norm_layer(norm_type,
                                       self.conv1,
                                       fmaps)
-        #assert self.norm1 is not None
         self.act1 = build_activation(act, fmaps)
         dilation = dilations[1]
         self.conv2 = nn.Conv1d(fmaps, Wfmaps,
                                kwidth,
                                dilation=dilation,
                                padding=get_padding(kwidth, dilation))
+        #assert self.norm2 is not None
         self.norm2 = build_norm_layer(norm_type,
                                       self.conv2,
                                       fmaps)
-        #assert self.norm2 is not None
         self.act2 = build_activation(act, fmaps)
         if self.num_inputs != self.fmaps:
             # build projection layer
