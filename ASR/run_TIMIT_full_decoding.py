@@ -1,7 +1,7 @@
 #
 # To run a TIMIT experiment, go to the ASR folder and execute the following command:
 #
-# python run_TIMIT_full_decoding.py ../cfg/frontend/PASE+.cfg ../FE_e199.ckpt $SLURM_TMPDIR/TIMIT/ TIMIT_asr_exp.res cfg/MLP_PASE.cfg cfg/decoder.cfg 
+# python run_TIMIT_full_decoding.py ../cfg/frontend/PASE+.cfg ../FE_e199.ckpt $SLURM_TMPDIR/TIMIT/ TIMIT_asr_exp cfg/MLP_PASE.cfg cfg/decoder.cfg 
 #
 
 
@@ -42,7 +42,7 @@ def get_freer_gpu(trials=10):
 pase_cfg = sys.argv[1]  # e.g, '../cfg/frontend/PASE+.cfg'
 pase_model = sys.argv[2]  # e.g, '../FE_e199.ckp' (download the pre-trained PASE+ model as described in the doc)
 data_folder = sys.argv[3]  # e.g., '/home/mirco/Dataset/TIMIT'
-output_folder = sys.argv[4]  # e.g., 'TIMIT_asr_exp.res'
+output_folder = sys.argv[4]  # e.g., 'TIMIT_asr_exp'
 cfg_file = sys.argv[5]  # e.g, cfg/MLP_pase.cfg
 cfg_dec = sys.argv[6]  # e.g., cfg/decoder.cfg
 
