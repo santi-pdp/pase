@@ -397,9 +397,12 @@ if not(skip_training):
         err_batch_history.append(err_batches_dev/N_batches_dev)
 
         print("epoch=%i loss_tr=%f err_tr=%f loss_te=%f err_te=%f lr=%f" % (ep, loss_batches/N_batches,
-                                                                            err_batches/N_batches, loss_batches_dev/N_batches_dev, err_batches_dev/N_batches_dev, lr))
+            err_batches/N_batches, loss_batches_dev/N_batches_dev, err_batches_dev/N_batches_dev, lr))
+        
+        text_file = open(output_file, "a+")
         text_file.write("epoch=%i loss_tr=%f err_tr=%f loss_te=%f err_te=%f lr=%f\n" % (
             ep, loss_batches/N_batches, err_batches/N_batches, loss_batches_dev/N_batches_dev, err_batches_dev/N_batches_dev, lr))
+        text_file.close()
 
         # learning rate annealing
         if ep > 0:
@@ -414,6 +417,7 @@ if not(skip_training):
 
     print('BEST ERR=%f' % (min(err_batch_history)))
     print('BEST ACC=%f' % (1-min(err_batch_history)))
+    text_file = open(output_file, "a+")
     text_file.write('BEST_ERR=%f\n' % (min(err_batch_history)))
     text_file.write('BEST_ACC=%f\n' % (1-min(err_batch_history)))
     text_file.close()
@@ -476,7 +480,7 @@ if not decoding_only:
     options['dnn_act'] = dnn_act
 
     # folder creation
-    text_file = open(output_file, "w")
+    #text_file = open(output_file, "w")
 
     # Loading pase
     pase = wf_builder(pase_cfg)
