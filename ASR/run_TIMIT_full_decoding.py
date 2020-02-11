@@ -46,6 +46,9 @@ cfg_dec = sys.argv[6]  # e.g., cfg/decoder.cfg
 
 skip_training = False
 
+# using absolute path for output folder
+output_folder=os.path.abspath(output_folder)
+
 count_file = output_folder+'/count.npy'
 ASR_model_file = output_folder+'/model.pkl'  # e.g., TIMIT_matconv_512/model.pkl
 
