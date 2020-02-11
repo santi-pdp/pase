@@ -21,6 +21,8 @@ import json
 from data_io import write_mat, open_or_fd
 from utils import run_shell
 
+import warnings
+warnings.filterwarnings("ignore")
 
 def get_freer_gpu(trials=10):
     for j in range(trials):
