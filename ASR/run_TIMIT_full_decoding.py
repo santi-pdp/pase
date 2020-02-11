@@ -83,8 +83,8 @@ if not(skip_training):
     batch_size = int(cfg['batch_size'])
     halving_factor = float(cfg['halving_factor'])
     lr = float(cfg['lr'])
-    left = int(cfg['left'])
-    right = int(cfg['right'])
+    left = int(cfg['left']) # Reduce this to minimize memory (but it has an effect on performance too)
+    right = int(cfg['right']) # Reduce this to minimize memory (but it has an effect on performance too)
     avg_spk = bool(cfg['avg_spk'])
     dnn_lay = cfg['dnn_lay']
     dnn_drop = cfg['dnn_drop']
