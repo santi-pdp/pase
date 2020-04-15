@@ -5,10 +5,12 @@ import random
 from random import shuffle
 import numpy as np
 import soundfile as sf
+import torchaudio
 import os
 
 def get_file_dur(fname):
-    x, rate = sf.read(fname)
+    #x, rate = sf.read(fname)
+    x, rate = torchaudio.load(fname)
     return len(x)
 
 def main(opts):
