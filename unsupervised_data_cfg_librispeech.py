@@ -9,9 +9,8 @@ import torchaudio
 import os
 
 def get_file_dur(fname):
-    #x, rate = sf.read(fname)
     x, rate = torchaudio.load(fname)
-    return len(x)
+    return x.shape[1]
 
 def main(opts):
     random.seed(opts.seed)
