@@ -8,14 +8,13 @@ import torchaudio
 import os
 
 def get_file_dur(fname):
-    #x, rate = sf.read(fname)
     try:
         x, rate = torchaudio.load(fname)
     except RuntimeError:
         print(f"Error processing {fname}")
         return (0)
 
-    return len(x)
+    return x.shape[1]
 
 
 def main(opts):
