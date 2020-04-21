@@ -262,7 +262,7 @@ def train(opts):
 
     #torch.autograd.set_detect_anomaly(True)
 
-    # ---------------------
+    # --------------------- 
     # Build Model
 
     minions_cfg = worker_parser(opts.net_cfg)
@@ -363,9 +363,9 @@ if __name__ == '__main__':
     parser.add_argument('--net_ckpt', type=str, default=None,
                         help='Ckpt to initialize the full network '
                              '(Def: None).')
-    parser.add_argument('--net_cfg', type=str,
+    parser.add_argument('--net_cfg', type=str, help="Workers configuration file (see cfg/workers/*.cfg)",
                         default=None)
-    parser.add_argument('--fe_cfg', type=str, default=None)
+    parser.add_argument('--fe_cfg', help="Frontend (main) model definition, see cfg/frontend/*.cfg - PASE or PASE+", type=str, default=None)
     #parser.add_argument('--do_eval', action='store_true', default=False)
     parser.add_argument('--pretrained_ckpt', type=str, default=None)
     parser.add_argument('--save_path', type=str, default='ckpt')
