@@ -331,6 +331,8 @@ def train(opts):
     model_description = str(Trainer.model)
     tfh = tempfile.NamedTemporaryFile(mode="w")
     tfh.write(model_description)
+    tfh.flush()
+
     print(model_description)
     num_params = Trainer.model.frontend.describe_params()
     print(f'Frontend params: {num_params}')
