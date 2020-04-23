@@ -19,6 +19,8 @@ import torch
 import pickle
 import torch.nn as nn
 import numpy as np
+import neptune
+import tempfile
 import argparse
 import os
 import json
@@ -325,8 +327,32 @@ def train(opts):
                       lr_mode=opts.lr_mode,
                       tensorboard=str2bool(opts.tensorboard),
                       device=device)
-    print(Trainer.model)
-    print('Frontend params: ', Trainer.model.frontend.describe_params())
+    
+    model_description = str(Trainer.model)
+    tfh = tempfile.NamedTemporaryFile(mode="w")
+    tfh.write(model_description)
+    print(model_description)
+    num_params = Trainer.model.frontend.describe_params()
+    print(f'Frontend params: {num_params}')
+
+
+    # Prepare logging
+    neptune_settings = None
+    npt_exp = None
+    if opts.neptune is not None:
+        with open(opts.neptune, "r") as fh:
+            neptune_settings = json.load(fh)
+            fh.close()
+
+        neptune.init(neptune_settings["project_name"], api_token=neptune_settings["api_key"])
+        npt_exp = neptune.create_experiment(params=vars(opts),name=opts.experimentname, tags=opts.tags)            
+    else:
+        # running offline
+        neptune.init(backend=neptune.OfflineBackend(), project_qualified_name="offline/PASE+")
+    
+    neptune.log_artifact(tfh.name, "model_description.txt")
+    tfh.close()
+    neptune.set_property("frontend_params", num_params)
 
     Trainer.model.to(device)
 
@@ -432,7 +458,12 @@ if __name__ == '__main__':
     parser.add_argument('--att_cfg', type=str, help='Path to the config file of attention blocks')
     parser.add_argument('--avg_factor', type=float, default=0, help="running average factor for option running_avg for attention")
     parser.add_argument('--att_mode', type=str, help='options for attention block')
+
     parser.add_argument('--tensorboard', type=str, default='True', help='use tensorboard for logging')
+    parser.add_argument('--neptune', type=str, default=None, required=False, help="Path to JSON-format file with Neptune credentials for cloud experiment tracking")
+    parser.add_argument('--experimentname', type=str, default="Debug", required=False, help="Experiment name to display in Neptune")
+    parser.add_argument("--tags", nargs="*", help="Tags for organising Neptune experiments", default=["debug"])
+
     parser.add_argument('--backprop_mode', type=str, default='base',help='backprop policy can be choose from: [base, select_one, select_half]')
     parser.add_argument('--dropout_rate', type=float, default=0.5, help="drop out rate for workers")
     parser.add_argument('--delta', type=float, help="delta for hyper volume loss scheduling")
