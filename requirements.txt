@@ -4,6 +4,7 @@ numpy==1.16.4
 scipy==1.1.0
 librosa==0.6.3
 SoundFile==0.10.2
+torchaudio==0.4.0
 pysptk==0.1.16
 matplotlib==3.0.2
 python_speech_features==0.6

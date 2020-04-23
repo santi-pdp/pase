@@ -4,12 +4,18 @@ import argparse
 import random
 from random import shuffle
 import numpy as np
-import soundfile as sf
+import torchaudio
 import os
 
 def get_file_dur(fname):
-    x, rate = sf.read(fname)
-    return len(x)
+    try:
+        x, rate = torchaudio.load(fname)
+    except RuntimeError:
+        print(f"Error processing {fname}")
+        return (0)
+
+    return x.shape[1]
+
 
 def main(opts):
     random.seed(opts.seed)
