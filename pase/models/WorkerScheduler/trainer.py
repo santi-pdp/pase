@@ -11,12 +11,13 @@ import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 import torch.nn as nn
 import numpy as np
+import neptune
 import random
 import os
 import pickle
 from tqdm import tqdm, trange
 try:
-    from tensorboardX import SummaryWriter
+    from torch.utils.tensorboard import SummaryWriter
     use_tb = True
 except ImportError:
     print('cannot import Tensorboard, use pickle for logging')
@@ -146,7 +147,7 @@ class trainer(object):
 
 
         # init tensorboard writer
-        print("Use tenoserboard: {}".format(tensorboard))
+        print("Use tensorboard: {}".format(tensorboard))
         self.tensorboard = tensorboard and use_tb
         if tensorboard and use_tb:
             self.writer = SummaryWriter(self.save_path)
@@ -395,6 +396,9 @@ class trainer(object):
             else:
                 pbar.write('%s, learning rate = %.8f, loss = %.4f' % (name, lrs[name], loss))
 
+            # Log to cloud experiment tracker
+            neptune.log_metric(f"{name}_loss", loss)
+
             if self.writer:
 
                 self.writer.add_scalar('train/{}_loss'.format(name),
@@ -439,9 +443,12 @@ class trainer(object):
                 loss = np.mean(loss)
                 pbar.write("avg loss {}: {}".format(name, loss))
 
-                self.writer.add_scalar('eval/{}_loss'.format(name),
-                                        loss,
-                                        global_step=epoch)
+            # Log to cloud experiment tracker
+            neptune.log_metric(f"{name}_loss", loss)
+
+            self.writer.add_scalar('eval/{}_loss'.format(name),
+                                    loss,
+                                    global_step=epoch)
         else:
             self.valid_losses['epoch'] = epoch
             self.valid_losses['losses'] = running_loss
