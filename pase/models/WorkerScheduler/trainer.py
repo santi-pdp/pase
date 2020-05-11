@@ -390,6 +390,11 @@ class trainer(object):
         pbar.write("=" * 50)
         pbar.write('Batch {}/{} (Epoch {}) step: {}:'.format(bidx, self.bpe, epoch, step))
 
+        neptune.log_text('Batch {}/{} (Epoch {}) step: {}:'.format(bidx, self.bpe, epoch, step))
+
+        for lr in lrs.keys():
+            neptune.log_metric(f"learning_rate_{lr}", lrs[lr])
+
         for name, loss in losses.items():
             if name == "total":
                 pbar.write('%s, learning rate = %.8f, loss = %.4f' % ("total", lrs['frontend'], loss))
