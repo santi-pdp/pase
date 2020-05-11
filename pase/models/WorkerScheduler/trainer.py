@@ -390,7 +390,8 @@ class trainer(object):
         pbar.write("=" * 50)
         pbar.write('Batch {}/{} (Epoch {}) step: {}:'.format(bidx, self.bpe, epoch, step))
 
-        neptune.log_text('Batch {}/{} (Epoch {}) step: {}:'.format(bidx, self.bpe, epoch, step))
+        neptune.log_text('progress', 'Batch {}/{} (Epoch {}) step: {}:'.format(bidx, self.bpe, epoch, step))
+        neptune.log_metric('epoch', epoch)
 
         for lr in lrs.keys():
             neptune.log_metric(f"learning_rate_{lr}", lrs[lr])
