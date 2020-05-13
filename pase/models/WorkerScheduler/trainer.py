@@ -448,9 +448,10 @@ class trainer(object):
             for name, loss in running_loss.items():
                 loss = np.mean(loss)
                 pbar.write("avg loss {}: {}".format(name, loss))
+                neptune.log_metric(f"eval_avg_{name}_loss", loss)
 
             # Log to cloud experiment tracker
-            neptune.log_metric(f"{name}_loss", loss)
+            neptune.log_metric(f"eval_{name}_loss", loss)
 
             self.writer.add_scalar('eval/{}_loss'.format(name),
                                     loss,
@@ -458,6 +459,9 @@ class trainer(object):
         else:
             self.valid_losses['epoch'] = epoch
             self.valid_losses['losses'] = running_loss
+
+            # Log to cloud experiment tracker
+            neptune.log_metric(f"valid_running_loss", running_loss)
 
             with open(os.path.join(self.save_path, 'valid_losses.pkl'), "wb") as f:
                 pbar.write("saved log to {}".format(os.path.join(self.save_path, 'valid_losses.pkl')))
