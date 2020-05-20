@@ -4,6 +4,7 @@ numpy==1.16.4
 scipy==1.1.0
 librosa==0.6.3
 SoundFile==0.10.2
+torchaudio==0.4.0
 pysptk==0.1.16
 matplotlib==3.0.2
 python_speech_features==0.6
@@ -12,6 +13,7 @@ tensorboardX==1.6
 webrtcvad==2.0.10
 cupy-cuda101
 pynvrtc==8.0 
+neptune-client==0.4.92
 git+https://github.com/salesforce/pytorch-qrnn
 git+https://github.com/detly/gammatone
 git+https://github.com/pswietojanski/kaldi-io-for-python.git

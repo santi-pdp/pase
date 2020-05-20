@@ -1,4 +1,5 @@
 import torch
+import torchaudio
 import torch.nn.functional as F
 import tqdm
 import gammatone
@@ -972,7 +973,7 @@ class Prosody(object):
             zcr = torch.tensor(zcr.astype(np.float32))
             zcr = zcr[:, :max_frames]
             # finally obtain energy
-            egy = librosa.feature.rmse(y=wav, frame_length=self.win,
+            egy = librosa.feature.rms(y=wav, frame_length=self.win,
                                        hop_length=self.hop,
                                        pad_mode='constant')
             egy = torch.tensor(egy.astype(np.float32))
@@ -1611,7 +1612,8 @@ class SimpleAdditive(object):
         if hasattr(self, 'cache') and filename in self.cache:
             return self.cache[filename]
         else:
-            nwav, rate = sf.read(filename)
+            nwav, rate = torchaudio.load(filename)
+            nwav = nwav.numpy().squeeze()
             if hasattr(self, 'cache'):
                 self.cache[filename] = nwav
         return nwav

@@ -48,7 +48,7 @@ other `nn.Module`.
 
 The self-supervised training stage requires the following components to be specified to the training script:
 
-* data root folder: contains `wav` files (or soft links to them) without subfolders.
+* data root folder: contains files (or soft links to them) without subfolders in `wav`, `mp3` or any Torchaudio-supported format. 
 * trainset statistics file to normalize each worker's output values, computed with the `make_trainset_statistics.py` script.
 * dataset configuration `data_cfg` file: contains pointers to train/valid/test splits, among other info.
 * front-end (encoder) configuration file: `cfg/frontend/PASE+.cfg`
@@ -58,9 +58,9 @@ The self-supervised training stage requires the following components to be speci
 
 To make the dataset configuration file the following files have to be provided:
 
-* training files list `train_scp`: contains a `wav` file name per line (without directory names), including `.wav` extension.
-* test files list `test_scp`: contains a `wav` file name per line (without directory names), including `.wav` extension.
-* dictionary with `wav` filename -> integer speaker class (speaker id) correspondence (same filenames as in train/test lists).
+* training files list `train_scp`: contains a file name per line (without directory names), including `.wav`/`mp3`/etc. extension.
+* test files list `test_scp`: contains a `wav` file name per line (without directory names), including `.wav`/`mp3`/etc. extension.
+* dictionary with filename -> integer speaker class (speaker id) correspondence (same filenames as in train/test lists).
 
 An example of each of these files can be found in the `data/` folder of the repo. Build them based on your data files.
 
@@ -139,7 +139,7 @@ The `--dtrans_cfg` flag controls the pointer to the configuration of data augmen
 
 The configuration for the distortions (supplied with the `--dtrans_cfg` argument) allows to control the probability of a distortion being active for a sample in the batch. Hence, distortions are applied on the fly and independently, although with a hard-coded order as programmed in file `pase/transforms.py` (i.e. Reverb happens before Additive, etc.). Note that there are possible distortions:
 
-* Overlap: activated with `overlap_p > 0` . This overlaps random chunks of speech from the selected directory of `wavs` emulating background speakers with the specified SNRs in `overlap_snrs` (picked randomly).
+* Overlap: activated with `overlap_p > 0` . This overlaps random chunks of speech from the selected directory of speech samples, emulating background speakers with the specified SNRs in `overlap_snrs` (picked randomly).
 * Additive noise: activated with `noises_p > 0`. Selects a noise file from the specified directories and applies a random SNR out of the possible values.
 * Amplitude clipping: activated with `clip_p > 0`. Clips the waveform amplitude on values beyond a specified percentage of the maximum peak (e.g. `0.1`value means clamp all values exceeding on absolute amplitude the value `0.1 x max_asbsolute_amplitude`).
 * Waveform chopping: activated with `chop_p > 0`. Chops continuous sections of speech by building windows randomly sized following a Gaussian pdf with the values specified as tuples in the `chop_factors` array. For instance, `[0.05, 0.025]` means sampling a window of size `0.05 sec` on average with `0.025 sec` standard deviation. Many Gaussian parameterizations can be supplied to have windows of different sizes on average, which are then sampled uniformly random.

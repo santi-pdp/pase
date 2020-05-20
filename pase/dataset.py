@@ -4,7 +4,7 @@ import re
 import glob
 from torch.utils.data import Dataset, ConcatDataset
 import math
-import soundfile as sf
+import torchaudio
 import json
 import tqdm
 import pickle
@@ -237,7 +237,8 @@ class WavDataset(Dataset):
         if (self.cache_on_load or self.preload_wav) and fname in cache:
             return cache[fname]
         else:
-            wav, rate = sf.read(fname)
+            wav, rate = torchaudio.load(fname)
+            wav = wav.numpy().squeeze()
             #fix in case wav is stereo, in which case
             #pick first channel only
             if wav.ndim > 1:
