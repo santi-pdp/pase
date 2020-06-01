@@ -8,7 +8,7 @@ This repository contains the official implementations of [PASE](https://arxiv.or
 
 * PyTorch 1.0 or higher
 * Torchvision 0.2 or higher
-* To use data augmentation during training (recommended), you must [build codec2 **from source**](https://github.com/drowe67/codec2), then `pip install pycodec2` (because `pycodec2` needs the header files).  You may also need to point `LD_LIBRARY_PATH` at `\usr\local\lib` for python to be able to load `pycodec2` successfully.
+* To use data augmentation during training (recommended), you must [build codec2 **from source**](https://github.com/drowe67/codec2), then [build its python wrapper, `pycodec`, also from source](https://github.com/EdwardDixon/pycodec2) (easy and painless).  You may also need to point `LD_LIBRARY_PATH` at `\usr\local\lib` for python to be able to load `pycodec2` successfully.
 * Install the requirements from `requirements.txt`: `pip install -r requirements.txt`
 
 *NOTE: Edit the cupy-cuda100 requirement in the file if needed depending on your CUDA version. Defaults to 10.0 now*

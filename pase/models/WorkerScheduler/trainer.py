@@ -11,12 +11,13 @@ import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 import torch.nn as nn
 import numpy as np
+import neptune
 import random
 import os
 import pickle
 from tqdm import tqdm, trange
 try:
-    from tensorboardX import SummaryWriter
+    from torch.utils.tensorboard import SummaryWriter
     use_tb = True
 except ImportError:
     print('cannot import Tensorboard, use pickle for logging')
@@ -146,7 +147,7 @@ class trainer(object):
 
 
         # init tensorboard writer
-        print("Use tenoserboard: {}".format(tensorboard))
+        print("Use tensorboard: {}".format(tensorboard))
         self.tensorboard = tensorboard and use_tb
         if tensorboard and use_tb:
             self.writer = SummaryWriter(self.save_path)
@@ -389,11 +390,20 @@ class trainer(object):
         pbar.write("=" * 50)
         pbar.write('Batch {}/{} (Epoch {}) step: {}:'.format(bidx, self.bpe, epoch, step))
 
+        neptune.log_text('progress', 'Batch {}/{} (Epoch {}) step: {}:'.format(bidx, self.bpe, epoch, step))
+        neptune.log_metric('epoch', epoch)
+
+        for lr in lrs.keys():
+            neptune.log_metric(f"learning_rate_{lr}", lrs[lr])
+
         for name, loss in losses.items():
             if name == "total":
                 pbar.write('%s, learning rate = %.8f, loss = %.4f' % ("total", lrs['frontend'], loss))
             else:
                 pbar.write('%s, learning rate = %.8f, loss = %.4f' % (name, lrs[name], loss))
+
+            # Log to cloud experiment tracker
+            neptune.log_metric(f"{name}_loss", loss)
 
             if self.writer:
 
@@ -438,13 +448,20 @@ class trainer(object):
             for name, loss in running_loss.items():
                 loss = np.mean(loss)
                 pbar.write("avg loss {}: {}".format(name, loss))
+                neptune.log_metric(f"eval_avg_{name}_loss", loss)
 
-                self.writer.add_scalar('eval/{}_loss'.format(name),
-                                        loss,
-                                        global_step=epoch)
+            # Log to cloud experiment tracker
+            neptune.log_metric(f"eval_{name}_loss", loss)
+
+            self.writer.add_scalar('eval/{}_loss'.format(name),
+                                    loss,
+                                    global_step=epoch)
         else:
             self.valid_losses['epoch'] = epoch
             self.valid_losses['losses'] = running_loss
+
+            # Log to cloud experiment tracker
+            neptune.log_metric(f"valid_running_loss", running_loss)
 
             with open(os.path.join(self.save_path, 'valid_losses.pkl'), "wb") as f:
                 pbar.write("saved log to {}".format(os.path.join(self.save_path, 'valid_losses.pkl')))
