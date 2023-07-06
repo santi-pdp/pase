@@ -1,7 +1,7 @@
 tqdm==4.28.1
 git+https://github.com/santi-pdp/ahoproc_tools.git
 numpy==1.16.4
-scipy==1.1.0
+scipy==1.10.0
 librosa==0.6.3
 SoundFile==0.10.2
 torchaudio==0.4.0
